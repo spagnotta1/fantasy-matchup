@@ -1,0 +1,37 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets and local configuration — .env.example is the tracked template
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local databases and downloaded data. The warehouse is rebuilt by
+# `python -m nflfp.pipeline full`; it is 1.8M rows of derived public data and
+# has no business in git history.
+data/
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
+*.parquet
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

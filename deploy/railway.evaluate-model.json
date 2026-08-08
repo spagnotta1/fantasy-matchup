@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "python -m nflfp.jobs run evaluate_model",
+    "cronSchedule": "0 16 * * 3",
+    "restartPolicyType": "NEVER"
+  }
+}
