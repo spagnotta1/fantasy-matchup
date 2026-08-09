@@ -30,7 +30,7 @@ from ..db.enums import ScoringProfile, values as enum_values
 from ..sources import current_season
 from . import repository
 from .assemble import team_ref
-from .dto import SlateWindow, TeamRef
+from .dto import SeasonAvailability, SlateWindow, TeamRef
 from .errors import InvalidRequest, NotFound, UnknownScoringProfile
 
 logger = logging.getLogger(__name__)
@@ -154,9 +154,26 @@ async def team_index(session: AsyncSession) -> dict[str, TeamRef]:
     return {team.abbr.upper(): team for team in await list_teams(session)}
 
 
-async def list_seasons(session: AsyncSession) -> tuple[int, ...]:
-    """Seasons in the warehouse, newest first."""
-    return tuple(await repository.seasons_available(session))
+async def list_published_seasons(session: AsyncSession) -> tuple[SeasonAvailability, ...]:
+    """Seasons with a published board, newest first, each with its weeks.
+
+    What a season picker should be built from, and the counterpart to
+    :func:`list_published_weeks` one level up. The warehouse holds every season
+    nflverse publishes — nearly three decades of it — and offering all of them
+    to a user is an invitation to pick one the deployment has never projected.
+    Availability is a property of what has been *published*, so it is answered
+    from the run table rather than the schedule.
+
+    Each entry carries its weeks, so a client builds both selectors and resolves
+    its opening slate from this one response.
+    """
+    by_season: dict[int, list[int]] = {}
+    for season, week in await repository.published_season_weeks(session):
+        by_season.setdefault(season, []).append(week)
+    return tuple(
+        SeasonAvailability(season=season, published_weeks=tuple(weeks))
+        for season, weeks in by_season.items()
+    )
 
 
 async def list_published_weeks(session: AsyncSession, season: int) -> tuple[int, ...]:

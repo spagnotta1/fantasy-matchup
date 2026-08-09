@@ -1,0 +1,385 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens.
+ *
+ * Two layers, deliberately. Raw values live on `:root` as plain CSS variables
+ * and are redefined per theme; `@theme inline` maps them into Tailwind's
+ * utility namespace by *reference*. That indirection is what lets a single
+ * `bg-surface` class follow the theme without every component knowing a theme
+ * exists, and it is why no colour is ever written literally in a component.
+ *
+ * The palette is deliberately narrow. Analytics screens earn their hierarchy
+ * from spacing and weight; colour is reserved for meaning — positive, negative,
+ * caution, information — so that when something is coloured it means something.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Neutral ramp — the structural surface stack, light theme. */
+  --app-bg: oklch(97.5% 0.005 250);
+  --app-surface: oklch(100% 0 0);
+  --app-surface-raised: oklch(99% 0.003 250);
+  --app-surface-sunken: oklch(95.5% 0.006 250);
+  --app-surface-hover: oklch(96% 0.008 250);
+  --app-border: oklch(90% 0.008 250);
+  --app-border-strong: oklch(83% 0.012 250);
+
+  --app-text: oklch(22% 0.015 255);
+  --app-text-secondary: oklch(45% 0.014 255);
+  --app-text-muted: oklch(58% 0.012 255);
+  --app-text-inverted: oklch(99% 0 0);
+
+  /* Brand. A cool teal, not a league colour — this product is not a clone of
+     any of them, and the accent is the first thing that says so. */
+  --app-accent: oklch(58% 0.115 205);
+  --app-accent-hover: oklch(52% 0.118 205);
+  --app-accent-soft: oklch(94% 0.035 205);
+  --app-accent-text: oklch(41% 0.105 205);
+  --app-on-accent: oklch(99% 0 0);
+
+  /* Semantic. Never the only carrier of meaning — every use is paired with a
+     glyph, a label, or a sign. */
+  --app-positive: oklch(56% 0.135 150);
+  --app-positive-soft: oklch(94.5% 0.045 150);
+  --app-positive-text: oklch(43% 0.12 150);
+
+  --app-negative: oklch(58% 0.18 22);
+  --app-negative-soft: oklch(95% 0.035 22);
+  --app-negative-text: oklch(47% 0.17 22);
+
+  --app-caution: oklch(70% 0.14 75);
+  --app-caution-soft: oklch(95.5% 0.05 80);
+  --app-caution-text: oklch(48% 0.11 65);
+
+  --app-info: oklch(58% 0.13 255);
+  --app-info-soft: oklch(95% 0.035 255);
+  --app-info-text: oklch(46% 0.14 260);
+
+  --app-focus: oklch(58% 0.15 240);
+
+  /* Chart tokens.
+   *
+   * Separate from the UI accent because they answer a different question. The
+   * UI accent is tuned for text and controls; a chart mark is judged on the
+   * lightness band and contrast against the *card* surface it is drawn on.
+   * These values were run through the palette validator rather than picked:
+   * light #008d9a and dark #00a4ab both pass band, chroma and contrast.
+   *
+   * There is deliberately only ONE series colour. Colouring outcomes by
+   * boom/green vs bust/red fails colour-vision separation outright (measured
+   * ΔE 3.8 deutan for that pair), so magnitude is carried by bar height and
+   * category by labels — never by hue. */
+  --app-chart-series: oklch(58% 0.115 205);
+  --app-chart-grid: oklch(93% 0.006 250);
+  --app-chart-axis: oklch(80% 0.01 250);
+  --app-chart-reference: oklch(65% 0.014 255);
+
+  --app-shadow-sm: 0 1px 2px oklch(20% 0.02 255 / 0.06);
+  --app-shadow: 0 1px 3px oklch(20% 0.02 255 / 0.08), 0 4px 12px oklch(20% 0.02 255 / 0.05);
+  --app-shadow-lg: 0 8px 30px oklch(20% 0.02 255 / 0.12);
+}
+
+/*
+ * Dark theme. Defined twice on purpose: once behind the OS preference for
+ * users who never touch a toggle, and once behind an explicit attribute so the
+ * toggle can override the OS in *both* directions. Guarding the media query
+ * with :not([data-theme='light']) is what stops the OS from winning back.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --app-bg: oklch(17% 0.012 255);
+    --app-surface: oklch(21% 0.014 255);
+    --app-surface-raised: oklch(24.5% 0.016 255);
+    --app-surface-sunken: oklch(14.5% 0.012 255);
+    --app-surface-hover: oklch(27% 0.018 255);
+    --app-border: oklch(30% 0.016 255);
+    --app-border-strong: oklch(40% 0.02 255);
+
+    --app-text: oklch(96% 0.004 255);
+    --app-text-secondary: oklch(76% 0.012 255);
+    --app-text-muted: oklch(62% 0.014 255);
+    --app-text-inverted: oklch(17% 0.012 255);
+
+    --app-accent: oklch(72% 0.115 200);
+    --app-accent-hover: oklch(78% 0.115 200);
+    --app-accent-soft: oklch(30% 0.05 205);
+    --app-accent-text: oklch(80% 0.1 200);
+    --app-on-accent: oklch(15% 0.02 220);
+
+    --app-positive: oklch(72% 0.15 152);
+    --app-positive-soft: oklch(29% 0.06 152);
+    --app-positive-text: oklch(80% 0.13 152);
+
+    --app-negative: oklch(68% 0.17 25);
+    --app-negative-soft: oklch(30% 0.07 25);
+    --app-negative-text: oklch(78% 0.14 25);
+
+    --app-caution: oklch(80% 0.13 80);
+    --app-caution-soft: oklch(31% 0.06 70);
+    --app-caution-text: oklch(85% 0.11 82);
+
+    --app-info: oklch(72% 0.12 255);
+    --app-info-soft: oklch(29% 0.06 258);
+    --app-info-text: oklch(81% 0.1 255);
+
+    --app-focus: oklch(75% 0.13 235);
+
+    /* Stepped for the dark band (L 0.48–0.67), not flipped from the light value. */
+    --app-chart-series: oklch(65% 0.115 200);
+    --app-chart-grid: oklch(27% 0.014 255);
+    --app-chart-axis: oklch(38% 0.016 255);
+    --app-chart-reference: oklch(58% 0.014 255);
+
+    --app-shadow-sm: 0 1px 2px oklch(0% 0 0 / 0.4);
+    --app-shadow: 0 1px 3px oklch(0% 0 0 / 0.45), 0 6px 16px oklch(0% 0 0 / 0.35);
+    --app-shadow-lg: 0 12px 40px oklch(0% 0 0 / 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --app-bg: oklch(17% 0.012 255);
+  --app-surface: oklch(21% 0.014 255);
+  --app-surface-raised: oklch(24.5% 0.016 255);
+  --app-surface-sunken: oklch(14.5% 0.012 255);
+  --app-surface-hover: oklch(27% 0.018 255);
+  --app-border: oklch(30% 0.016 255);
+  --app-border-strong: oklch(40% 0.02 255);
+
+  --app-text: oklch(96% 0.004 255);
+  --app-text-secondary: oklch(76% 0.012 255);
+  --app-text-muted: oklch(62% 0.014 255);
+  --app-text-inverted: oklch(17% 0.012 255);
+
+  --app-accent: oklch(72% 0.115 200);
+  --app-accent-hover: oklch(78% 0.115 200);
+  --app-accent-soft: oklch(30% 0.05 205);
+  --app-accent-text: oklch(80% 0.1 200);
+  --app-on-accent: oklch(15% 0.02 220);
+
+  --app-positive: oklch(72% 0.15 152);
+  --app-positive-soft: oklch(29% 0.06 152);
+  --app-positive-text: oklch(80% 0.13 152);
+
+  --app-negative: oklch(68% 0.17 25);
+  --app-negative-soft: oklch(30% 0.07 25);
+  --app-negative-text: oklch(78% 0.14 25);
+
+  --app-caution: oklch(80% 0.13 80);
+  --app-caution-soft: oklch(31% 0.06 70);
+  --app-caution-text: oklch(85% 0.11 82);
+
+  --app-info: oklch(72% 0.12 255);
+  --app-info-soft: oklch(29% 0.06 258);
+  --app-info-text: oklch(81% 0.1 255);
+
+  --app-focus: oklch(75% 0.13 235);
+
+  --app-shadow-sm: 0 1px 2px oklch(0% 0 0 / 0.4);
+  --app-shadow: 0 1px 3px oklch(0% 0 0 / 0.45), 0 6px 16px oklch(0% 0 0 / 0.35);
+  --app-shadow-lg: 0 12px 40px oklch(0% 0 0 / 0.5);
+}
+
+@theme inline {
+  --color-bg: var(--app-bg);
+  --color-surface: var(--app-surface);
+  --color-surface-raised: var(--app-surface-raised);
+  --color-surface-sunken: var(--app-surface-sunken);
+  --color-surface-hover: var(--app-surface-hover);
+  --color-line: var(--app-border);
+  --color-line-strong: var(--app-border-strong);
+
+  --color-ink: var(--app-text);
+  --color-ink-secondary: var(--app-text-secondary);
+  --color-ink-muted: var(--app-text-muted);
+  --color-ink-inverted: var(--app-text-inverted);
+
+  --color-accent: var(--app-accent);
+  --color-accent-hover: var(--app-accent-hover);
+  --color-accent-soft: var(--app-accent-soft);
+  --color-accent-text: var(--app-accent-text);
+  --color-on-accent: var(--app-on-accent);
+
+  --color-positive: var(--app-positive);
+  --color-positive-soft: var(--app-positive-soft);
+  --color-positive-text: var(--app-positive-text);
+
+  --color-negative: var(--app-negative);
+  --color-negative-soft: var(--app-negative-soft);
+  --color-negative-text: var(--app-negative-text);
+
+  --color-caution: var(--app-caution);
+  --color-caution-soft: var(--app-caution-soft);
+  --color-caution-text: var(--app-caution-text);
+
+  --color-info: var(--app-info);
+  --color-info-soft: var(--app-info-soft);
+  --color-info-text: var(--app-info-text);
+
+  --color-focus: var(--app-focus);
+
+  --color-chart-series: var(--app-chart-series);
+  --color-chart-grid: var(--app-chart-grid);
+  --color-chart-axis: var(--app-chart-axis);
+  --color-chart-reference: var(--app-chart-reference);
+
+  --shadow-card: var(--app-shadow-sm);
+  --shadow-raised: var(--app-shadow);
+  --shadow-overlay: var(--app-shadow-lg);
+
+  --radius-card: 0.875rem;
+  --radius-control: 0.5rem;
+
+  --font-sans:
+    'Inter var', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  /* Numbers in a table must align vertically or they cannot be compared at a
+     glance. A tabular-figure stack is not decoration here, it is the whole
+     reason a ranking board is readable. */
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, monospace;
+
+  --animate-fade-in: fade-in 0.18s ease-out;
+  --animate-rise: rise 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+  /* For work whose duration is genuinely unknown — the simulation endpoint
+     reports no progress, so a determinate bar would be fiction. */
+  --animate-indeterminate: indeterminate 1.3s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes indeterminate {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  /*
+   * No global `scroll-behavior: smooth`. It would animate the scroll
+   * restoration on every navigation — the new page arriving while the old
+   * offset visibly unwinds — and the skip link's jump to content, which should
+   * be immediate. The one scroll that is genuinely worth animating, moving to a
+   * finished simulation result, asks for it explicitly and checks the user's
+   * motion preference first.
+   */
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* One focus treatment for the whole application. Visible, high contrast, and
+     never removed — a keyboard user who cannot see where they are cannot use
+     the product at all. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-soft);
+    color: var(--color-accent-text);
+  }
+
+  /* Honour the OS setting rather than animating anyway. Vestibular disorders
+     are real and the animations here are ornament, not information. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/*
+ * Skip layout and paint for cards scrolled out of view.
+ *
+ * A full slate is roughly 400 players, and the card grid draws each one with a
+ * range bar, two chips and an avatar. `content-visibility` lets the browser
+ * leave the off-screen ones unrendered until they approach the viewport, which
+ * costs one CSS rule instead of a virtualisation library — and unlike a virtual
+ * list it keeps the real DOM intact, so find-in-page, ⌘F, tab order and screen
+ * reader navigation still traverse the whole board.
+ *
+ * The intrinsic size is the measured height of a real card. Getting it wrong is
+ * not a rendering bug but it does make the scrollbar shift as rows resolve.
+ *
+ * Deliberately not applied to table rows: `contain: size` has no effect on
+ * internal table elements, so it would be inert there at best.
+ */
+@utility deferred-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 12.5rem;
+}
+
+/* Skip link: off-screen until focused, then pinned over the shell. */
+@utility skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.75rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  transition: transform 0.15s ease-out;
+
+  &:focus-visible {
+    transform: none;
+  }
+}

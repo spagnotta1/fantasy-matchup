@@ -175,3 +175,130 @@ class TestGenerationResult:
         assert "model_run_id" not in detail
         assert "unprojected" not in detail
         assert detail["season"] == 2025
+
+
+# ---------------------------------------------------------------------------
+# the backfill
+# ---------------------------------------------------------------------------
+
+
+class _RowWiseModel:
+    """A model whose prediction depends only on the row it is given.
+
+    That is the property :class:`~nflfp.predict.generate.FitCache` relies on to
+    hoist residual scoring out of the per-week loop, so the test double has to
+    have it — and ``_fitted_on`` records the training set so a test can prove
+    the cached and uncached paths fitted the same one.
+    """
+
+    name = "rowwise"
+    version = "1.0.0"
+    algorithm = "test"
+
+    def __init__(self):
+        self._fitted_on: list[tuple[int, int]] = []
+
+    def params(self) -> dict:
+        return {}
+
+    def fit(self, rows):
+        self._fitted_on = [(int(r["season"]), int(r["week"])) for r in rows]
+
+    def predict(self, rows):
+        return [_Prediction(str(r["player_id"]), str(r["position"]),
+                            season=int(r["season"]), week=int(r["week"]),
+                            components={"receiving_yards": float(r["seed"])})
+                for r in rows]
+
+
+def _history_rows() -> list[dict]:
+    """Three seasons of completed player-weeks, deterministic and tiny."""
+    rows = []
+    for season in (2022, 2023, 2024):
+        for week in range(1, 5):
+            for index in range(3):
+                rows.append(
+                    {
+                        "season": season,
+                        "week": week,
+                        "player_id": f"p{index}",
+                        "position": "WR",
+                        "seed": season + week + index,
+                        "fp_half_ppr_actual": float(10 + index),
+                    }
+                )
+    return rows
+
+
+class TestFitCacheEquivalence:
+    """The backfill's whole correctness claim.
+
+    A backfilled board has to be the board the weekly job would have written
+    for that week. The cache exists only to stop reloading and refitting
+    identical inputs, so if it ever changes a number it is a bug — and one that
+    would be invisible, because a wrong-but-plausible projection renders
+    exactly like a right one.
+    """
+
+    def _fit(self, cache):
+        from nflfp.predict.generate import _fit_distribution
+
+        history = _history_rows()
+        return [
+            _fit_distribution(
+                _RowWiseModel, history, cutoff=cutoff, profile="half_ppr", cache=cache
+            )[1]
+            for cutoff in [(2024, 1), (2024, 2), (2024, 3), (2024, 4)]
+        ]
+
+    def test_a_cached_backfill_produces_the_uncached_samples_exactly(self):
+        from nflfp.predict.generate import FitCache
+
+        assert self._fit(FitCache()) == self._fit(None)
+
+    def test_the_residual_model_is_fitted_once_per_season_not_once_per_week(self):
+        """The saving that makes a backfill minutes rather than an hour."""
+        from nflfp.predict.generate import FitCache
+
+        cache = FitCache()
+        self._fit(cache)
+        assert len(cache.residuals) == 1
+
+    def test_a_week_only_sees_residuals_from_before_it(self):
+        """The cached list runs to the end of the season; a week takes the
+        prefix it is entitled to. Taking the whole list would leak."""
+        from nflfp.predict.generate import FitCache
+
+        samples = self._fit(FitCache())
+        assert [len(s) for s in samples] == sorted(len(s) for s in samples)
+        assert len(samples[0]) < len(samples[-1])
+
+
+class TestBackfillResult:
+    def test_skips_are_summarised_by_reason_not_listed_per_week(self):
+        import json
+
+        from nflfp.predict.generate import BackfillResult, BackfillWeek
+
+        result = BackfillResult(model_name="m", model_version="1")
+        result.weeks = [
+            BackfillWeek(2018, 1, projections=300),
+            BackfillWeek(2017, 1, skipped=True, skip_reason="no residual history"),
+            BackfillWeek(2017, 2, skipped=True, skip_reason="no residual history"),
+        ]
+        detail = result.as_detail()
+
+        assert detail["weeks_generated"] == 1
+        assert detail["weeks_skipped"] == 2
+        assert detail["skipped_because"] == {"no residual history": 2}
+        assert detail["seasons"] == [2018]
+        assert json.loads(json.dumps(detail))["projections"] == 300
+
+    def test_a_refused_week_contributes_no_projections(self):
+        """A skip is a week with no board, not a week with an empty one."""
+        from nflfp.predict.generate import BackfillResult, BackfillWeek
+
+        result = BackfillResult(model_name="m", model_version="1")
+        result.weeks = [BackfillWeek(2016, 1, skipped=True, skip_reason="too early")]
+        assert result.projections_written == 0
+        assert result.seasons_covered == []

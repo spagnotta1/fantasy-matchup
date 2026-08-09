@@ -34,6 +34,13 @@ only free parameters in this module and they are named, not buried. They move
 dominated by the interior, which is why a coarse tail is tolerable here and
 would not be if this were pricing an outright ceiling bet.
 
+:meth:`OutcomeCurve.from_percentiles` accepts the two factors as keyword
+arguments defaulting to the constants, so an evaluation harness can build a
+curve under candidate factors **through this same code path** rather than
+through a parallel reimplementation of it. The defaults are the production
+configuration; passing anything else is an experiment and is the caller's to
+declare. See ``docs/simulation-readiness.md``, Phase 6C.
+
 Independence
 ------------
 :func:`probability_beats` assumes the two outcomes are independent. That is
@@ -52,12 +59,31 @@ from dataclasses import dataclass
 #: How far below P10 the distribution is assumed to reach, as a multiple of the
 #: P10-P25 segment. Smaller than the upper factor because zero is a near-hard
 #: floor on fantasy scoring.
-LOWER_TAIL_FACTOR = 1.5
+#:
+#: Phase 6C measured this at the lineup level and recommended **1.0**, which was
+#: approved and applied in Phase 6D. It is barely identified either way:
+#: :data:`HARD_FLOOR` clamps the lower extension for most startable players, so
+#: the calibration surface is nearly flat along this axis — 1.0 is the middle of
+#: an underdetermined direction rather than an argmin. Was 1.5 through Phases
+#: 6A–6C. See ``docs/simulation-readiness.md``.
+LOWER_TAIL_FACTOR = 1.0
 
 #: How far above P90 the distribution is assumed to reach, as a multiple of the
 #: P75-P90 segment. Larger because the distribution is right-skewed: the ceiling
 #: is genuinely long.
-UPPER_TAIL_FACTOR = 2.5
+#:
+#: This is the load-bearing one. Phase 6C found that 2.5 over-disperses a
+#: seven-player sum — the team total's 80% interval covered 82.2% of realised
+#: totals against a nominal 80% — and recommended **2.0**, which was approved and
+#: applied in Phase 6D. Both held-out and tuning surfaces put the calibration
+#: basin at 2.0 regardless of the lower factor. Was 2.5 through Phases 6A–6C;
+#: ``tests/test_tail_calibration.py`` pins the shipped values so the next change
+#: is also deliberate.
+#:
+#: This is a **calibration** improvement and not a winner-prediction one. Brier,
+#: log loss and score-differential CRPS all moved in its favour and none of them
+#: significantly; the claim it is approved on is interval calibration.
+UPPER_TAIL_FACTOR = 2.0
 
 #: Fantasy scoring can go negative (interceptions, fumbles) but not far. The
 #: lower tail is clamped here so a wide interval cannot imply an impossible
@@ -128,6 +154,8 @@ class OutcomeCurve:
         expected: float | None = None,
         extrapolated: bool = False,
         samples: int | None = None,
+        lower_tail_factor: float = LOWER_TAIL_FACTOR,
+        upper_tail_factor: float = UPPER_TAIL_FACTOR,
     ) -> "OutcomeCurve | None":
         """Build a curve from stored percentiles.
 
@@ -136,6 +164,14 @@ class OutcomeCurve:
         ceiling are not optional, because with fewer than three knots the
         "distribution" is a straight line and every question asked of it is
         really a question about the point estimate.
+
+        Args:
+            lower_tail_factor: How far below the lowest stored knot the curve
+                reaches, as a multiple of the adjacent segment. Defaults to the
+                production constant; overriding it is how the Phase 6C
+                evaluation measures a candidate configuration without a second
+                implementation of the reconstruction.
+            upper_tail_factor: The same, above the highest stored knot.
 
         Returns:
             The curve, or ``None`` when there is not enough stored to build one
@@ -163,7 +199,11 @@ class OutcomeCurve:
             raise ValueError(f"percentiles are not ordered: {values}")
 
         return cls(
-            knots=_extend_tails(supplied),
+            knots=_extend_tails(
+                supplied,
+                lower_factor=lower_tail_factor,
+                upper_factor=upper_tail_factor,
+            ),
             expected=expected,
             extrapolated=extrapolated,
             samples=samples,
@@ -276,7 +316,10 @@ class OutcomeCurve:
 
 
 def _extend_tails(
-    supplied: Sequence[tuple[float, float]]
+    supplied: Sequence[tuple[float, float]],
+    *,
+    lower_factor: float = LOWER_TAIL_FACTOR,
+    upper_factor: float = UPPER_TAIL_FACTOR,
 ) -> tuple[tuple[float, float], ...]:
     """Add q=0 and q=1 knots so the curve spans the whole probability range.
 
@@ -285,12 +328,16 @@ def _extend_tails(
     — there is no slope to extend, so the tail is flat and the curve simply
     stops there. That is the right answer: a distribution with no observed
     spread at the bottom should not be given an imaginary one.
+
+    A factor of zero is legitimate and means "do not extend": the curve reaches
+    its stored knot at q=0 or q=1 and no further, which is the boundary case a
+    parameter search has to be able to evaluate.
     """
     knots = list(supplied)
 
     lowest_p, lowest_v = knots[0]
     _, next_v = knots[1]
-    lower_span = (next_v - lowest_v) * LOWER_TAIL_FACTOR
+    lower_span = (next_v - lowest_v) * lower_factor
     lower_value = max(HARD_FLOOR, lowest_v - lower_span)
     lower_value = min(lower_value, lowest_v)
     if lowest_p > 0.0:
@@ -298,7 +345,7 @@ def _extend_tails(
 
     highest_p, highest_v = knots[-1]
     _, prev_v = knots[-2]
-    upper_span = (highest_v - prev_v) * UPPER_TAIL_FACTOR
+    upper_span = (highest_v - prev_v) * upper_factor
     upper_value = max(highest_v, highest_v + upper_span)
     if highest_p < 1.0:
         knots.append((1.0, upper_value))
@@ -419,6 +466,20 @@ def probability_total_at_least(
     curves are *not* approximated anywhere else in this module; only their sum
     is, and only because an exact convolution of piecewise-linear curves would
     cost far more than the accuracy is worth for a lineup-level number.
+
+    Independence is the load-bearing assumption
+    ------------------------------------------
+    Variances are summed in quadrature, which is only valid for uncorrelated
+    outcomes. A real fantasy lineup is not uncorrelated: teammates divide one
+    offence's plays, and any two players in the same game share pace and script.
+    The error is concentrated in the **spread**, not the centre — the total
+    stays about right while the interval comes out too narrow, which makes the
+    floor and the ceiling the least trustworthy numbers this function produces.
+
+    Callers assembling a lineup should pair this with
+    :func:`nflfp.services.rosters.lineup_caveats`, which reports exactly which
+    players break the assumption. Correcting for it needs a fitted correlation
+    structure; see ``docs/simulation-readiness.md``.
 
     Returns ``0.0`` for an empty roster and for a degenerate sum, rather than
     dividing by a zero standard deviation.

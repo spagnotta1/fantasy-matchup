@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="Weekly NFL fantasy football projections with honest uncertainty: floors, ceilings, matchup grades and head-to-head simulation."
+    />
+    <!--
+      Both values are declared so the browser paints the correct chrome before
+      the stylesheet loads. Without this the address bar flashes white on a dark
+      device on every cold load.
+    -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f7f9" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1c1e22" />
+    <title>Fourth &amp; Probable — NFL fantasy projections</title>
+    <script>
+      // Applied before first paint so a stored dark preference does not flash a
+      // light screen. Kept inline and tiny for that reason; the React hook owns
+      // it from mount onwards.
+      try {
+        var stored = localStorage.getItem('nflfp.theme')
+        if (stored === 'dark' || stored === 'light') {
+          document.documentElement.setAttribute('data-theme', stored)
+        }
+      } catch (error) {
+        /* Storage unavailable: fall back to the OS preference. */
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

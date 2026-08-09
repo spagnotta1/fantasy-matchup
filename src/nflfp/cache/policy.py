@@ -55,7 +55,11 @@ RULES: tuple[CacheRule, ...] = (
         3600,
         "derived from frozen constants and the position registry; changes on deploy",
     ),
-    CacheRule("/api/v1/seasons", 900, "the warehouse gains a season once a year"),
+    CacheRule(
+        "/api/v1/seasons",
+        900,
+        "published availability, which gains a week when the weekly job publishes",
+    ),
     CacheRule("/api/v1/teams", 3600, "branding dimension, effectively static"),
     CacheRule("/api/v1/games", 600, "the schedule moves only for flexed kickoffs"),
     CacheRule(
@@ -67,6 +71,13 @@ RULES: tuple[CacheRule, ...] = (
     CacheRule("/api/v1/rankings", 300, "same board, filtered"),
     CacheRule("/api/v1/defense-rankings", 300, "aggregate over the same slate"),
     CacheRule("/api/v1/matchups", 300, "reads the slate plus defensive form"),
+    # Listed with a TTL of zero so the table answers the question rather than
+    # leaving it to the reader. `POST` never reaches the cache anyway — the
+    # middleware handles `GET` only — and a simulation's inputs are two whole
+    # lineups, so the hit rate on a keyed body would be near zero even if it
+    # could be cached. It is also cheap to recompute and deterministic, which
+    # is what makes recomputing the right answer.
+    CacheRule("/api/v1/simulations", 0, "POST with a unique body; cheap and deterministic"),
     CacheRule("/api/v1/start-sit", 300, "deterministic over two stored distributions"),
     CacheRule("/api/v1/compare", 300, "deterministic over up to six distributions"),
     CacheRule("/api/v1/players", 300, "profile and history join the published run"),

@@ -9,7 +9,7 @@ lost its ``applied_to_projection`` flag.
 
 from __future__ import annotations
 
-from ..services import dto
+from ..services import dto, simulation
 from . import schemas
 from .provenance import Provenance
 
@@ -20,6 +20,14 @@ def player(ref: dto.PlayerRef) -> schemas.PlayerOut:
 
 def team(ref: dto.TeamRef) -> schemas.TeamOut:
     return schemas.TeamOut.model_validate(ref)
+
+
+def season(availability: dto.SeasonAvailability) -> schemas.SeasonOut:
+    return schemas.SeasonOut(
+        season=availability.season,
+        published_weeks=list(availability.published_weeks),
+        latest_published_week=availability.latest_published_week,
+    )
 
 
 def model_ref(ref: dto.ModelRef | None) -> schemas.ModelRefOut | None:
@@ -249,6 +257,81 @@ def team_outlook(source: dto.TeamOutlook) -> schemas.TeamOutlookOut:
         ),
         players=[ranked(entry) for entry in source.players],
         projected_points=source.projected_points,
+    )
+
+
+def simulated_player(source: simulation.SimulatedPlayer) -> schemas.SimulatedPlayerOut:
+    return schemas.SimulatedPlayerOut(
+        player_id=source.player_id,
+        name=source.name,
+        slot=source.slot,
+        position=source.position,
+        team=source.team,
+        game_id=source.game_id,
+        expected_points=source.expected_points,
+        floor=source.floor,
+        ceiling=source.ceiling,
+        simulated_mean=source.simulated_mean,
+    )
+
+
+def team_simulation(source: simulation.TeamSimulation) -> schemas.TeamSimulationOut:
+    return schemas.TeamSimulationOut(
+        expected_score=source.expected_score,
+        median_score=source.median_score,
+        p10=source.p10,
+        p25=source.p25,
+        p75=source.p75,
+        p90=source.p90,
+        win_probability=source.win_probability,
+        loss_probability=source.loss_probability,
+        tie_probability=source.tie_probability,
+        projection_sum=source.projection_sum,
+        players=[simulated_player(entry) for entry in source.players],
+    )
+
+
+def matchup_simulation(
+    source: simulation.MatchupSimulation,
+) -> schemas.MatchupSimulationOut:
+    """Split a simulation into its run metadata, two derived team blocks, and
+    its assumptions.
+
+    The team blocks are ``derived``, not ``model``, even though every number in
+    them descends from model output. A simulation is a calculation performed
+    above the model, and labelling its output ``model`` would extend the
+    foundation's measured guarantees — interval coverage, calibration,
+    conditional bias — to a quantity that was never measured against a held-out
+    residual.
+    """
+    return schemas.MatchupSimulationOut(
+        season=source.season,
+        week=source.week,
+        scoring_profile=source.scoring_profile,
+        simulation=schemas.SimulationRunOut(
+            iterations=source.iterations,
+            seed=source.seed,
+            sampling_method=source.assumptions.sampling_method,
+            correlation_mode=source.assumptions.correlation_mode,
+            correlation_model_version=source.assumptions.correlation_model_version,
+            lineup_format=source.lineup_format,
+            model=model_ref(source.model),
+        ),
+        team_a=team_simulation(source.team_a),
+        team_b=team_simulation(source.team_b),
+        score_differential=source.score_differential,
+        median_differential=source.median_differential,
+        assumptions=schemas.SimulationAssumptionsOut(
+            player_independence=source.assumptions.player_independence,
+            kicker_projection_available=source.assumptions.kicker_projection_available,
+            defense_projection_available=source.assumptions.defense_projection_available,
+            injury_adjustment_applied=source.assumptions.injury_adjustment_applied,
+            matchup_adjustment_applied=source.assumptions.matchup_adjustment_applied,
+            weather_adjustment_applied=source.assumptions.weather_adjustment_applied,
+            correlation_mode=source.assumptions.correlation_mode,
+            correlation_model_version=source.assumptions.correlation_model_version,
+            notes=list(source.assumptions.notes()),
+        ),
     )
 
 

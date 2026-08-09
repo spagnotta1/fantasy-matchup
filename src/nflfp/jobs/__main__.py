@@ -54,6 +54,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         options["datasets"] = args.datasets
     if args.seasons:
         options["seasons"] = args.seasons
+    if getattr(args, "skip_existing", False):
+        options["skip_existing"] = True
     run = run_job(args.name, options=options, trigger="manual")
     print(f"\n{run.job_name}: {run.status} — {run.records_written} record(s)")
     if run.detail:
@@ -159,7 +161,9 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--datasets", nargs="+", default=None,
                             help="refresh_injuries: datasets to reload (default: injuries)")
     run_parser.add_argument("--seasons", type=int, nargs="+", default=None,
-                            help="evaluate_model: seasons to evaluate over")
+                            help="evaluate_model / backfill_projections: seasons to cover")
+    run_parser.add_argument("--skip-existing", action="store_true",
+                            help="backfill_projections: leave already-published weeks alone")
     publish = run_parser.add_mutually_exclusive_group()
     publish.add_argument("--publish", dest="publish", action="store_true", default=None,
                          help="generate_projections: make the run live")

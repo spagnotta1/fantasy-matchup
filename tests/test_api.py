@@ -534,25 +534,39 @@ class TestPlayerIndex:
 
 class TestWeekSummary:
     """`GET /weeks/{week}` — the endpoint that distinguishes "no games" from
-    "the projection job has not run"."""
+    "the projection job has not run".
+
+    Every request here names the season explicitly. Omitting it resolves the
+    week against ``current_season()``, which rolls over in March — so a suite
+    that relied on the default passed until the league year moved past the stub
+    warehouse's ``SEASON`` and then failed on a calendar date rather than on a
+    code change. The endpoint's defaulting behaviour is covered by the slate
+    tests, which is the right place for it.
+    """
+
+    async def week(self, client, week: int) -> dict:
+        response = await client.get(url(f"/weeks/{week}"), params={"season": SEASON})
+        assert response.status_code == 200, response.text
+        return response.json()
 
     async def test_returns_the_schedule_and_the_counts(self, client):
-        body = (await client.get(url(f"/weeks/{UPCOMING_WEEK}"))).json()["data"]
+        body = (await self.week(client, UPCOMING_WEEK))["data"]
         assert body["week"] == UPCOMING_WEEK
         assert body["game_count"] == len(body["games"])
+        assert body["game_count"] >= 1
         assert body["completed_games"] + body["upcoming_games"] == body["game_count"]
 
     async def test_an_upcoming_week_counts_its_games_as_upcoming(self, client):
-        body = (await client.get(url(f"/weeks/{UPCOMING_WEEK}"))).json()["data"]
+        body = (await self.week(client, UPCOMING_WEEK))["data"]
         assert body["upcoming_games"] >= 1
         assert body["completed_games"] == 0
 
     async def test_a_completed_week_counts_its_games_as_played(self, client):
-        body = (await client.get(url(f"/weeks/{UPCOMING_WEEK - 1}"))).json()["data"]
+        body = (await self.week(client, UPCOMING_WEEK - 1))["data"]
         assert body["completed_games"] >= 1
 
     async def test_a_published_week_says_so_and_names_the_run(self, client):
-        body = (await client.get(url(f"/weeks/{UPCOMING_WEEK}"))).json()["data"]
+        body = (await self.week(client, UPCOMING_WEEK))["data"]
         assert body["projections_published"] is True
         assert body["projection_count"] == len(PLAYERS)
         assert body["model"]["run_id"]
@@ -560,15 +574,92 @@ class TestWeekSummary:
     async def test_an_unprojected_week_is_answered_not_refused(self, client):
         """A week on the schedule with no run is a state a UI renders as
         "projections coming Thursday", not a 404."""
-        response = await client.get(url(f"/weeks/{UPCOMING_WEEK - 1}"))
-        assert response.status_code == 200
-        body = response.json()
+        body = await self.week(client, UPCOMING_WEEK - 1)
         assert body["data"]["projections_published"] is False
         assert body["data"]["projection_count"] == 0
-        assert any("not published" in notice for notice in body["meta"]["notices"])
+        # The notice has to explain the *difference* between an empty board and
+        # a broken one, which is the whole reason this endpoint exists.
+        notices = body["meta"]["notices"]
+        assert any("No projection run is published" in notice for notice in notices)
+        assert any("the weekly job runs" in notice for notice in notices)
 
     async def test_an_impossible_week_is_rejected_at_the_edge(self, client):
         assert (await client.get(url("/weeks/99"))).status_code == 422
+
+
+class TestSeasonAvailability:
+    """`GET /seasons` — what a season picker may honestly offer.
+
+    The warehouse holds a game table going back to 1999. A picker built from
+    *that* offers twenty-eight seasons on a deployment that has published one
+    week, and every selection but one lands on an empty product. So the
+    endpoint answers from the run table, and this is the test that stops the
+    schedule from leaking back into it.
+    """
+
+    async def seasons(self, client) -> dict:
+        response = await client.get(url("/seasons"))
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    async def test_a_season_carries_the_weeks_it_published(self, client):
+        entries = (await self.seasons(client))["data"]
+        assert [entry["season"] for entry in entries] == [SEASON]
+        assert entries[0]["published_weeks"] == [UPCOMING_WEEK]
+        assert entries[0]["latest_published_week"] == UPCOMING_WEEK
+
+    async def test_a_scheduled_season_with_no_run_is_not_offered(
+        self, client, async_db_session
+    ):
+        """The case the frontend cannot detect for itself.
+
+        1999 has games. It has never been projected, and a user who selects it
+        gets a screen with nothing on it and no explanation — which reads as a
+        broken application rather than an unpublished season.
+        """
+        await async_db_session.execute(
+            text(
+                "INSERT INTO game_team (game_id, season, week, team, opponent,"
+                " is_home) VALUES ('1999_1_A_B', 1999, 1, 'KC', 'BUF', true)"
+            )
+        )
+        assert 1999 not in [e["season"] for e in (await self.seasons(client))["data"]]
+
+    async def test_an_unpublished_run_does_not_make_a_season_available(
+        self, client, async_db_session
+    ):
+        """Availability is publication, not existence of a run.
+
+        A run that succeeded but was never promoted serves nothing — the read
+        path filters on `status = 'published'` everywhere else, and a season
+        picker that disagreed with it would offer a week whose board is empty.
+        """
+        await async_db_session.execute(
+            text(
+                "INSERT INTO model_runs (model_name, model_version, algorithm,"
+                " season, week, status, feature_schema_version, created_at,"
+                " updated_at) VALUES ('shrinkage_eb', '1.0.0', 'baseline', 2024, 5,"
+                " 'succeeded', 1, now(), now())"
+            )
+        )
+        assert 2024 not in [e["season"] for e in (await self.seasons(client))["data"]]
+
+    async def test_the_weeks_endpoint_agrees_with_the_season_list(self, client):
+        """Two endpoints, one answer. A client may build its week picker from
+        either, and they must not disagree about what is published."""
+        entry = (await self.seasons(client))["data"][0]
+        weeks = (await client.get(url(f"/seasons/{entry['season']}/weeks"))).json()
+        assert weeks["data"] == entry["published_weeks"]
+
+    async def test_nothing_published_is_an_empty_list_with_a_notice(
+        self, client, async_db_session
+    ):
+        await async_db_session.execute(
+            text("UPDATE model_runs SET status = 'superseded'")
+        )
+        body = await self.seasons(client)
+        assert body["data"] == []
+        assert any("No projection run" in n for n in body["meta"]["notices"])
 
 
 class TestOperational:
@@ -658,6 +749,38 @@ class TestOperational:
             url("/projections/00-9999999"), params={"season": SEASON}
         )
         assert set(response.json()) == {"code", "message", "field", "remedy"}
+
+    async def test_an_unrouted_path_uses_the_same_shape(self, client):
+        """The error a client meets first, while integrating.
+
+        Left to the framework this is `{"detail": "Not Found"}` — a second
+        error contract, produced by a typo, that no client parses. A typo must
+        not be the one failure the error handling does not cover.
+        """
+        response = await client.get(url("/no-such-endpoint"))
+        assert response.status_code == 404
+        body = response.json()
+        assert set(body) == {"code", "message", "field", "remedy"}
+        assert body["code"] == "not_found"
+        assert "detail" not in body
+
+    async def test_a_wrong_method_uses_the_same_shape(self, client):
+        response = await client.post(url("/seasons"))
+        assert response.status_code == 405
+        assert response.json()["code"] == "method_not_allowed"
+        # Starlette's own `Allow` header still travels; only the body changes.
+        assert "GET" in response.headers.get("allow", "")
+
+    async def test_a_schema_validation_failure_uses_the_same_shape(self, client):
+        """FastAPI's default here is a list of Pydantic issues under `detail`.
+        The client highlights `field`, so it has to be a field name rather than
+        a `loc` array with a transport prefix on the front."""
+        response = await client.get(url("/projections"), params={"week": "not-a-week"})
+        assert response.status_code == 422
+        body = response.json()
+        assert set(body) == {"code", "message", "field", "remedy"}
+        assert body["code"] == "invalid_request"
+        assert body["field"] == "week"
 
     async def test_the_openapi_document_builds(self, client):
         response = await client.get("/openapi.json")

@@ -28,6 +28,7 @@ must not report failure because Redis was restarting.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
@@ -35,7 +36,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..cache import invalidate_all_sync
-from .dataset import load_rows
+from .dataset import SOURCE_TABLE, load_rows
 from .distribution import ResidualDistribution
 from .persist import (
     ProjectionBundle,
@@ -55,6 +56,62 @@ logger = logging.getLogger(__name__)
 #: of how wrong the *components* were; refitting per profile would be four
 #: passes over the same errors expressed in different units.
 DISTRIBUTION_PROFILE = "half_ppr"
+
+#: Smallest training set a week may be projected from. Below this the shrinkage
+#: priors are fitted on noise, and the resulting board would carry the
+#: authority of a model without the accuracy — the thing the frozen foundation
+#: exists to prevent. Matches ``dataset.walk_forward``'s own floor so a
+#: backfilled week and a backtested one cover the same ground.
+MIN_TRAIN_ROWS = 500
+
+#: Smallest sample the *residual* model may be fitted on. This is a separate
+#: floor because it binds a season earlier than the one above: the held-out
+#: distribution refits on everything before the *previous* season, so the first
+#: two seasons in the warehouse have a full training set and no residual
+#: history at all. Projecting them anyway would store point estimates whose
+#: intervals came from a model fitted on nothing.
+MIN_RESIDUAL_TRAIN_ROWS = 500
+
+
+@dataclass
+class FitCache:
+    """Rows and residual fits shared across the weeks of one backfill.
+
+    :func:`generate_week` reloads everything it needs on every call, which is
+    right for the weekly job: it runs once, and a few seconds of redundant I/O
+    is a good price for having no state to get wrong. A backfill calls it ~140
+    times, where that redundancy is most of the wall clock and the reloaded
+    inputs are identical every time.
+
+    So this memoises the parts that provably do not vary within a season — the
+    completed-week history, a season's feature rows, and the residual model's
+    scored output — and nothing else. The backfill loop still calls the same
+    :func:`generate_week`, so a backfilled week and a scheduled one come from
+    one implementation rather than two that have to be kept in agreement.
+
+    Hoisting the residual predictions is only sound because a model's
+    ``predict`` is row-wise: it maps each row independently, so scoring a
+    range once and filtering it per week yields exactly what scoring each
+    week's sub-range separately would have. That is a property of
+    :class:`~nflfp.predict.base.ComponentModel`, not an assumption about one
+    model, and :func:`generate_week` with ``cache=None`` remains the
+    definition this is checked against.
+    """
+
+    #: Completed player-weeks, all seasons. The training pool.
+    history: list[dict] | None = None
+    #: Season -> every feature row for it, completed or not.
+    season_rows: dict[int, list[dict]] = field(default_factory=dict)
+    #: (residual cutoff, profile) -> scored residuals, each tagged with the
+    #: (season, week) it came from so a week can take the prefix it is
+    #: entitled to.
+    residuals: dict[
+        tuple[tuple[int, int], str], list[tuple[tuple[int, int], str, float, float]]
+    ] = field(default_factory=dict)
+
+
+def _ordinal(row: dict) -> tuple[int, int]:
+    return (int(row["season"]), int(row["week"]))
 
 
 @dataclass
@@ -112,6 +169,8 @@ def generate_week(
     week: int,
     publish: bool = False,
     profile: str = DISTRIBUTION_PROFILE,
+    cache: FitCache | None = None,
+    invalidate: bool = True,
 ) -> GenerationResult:
     """Fit, project, persist and optionally publish one week.
 
@@ -125,6 +184,13 @@ def generate_week(
         publish: Make the run live for its ``(model, season, week)``, and retire
             the cache namespace.
         profile: Scoring profile whose residuals fit the distribution.
+        cache: Optional :class:`FitCache` shared across the weeks of a
+            backfill. ``None`` — the weekly job's path — loads everything
+            fresh and is the behaviour every other path is defined against.
+        invalidate: Whether a publish also retires the cache namespace. Only a
+            backfill sets this ``False``, because bumping the epoch once per
+            week for a hundred weeks retires namespaces nobody ever read; it
+            bumps once when the whole run lands.
 
     Returns:
         A :class:`GenerationResult`. A week with no target rows returns
@@ -138,11 +204,7 @@ def generate_week(
     factory = get_model_factory(model_name)
     probe = factory()
 
-    targets = [
-        row
-        for row in load_rows(session, seasons=[season])
-        if int(row["week"]) == week
-    ]
+    targets = [row for row in _season_rows(session, season, cache) if int(row["week"]) == week]
     if not targets:
         logger.warning("no feature rows for %s week %s", season, week)
         return GenerationResult(
@@ -158,16 +220,16 @@ def generate_week(
             ),
         )
 
-    history = load_rows(session, completed_only=True)
+    history = _history(session, cache)
     cutoff = (season, week)
-    train = [row for row in history if (int(row["season"]), int(row["week"])) < cutoff]
+    train = [row for row in history if _ordinal(row) < cutoff]
     _assert_trained_before(train, cutoff)
 
     model = factory()
     model.fit(train)
 
     distribution, samples = _fit_distribution(
-        factory, history, cutoff=cutoff, profile=profile
+        factory, history, cutoff=cutoff, profile=profile, cache=cache
     )
 
     run = create_model_run(
@@ -214,7 +276,8 @@ def generate_week(
         # then find that run superseded, leaving the stale body in the *new*
         # namespace where nothing will retire it.
         session.flush()
-        result.cache_epoch = invalidate_all_sync()
+        if invalidate:
+            result.cache_epoch = invalidate_all_sync()
 
     logger.info(
         "generated projections",
@@ -224,6 +287,262 @@ def generate_week(
             "week": week,
             "projections": written,
             "published": result.published,
+        },
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# backfill
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class BackfillWeek:
+    """One week a backfill produced or refused, and why."""
+
+    season: int
+    week: int
+    projections: int = 0
+    published: bool = False
+    model_run_id: int | None = None
+    skipped: bool = False
+    skip_reason: str = ""
+
+    @property
+    def label(self) -> str:
+        return f"{self.season}w{self.week:02d}"
+
+
+@dataclass
+class BackfillResult:
+    """What a backfill covered, in a form a job log can store."""
+
+    model_name: str
+    model_version: str
+    weeks: list[BackfillWeek] = field(default_factory=list)
+    cache_epoch: int | None = None
+
+    @property
+    def generated(self) -> list[BackfillWeek]:
+        return [entry for entry in self.weeks if not entry.skipped]
+
+    @property
+    def skipped(self) -> list[BackfillWeek]:
+        return [entry for entry in self.weeks if entry.skipped]
+
+    @property
+    def projections_written(self) -> int:
+        return sum(entry.projections for entry in self.generated)
+
+    @property
+    def seasons_covered(self) -> list[int]:
+        return sorted({entry.season for entry in self.generated})
+
+    def as_detail(self) -> dict:
+        """JSON-serialisable summary for ``job_runs.detail``.
+
+        Skips are summarised by reason rather than listed one per week. A
+        hundred weeks refused for the same reason is one fact, and burying it
+        in a hundred rows is how it stops being read.
+        """
+        reasons: dict[str, int] = {}
+        for entry in self.skipped:
+            reasons[entry.skip_reason] = reasons.get(entry.skip_reason, 0) + 1
+        detail = {
+            "model": self.model_name,
+            "model_version": self.model_version,
+            "weeks_generated": len(self.generated),
+            "weeks_skipped": len(self.skipped),
+            "projections": self.projections_written,
+            "seasons": self.seasons_covered,
+        }
+        if reasons:
+            detail["skipped_because"] = reasons
+        if self.cache_epoch is not None:
+            detail["cache_epoch"] = self.cache_epoch
+        return detail
+
+
+def available_weeks(
+    session: Session, seasons: Sequence[int] | None = None
+) -> list[tuple[int, int]]:
+    """Every ``(season, week)`` the feature layer can project, chronologically.
+
+    Read from ``feat_training_dataset`` rather than from the schedule, because
+    what a week can be projected from is the feature layer's coverage, not the
+    warehouse's. The two differ: the warehouse holds playoff weeks 19-22, and
+    the feature layer stops at the fantasy regular season, which is the right
+    scope and not a gap.
+    """
+    params: dict[str, object] = {}
+    where = ""
+    if seasons:
+        where = "WHERE season = ANY(:seasons)"
+        params["seasons"] = list(seasons)
+    rows = session.execute(
+        text(
+            f"SELECT DISTINCT season, week FROM {SOURCE_TABLE} {where} "
+            "ORDER BY season, week"
+        ),
+        params,
+    )
+    return [(int(season), int(week)) for season, week in rows]
+
+
+def published_weeks(session: Session, model_name: str) -> set[tuple[int, int]]:
+    """Weeks that already have a live board for this model."""
+    rows = session.execute(
+        text(
+            "SELECT season, week FROM model_runs "
+            "WHERE model_name = :model AND status = 'published'"
+        ),
+        {"model": model_name},
+    )
+    return {(int(season), int(week)) for season, week in rows}
+
+
+def generate_backfill(
+    session: Session,
+    *,
+    model_name: str,
+    seasons: Sequence[int] | None = None,
+    publish: bool = True,
+    profile: str = DISTRIBUTION_PROFILE,
+    skip_existing: bool = False,
+    min_train_rows: int = MIN_TRAIN_ROWS,
+    min_residual_train_rows: int = MIN_RESIDUAL_TRAIN_ROWS,
+    commit_each: bool = False,
+    on_week: Callable[[BackfillWeek], None] | None = None,
+) -> BackfillResult:
+    """Project and publish every week the feature layer can support.
+
+    The weekly job produces one board a week, which means a fresh deployment
+    can offer a user exactly one week to look at no matter how much history the
+    warehouse holds. This walks the same generator over every week instead, so
+    the season and week selectors — which are built from *published runs*, and
+    correctly so — describe the whole warehouse rather than the last cron
+    firing.
+
+    Every week goes through :func:`generate_week` unchanged. A backfilled board
+    is therefore the same object the Tuesday job would have written for that
+    week, fitted on the same training set with the same leakage check, and the
+    numbers behind a 2019 slate reconcile with a 2025 one because there is one
+    implementation rather than a historical importer beside a live one.
+
+    Args:
+        session: Open synchronous session.
+        model_name: A model registered in :mod:`nflfp.predict.registry`.
+        seasons: Restrict to these seasons; every season with feature rows if
+            omitted.
+        publish: Make each run live. A backfill that does not publish stores
+            boards no picker will ever offer, so this defaults ``True`` — the
+            opposite of :func:`generate_week`, where the caller is usually
+            evaluating a challenger.
+        profile: Scoring profile whose residuals fit the distribution.
+        skip_existing: Leave weeks that already have a published run alone.
+            The way to extend a backfill after adding a season without
+            reprojecting what is already there.
+        min_train_rows: Refuse a week with less training data than this.
+        min_residual_train_rows: Refuse a week whose *residual* model would be
+            fitted on less than this. Binds a season earlier than the above.
+        commit_each: Commit after each week. A backfill is minutes of work and
+            every week it produces is independently valid, so losing 130 good
+            boards because the 131st failed is a worse trade than a long
+            transaction avoids.
+        on_week: Called after each week, for progress reporting. A backfill is
+            long enough that silence reads as a hang.
+
+    Returns:
+        A :class:`BackfillResult` listing every week generated and every week
+        refused with its reason. Weeks are **refused, never approximated**: the
+        first seasons in the warehouse have no prior season for the residual
+        model to learn from, and a board whose interval came from a model
+        fitted on nothing is exactly what Layer 3b exists to prevent.
+    """
+    factory = get_model_factory(model_name)
+    probe = factory()
+    result = BackfillResult(model_name=probe.name, model_version=probe.version)
+
+    cache = FitCache()
+    history = _history(session, cache)
+    already = published_weeks(session, probe.name) if skip_existing else set()
+
+    # Counting rows against a cutoff is a scan of the history per week, which
+    # is cheap next to a fit but silly to repeat: one sorted pass gives every
+    # cutoff its training-set size by bisection instead.
+    ordinals = sorted(_ordinal(row) for row in history)
+
+    def rows_before(cutoff: tuple[int, int]) -> int:
+        from bisect import bisect_left
+
+        return bisect_left(ordinals, cutoff)
+
+    published_any = False
+
+    for season, week in available_weeks(session, seasons):
+        cutoff = (season, week)
+        entry = BackfillWeek(season=season, week=week)
+
+        if cutoff in already:
+            entry.skipped = True
+            entry.skip_reason = "already published"
+        elif rows_before(cutoff) < min_train_rows:
+            entry.skipped = True
+            entry.skip_reason = (
+                f"only {rows_before(cutoff)} training row(s) before this week; "
+                f"{min_train_rows} required"
+            )
+        elif rows_before((season - 1, 1)) < min_residual_train_rows:
+            entry.skipped = True
+            entry.skip_reason = (
+                "not enough history before the previous season to fit a "
+                "held-out residual distribution; the interval would be "
+                "unmeasured"
+            )
+        else:
+            generated = generate_week(
+                session,
+                model_name=model_name,
+                season=season,
+                week=week,
+                publish=publish,
+                profile=profile,
+                cache=cache,
+                invalidate=False,
+            )
+            if generated.skipped:
+                entry.skipped = True
+                entry.skip_reason = generated.skip_reason
+            else:
+                entry.projections = generated.projections_written
+                entry.published = generated.published
+                entry.model_run_id = generated.model_run_id
+                published_any = published_any or generated.published
+                if commit_each:
+                    session.commit()
+
+        result.weeks.append(entry)
+        if on_week is not None:
+            on_week(entry)
+
+    # One epoch bump for the whole backfill. Every published week retires the
+    # same namespace, so doing it per week would retire namespaces that no
+    # reader had time to populate and cost a Redis round trip each.
+    if published_any:
+        if commit_each:
+            session.commit()
+        else:
+            session.flush()
+        result.cache_epoch = invalidate_all_sync()
+
+    logger.info(
+        "backfill complete",
+        extra={
+            "model": probe.name,
+            "weeks_generated": len(result.generated),
+            "weeks_skipped": len(result.skipped),
+            "projections": result.projections_written,
         },
     )
     return result
@@ -256,8 +575,31 @@ def _assert_trained_before(train: list[dict], cutoff: tuple[int, int]) -> None:
         )
 
 
+def _history(session: Session, cache: FitCache | None) -> list[dict]:
+    """Completed player-weeks, loaded once per backfill."""
+    if cache is None:
+        return load_rows(session, completed_only=True)
+    if cache.history is None:
+        cache.history = load_rows(session, completed_only=True)
+    return cache.history
+
+
+def _season_rows(session: Session, season: int, cache: FitCache | None) -> list[dict]:
+    """Every feature row for a season, loaded once per backfill."""
+    if cache is None:
+        return load_rows(session, seasons=[season])
+    if season not in cache.season_rows:
+        cache.season_rows[season] = load_rows(session, seasons=[season])
+    return cache.season_rows[season]
+
+
 def _fit_distribution(
-    factory, history: list[dict], *, cutoff: tuple[int, int], profile: str
+    factory,
+    history: list[dict],
+    *,
+    cutoff: tuple[int, int],
+    profile: str,
+    cache: FitCache | None = None,
 ) -> tuple[ResidualDistribution, list[tuple[str, float, float]]]:
     """Fit the outcome distribution on genuinely held-out residuals.
 
@@ -272,25 +614,43 @@ def _fit_distribution(
     produced a stated 94% boom probability that delivered 17%.
     """
     residual_cutoff = (cutoff[0] - 1, 1)
-    residual_train = [
-        row for row in history if (int(row["season"]), int(row["week"])) < residual_cutoff
-    ]
-    residual_eval = [
-        row
-        for row in history
-        if residual_cutoff <= (int(row["season"]), int(row["week"])) < cutoff
-    ]
+    key = (residual_cutoff, profile)
 
-    residual_model = factory()
-    residual_model.fit(residual_train)
+    if cache is not None and key in cache.residuals:
+        scored = cache.residuals[key]
+    else:
+        # Uncached, the eval range stops at the target week — the single-week
+        # job should not predict rows it will discard. Cached, it runs to the
+        # end of the target season, because every week of that season shares
+        # this residual cutoff and will take a prefix of the same list.
+        upper = (cutoff[0] + 1, 1) if cache is not None else cutoff
 
-    samples: list[tuple[str, float, float]] = []
-    for row, prediction in zip(residual_eval, residual_model.predict(residual_eval)):
-        actual = row.get(f"fp_{profile}_actual")
-        if actual is None:
-            continue
-        points = score_components(prediction.components, position=prediction.position)[profile]
-        samples.append((prediction.position, points, float(actual)))
+        residual_train = [row for row in history if _ordinal(row) < residual_cutoff]
+        residual_eval = [
+            row for row in history if residual_cutoff <= _ordinal(row) < upper
+        ]
+
+        residual_model = factory()
+        residual_model.fit(residual_train)
+
+        scored = []
+        for row, prediction in zip(residual_eval, residual_model.predict(residual_eval)):
+            actual = row.get(f"fp_{profile}_actual")
+            if actual is None:
+                continue
+            points = score_components(
+                prediction.components, position=prediction.position
+            )[profile]
+            scored.append((_ordinal(row), prediction.position, points, float(actual)))
+
+        if cache is not None:
+            cache.residuals[key] = scored
+
+    samples = [
+        (position, points, actual)
+        for ordinal, position, points, actual in scored
+        if ordinal < cutoff
+    ]
 
     return ResidualDistribution().fit(samples), samples
 

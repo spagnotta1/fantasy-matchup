@@ -17,8 +17,9 @@ from ...config import get_settings
 from ...db.engine import check_database
 from ...predict.foundation import foundation_summary
 from ...services import catalog
+from ...services.lineup import format_summary, slot_summary
 from ...services.positions import support_summary
-from .. import schemas
+from .. import mappers, schemas
 from ..dependencies import DbSession
 from ..provenance import PROVENANCE_LEGEND
 
@@ -210,6 +211,40 @@ async def positions() -> schemas.Envelope[list[schemas.PositionSupportOut]]:
 
 
 @router.get(
+    "/meta/lineup-slots",
+    response_model=schemas.Envelope[list[schemas.LineupSlotOut]],
+    summary="Lineup slots, what fills them, and which are simulable",
+    description=(
+        "The slot vocabulary `POST /simulations` validates against. FLEX "
+        "accepts RB/WR/TE; quarterbacks are excluded, because a format that "
+        "admits one is a superflex league and is a separate lineup format "
+        "rather than a change to what FLEX means.\n\n"
+        "K and DST appear with `supported: false`. They are recognised slots in "
+        "every real league and refusing them as *unknown* would misrepresent a "
+        "missing model as a typo; `/meta/positions` carries what each is "
+        "blocked on.\n\n"
+        "`meta.notices` lists the lineup formats a simulation may be run "
+        "against."
+    ),
+)
+async def lineup_slots() -> schemas.Envelope[list[schemas.LineupSlotOut]]:
+    return schemas.Envelope[list[schemas.LineupSlotOut]](
+        data=[
+            schemas.LineupSlotOut.model_validate(entry) for entry in slot_summary()
+        ],
+        meta=schemas.MetaOut(
+            notices=[
+                f"{entry['label']} ({entry['name']}): "
+                + ", ".join(
+                    f"{r['count']}x{r['slot']}" for r in entry["requirements"]
+                )
+                for entry in format_summary()
+            ]
+        ),
+    )
+
+
+@router.get(
     "/meta/provenance",
     response_model=schemas.Envelope[dict[str, str]],
     summary="What each provenance label means",
@@ -243,11 +278,37 @@ async def scoring_profiles() -> schemas.Envelope[list[str]]:
 
 @router.get(
     "/seasons",
-    response_model=schemas.Envelope[list[int]],
-    summary="Seasons present in the warehouse, newest first",
+    response_model=schemas.Envelope[list[schemas.SeasonOut]],
+    summary="Seasons with a published board, newest first",
+    description=(
+        "Availability, not history. The warehouse holds every season nflverse "
+        "publishes; this returns only the ones a published projection run "
+        "covers, because a season the deployment has never projected has no "
+        "screen to show and offering it in a picker makes a working install "
+        "look broken.\n\n"
+        "Each entry carries its published weeks, so a client builds the season "
+        "*and* week selectors — and resolves which slate to open on — from this "
+        "one response. `data[0].latest_published_week` is the newest board in "
+        "the deployment.\n\n"
+        "An empty list is the honest answer for an install whose projection job "
+        "has not run; `meta.notices` says so."
+    ),
 )
-async def seasons(db: DbSession) -> schemas.Envelope[list[int]]:
-    return schemas.Envelope[list[int]](data=list(await catalog.list_seasons(db)))
+async def seasons(db: DbSession) -> schemas.Envelope[list[schemas.SeasonOut]]:
+    found = await catalog.list_published_seasons(db)
+    return schemas.Envelope[list[schemas.SeasonOut]](
+        data=[mappers.season(entry) for entry in found],
+        meta=schemas.MetaOut(
+            notices=(
+                []
+                if found
+                else [
+                    "No projection run has been published, so no season has a "
+                    "board to show."
+                ]
+            )
+        ),
+    )
 
 
 @router.get(

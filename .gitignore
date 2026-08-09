@@ -30,6 +30,13 @@ data/
 *.sqlite3
 *.parquet
 
+# Phase 6B artifacts. The panel is 13 MB of regenerable intermediate — a
+# walk-forward pass over the frozen prediction foundation, rebuilt in ~65s by
+# `python scripts/phase6b_backtest.py --rebuild-panel`. The fitted model and the
+# report are small, are the evidence behind docs/simulation-readiness.md, and
+# are tracked.
+artifacts/panel_*.jsonl
+
 # Editor / OS
 .vscode/
 .idea/

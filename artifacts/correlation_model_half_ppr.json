@@ -1,0 +1,259 @@
+{
+  "version": "1.0.0",
+  "mode": "game_environment",
+  "profile": "half_ppr",
+  "model_name": "shrinkage_eb",
+  "loadings": {
+    "QB": {
+      "game": 0.398649,
+      "team": 0.9171035791005289
+    },
+    "RB": {
+      "game": 0.028355,
+      "team": 0.043911
+    },
+    "TE": {
+      "game": 0.131706,
+      "team": 0.16588
+    },
+    "WR": {
+      "game": 0.175626,
+      "team": 0.161649
+    }
+  },
+  "estimation": {
+    "projection_floor": 6.0,
+    "rows": 18209,
+    "pairs": 87491,
+    "through_season": 2025,
+    "through_week": 18,
+    "cells": [
+      {
+        "position_a": "RB",
+        "position_b": "WR",
+        "relation": "opp",
+        "n": 10029,
+        "correlation": -0.0017501844011443668
+      },
+      {
+        "position_a": "RB",
+        "position_b": "WR",
+        "relation": "same",
+        "n": 9942,
+        "correlation": -0.01357132452557692
+      },
+      {
+        "position_a": "QB",
+        "position_b": "WR",
+        "relation": "same",
+        "n": 8382,
+        "correlation": 0.2357409947879016
+      },
+      {
+        "position_a": "QB",
+        "position_b": "WR",
+        "relation": "opp",
+        "n": 8365,
+        "correlation": 0.07335883758529958
+      },
+      {
+        "position_a": "WR",
+        "position_b": "WR",
+        "relation": "opp",
+        "n": 7841,
+        "correlation": 0.049511047882709304
+      },
+      {
+        "position_a": "WR",
+        "position_b": "WR",
+        "relation": "same",
+        "n": 5497,
+        "correlation": 0.004276974870979131
+      },
+      {
+        "position_a": "QB",
+        "position_b": "RB",
+        "relation": "same",
+        "n": 5361,
+        "correlation": 0.06158530337917634
+      },
+      {
+        "position_a": "QB",
+        "position_b": "RB",
+        "relation": "opp",
+        "n": 5350,
+        "correlation": 0.03076349650673277
+      },
+      {
+        "position_a": "TE",
+        "position_b": "WR",
+        "relation": "opp",
+        "n": 4437,
+        "correlation": 0.045987109517711844
+      },
+      {
+        "position_a": "TE",
+        "position_b": "WR",
+        "relation": "same",
+        "n": 4232,
+        "correlation": 0.007898547808367287
+      },
+      {
+        "position_a": "RB",
+        "position_b": "RB",
+        "relation": "opp",
+        "n": 3214,
+        "correlation": -0.03856929328570995
+      },
+      {
+        "position_a": "RB",
+        "position_b": "TE",
+        "relation": "same",
+        "n": 2826,
+        "correlation": 0.0053642736319133195
+      },
+      {
+        "position_a": "RB",
+        "position_b": "TE",
+        "relation": "opp",
+        "n": 2789,
+        "correlation": 0.021362378554240887
+      },
+      {
+        "position_a": "QB",
+        "position_b": "TE",
+        "relation": "same",
+        "n": 2350,
+        "correlation": 0.21830529576094124
+      },
+      {
+        "position_a": "QB",
+        "position_b": "TE",
+        "relation": "opp",
+        "n": 2332,
+        "correlation": 0.060556167902104274
+      },
+      {
+        "position_a": "QB",
+        "position_b": "QB",
+        "relation": "opp",
+        "n": 2279,
+        "correlation": 0.14340685687636565
+      },
+      {
+        "position_a": "RB",
+        "position_b": "RB",
+        "relation": "same",
+        "n": 1539,
+        "correlation": -0.03680855740601009
+      },
+      {
+        "position_a": "TE",
+        "position_b": "TE",
+        "relation": "opp",
+        "n": 606,
+        "correlation": -0.03147872551713237
+      },
+      {
+        "position_a": "TE",
+        "position_b": "TE",
+        "relation": "same",
+        "n": 120,
+        "correlation": 0.026437976646740288
+      }
+    ],
+    "residuals": [
+      [
+        "WR-WR same",
+        0.004276974870979131,
+        0.056974768490123395
+      ],
+      [
+        "TE-TE opp",
+        -0.03147872551713237,
+        0.01734657052087241
+      ],
+      [
+        "TE-WR same",
+        0.007898547808367287,
+        0.04994526842265265
+      ],
+      [
+        "RB-RB same",
+        -0.03680855740601009,
+        0.002732224506768792
+      ],
+      [
+        "RB-RB opp",
+        -0.03856929328570995,
+        0.0008040121137873784
+      ],
+      [
+        "RB-WR same",
+        -0.01357132452557692,
+        0.012078112406432194
+      ],
+      [
+        "TE-WR opp",
+        0.045987109517711844,
+        0.023131074216296184
+      ],
+      [
+        "QB-RB opp",
+        0.03076349650673277,
+        0.011303722343341035
+      ],
+      [
+        "WR-WR opp",
+        0.049511047882709304,
+        0.030844517292683456
+      ],
+      [
+        "RB-TE opp",
+        0.021362378554240887,
+        0.00373454854452964
+      ],
+      [
+        "QB-WR same",
+        0.2357409947879016,
+        0.21826156697438337
+      ],
+      [
+        "QB-QB opp",
+        0.14340685687636565,
+        0.15892066378633857
+      ],
+      [
+        "QB-TE same",
+        0.21830529576094124,
+        0.20463335704222238
+      ],
+      [
+        "QB-RB same",
+        0.06158530337917634,
+        0.0515750471237324
+      ],
+      [
+        "QB-TE opp",
+        0.060556167902104274,
+        0.05250455696026371
+      ],
+      [
+        "RB-WR opp",
+        -0.0017501844011443668,
+        0.004979896138198243
+      ],
+      [
+        "RB-TE same",
+        0.0053642736319133195,
+        0.011018556191336782
+      ],
+      [
+        "QB-WR opp",
+        0.07335883758529958,
+        0.07001307850910753
+      ]
+    ],
+    "weighted_rmse": 0.02414590244879433
+  }
+}

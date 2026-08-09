@@ -31,6 +31,7 @@ class TestJobRegistry:
             "warm_cache",
             "evaluate_model",
             "invalidate_cache",
+            "backfill_projections",
         }
 
     def test_injuries_refresh_daily_not_weekly(self):
@@ -90,9 +91,22 @@ class TestJobRegistry:
         assert job.is_scheduled is False
         assert job not in REGISTRY.scheduled()
 
+    def test_backfill_is_registered_but_never_scheduled(self):
+        """A catch-up run, not a cadence. Once the history is published the
+        weekly job keeps it current, and a cron would spend an hour a week
+        rewriting boards for seasons that ended years ago."""
+        job = REGISTRY.get("backfill_projections")
+        assert job.schedule == MANUAL
+        assert job.is_scheduled is False
+        assert job not in REGISTRY.scheduled()
+
     def test_scheduled_returns_only_timed_jobs(self):
+        """Counted against the manual jobs rather than a literal, so adding
+        one is a one-line registry change rather than a test edit that invites
+        bumping the number until it passes."""
         assert all(job.is_scheduled for job in REGISTRY.scheduled())
-        assert len(REGISTRY.scheduled()) == len(REGISTRY.all()) - 1
+        manual = [job for job in REGISTRY.all() if job.schedule == MANUAL]
+        assert len(REGISTRY.scheduled()) == len(REGISTRY.all()) - len(manual)
 
     def test_unknown_job_lists_the_valid_names(self):
         with pytest.raises(KeyError, match="registered:"):

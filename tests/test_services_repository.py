@@ -54,8 +54,12 @@ class TestCalendarQueries:
     async def test_published_weeks_lists_only_published_runs(self, warehouse):
         assert await repository.published_weeks(warehouse, SEASON) == [UPCOMING_WEEK]
 
-    async def test_seasons_available(self, warehouse):
-        assert await repository.seasons_available(warehouse) == [SEASON]
+    async def test_published_season_weeks_pairs_each_season_with_its_weeks(
+        self, warehouse
+    ):
+        assert await repository.published_season_weeks(warehouse) == [
+            (SEASON, UPCOMING_WEEK)
+        ]
 
 
 # ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ import statistics
 from collections.abc import Mapping, Sequence
 
 from . import grading
-from .distributions import OutcomeCurve, probability_beats
+from .distributions import probability_beats
 from .dto import (
     GameContext,
     HistoricalWeek,
@@ -437,17 +437,7 @@ def assign_tiers(
     if not projections:
         return []
 
-    curves = [
-        OutcomeCurve.from_percentiles(
-            p10=p.points.floor,
-            p25=p.points.p25,
-            median=p.points.median,
-            p75=p.points.p75,
-            p90=p.points.ceiling,
-            expected=p.points.expected,
-        )
-        for p in projections
-    ]
+    curves = [p.points.curve() for p in projections]
 
     tiers = [1]
     tier = 1

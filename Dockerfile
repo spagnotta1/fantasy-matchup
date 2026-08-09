@@ -10,6 +10,30 @@
 # The default command is the API, because that is the service that must come up
 # by itself after a platform restart. Every other service overrides it in its
 # railway.*.json.
+#
+# The frontend is built in a first stage and its output copied into the runtime
+# image, so the API serves the app from its own origin. That is what lets the
+# client call a relative `/api/v1` with no CORS exchange and no absolute base
+# URL baked into the bundle. Node does not survive into the final image — only
+# the static files it produced.
+
+FROM node:22-slim AS web
+
+WORKDIR /web
+
+# Lockfile first, so a source edit does not reinstall the dependency tree.
+# `npm ci` rather than `npm install`: it installs exactly the lockfile and fails
+# when the two disagree, which is the behaviour a reproducible build needs.
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+
+COPY web/ ./
+# Runs `tsc -b` before Vite, so a type error fails the image build rather than
+# shipping. The frontend needs no build-time configuration: every environment
+# it can be deployed into is same-origin by construction.
+RUN npm run build
+
+
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -27,6 +51,14 @@ RUN pip install .
 COPY scripts ./scripts
 COPY migrations ./migrations
 COPY alembic.ini ./
+
+# The built frontend. Set explicitly rather than discovered: the package is
+# installed into site-packages, so the repository-relative fallback in
+# nflfp.api.spa cannot find `web/dist` from there. An image built without this
+# stage — or a worker container that ignores the variable — simply serves the
+# API, which is the correct behaviour for every service that is not the API.
+COPY --from=web /web/dist ./web/dist
+ENV WEB_DIST_DIR=/app/web/dist
 
 # DuckDB downloads the httpfs and postgres extensions on first use. Baking them
 # into the image keeps the cron run from depending on extension-CDN uptime.

@@ -171,6 +171,21 @@ class Settings(BaseSettings):
     #: How far ahead to fetch forecasts and markets. One NFL week plus slack.
     provider_horizon_days: int = Field(default=10, ge=1, le=16)
 
+    # ---- frontend ---------------------------------------------------------
+    web_dist_dir: str | None = Field(
+        default=None,
+        description=(
+            "Directory holding the built frontend (Vite's `web/dist`). When it "
+            "exists the API also serves the single-page app from the same "
+            "origin, which is the configuration the client is written for: it "
+            "calls a relative `/api/v1`, so there is no CORS exchange and no "
+            "absolute base URL to keep in step with the deployment. Unset, or "
+            "pointing nowhere, the API serves only JSON — which is what the "
+            "ETL, job and warmer containers run, since none of them should "
+            "carry a copy of the frontend."
+        ),
+    )
+
     # ---- domain defaults --------------------------------------------------
     default_scoring_profile: str = "half_ppr"
 

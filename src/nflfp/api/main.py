@@ -25,7 +25,8 @@ from .caching import ResponseCacheMiddleware
 from .errors import install_error_handlers
 from .middleware import RequestContextMiddleware
 from .provenance import PROVENANCE_LEGEND
-from .routers import advice, matchups, meta, players, projections
+from .routers import advice, matchups, meta, players, projections, simulations
+from .spa import mount_frontend
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +79,29 @@ must clear.
   softened. Week 1 is legitimately ungraded.
 - **Start/sit declines to call a toss-up.** Below a 58% win probability no
   player is named, because the edge is smaller than the model's own error.
+- **Matchup simulation assumes player independence.** `POST
+  {API_PREFIX}/simulations` draws each player from their own distribution.
+  Teammates and opposing players are correlated, so the reported intervals are
+  too narrow and the win probability sits further from 50% than the evidence
+  supports. The assumption is a field on the response, not a footnote.
 
 ### Errors
 
 One shape for every failure: `{{"code", "message", "field", "remedy"}}`.
 `404` not found, `422` semantically impossible, `503` a recoverable server
 state (a materialized view awaiting a rebuild) with a `Retry-After` header.
+
+*Every* failure, including the ones the framework raises: an unrouted path, a
+wrong method and a schema validation error all answer in this shape rather than
+in Starlette's `detail`.
+
+### Which seasons and weeks exist
+
+`GET {API_PREFIX}/seasons` returns the seasons a run has actually been
+published for, each with its published weeks — not every season in the
+warehouse. Build both selectors from it. `data[0].latest_published_week` is the
+newest board in the deployment, and an empty list means nothing is published at
+all.
 """
 
 
@@ -167,7 +185,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=["*"] if not settings.is_deployed else [],
         allow_credentials=False,
-        allow_methods=["GET"],
+        # POST is here for `/simulations` alone, which takes two lineups in a
+        # body because fourteen ids do not belong in a query string. It writes
+        # nothing, so the method is a transport choice rather than a mutation —
+        # and with `allow_credentials=False` a cross-origin POST carries no
+        # ambient authority regardless.
+        allow_methods=["GET", "POST"],
         allow_headers=["*"],
         expose_headers=["X-Cache", "X-Request-ID", "X-Response-Time-ms", "Age"],
     )
@@ -182,18 +205,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         players.router,
         matchups.router,
         advice.router,
+        simulations.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 
-    @app.get("/", include_in_schema=False)
-    async def root() -> dict:
-        return {
-            "name": "nflfp",
-            "api": API_PREFIX,
-            "docs": "/docs",
-            "model": FROZEN_MODEL,
-            "phase": FOUNDATION_PHASE,
-        }
+    # Registered before the frontend so that a deployment *without* a build
+    # still answers `/` with something that identifies the service. When a build
+    # is present the catch-all below never sees `/`, and the browser gets the
+    # app instead — which is the right answer at the root of a product.
+    if not mount_frontend(app, settings):
+
+        @app.get("/", include_in_schema=False)
+        async def root() -> dict:
+            return {
+                "name": "nflfp",
+                "api": API_PREFIX,
+                "docs": "/docs",
+                "model": FROZEN_MODEL,
+                "phase": FOUNDATION_PHASE,
+            }
 
     return app
 

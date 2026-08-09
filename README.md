@@ -264,6 +264,7 @@ python -m nflfp.jobs schedule                    # Railway cron config
 | `generate_projections` | weekly, after the feature build | see [Layer 6](#layer-6--background-jobs-and-caching) |
 | `warm_cache` | hourly | the first request after a publish should not be the one that pays |
 | `evaluate_model` | weekly, the day after a projection run | a model whose accuracy drifts does not announce itself |
+| `backfill_projections` | **manual only** | a catch-up run, not a cadence — once the history is published the weekly job keeps it current |
 | `invalidate_cache` | **manual only** | publishing already invalidates; a cron would discard the cache on a timer |
 
 Failure is survivable: a non-critical job that fails is recorded and the batch
@@ -444,11 +445,19 @@ an HTTP exception, and nothing returns a Pydantic model.
 
 ```
 catalog     when and what format   ─┐
-projections slate, rankings, a week ├─► assemble (pure) ─► grading, distributions
-players     search, profile, history│         ▲
-matchups    a game from both sides  │         │
-advice      start/sit, compare     ─┘   repository (the only SQL)
+projections slate, rankings, a week │
+players     search, profile, history├─► assemble (pure) ─► grading, distributions
+matchups    a game from both sides  │         ▲
+advice      start/sit, compare      │         │
+rosters     a named set + its gaps ─┘   repository (the only SQL)
 ```
+
+`rosters` is the newest and the odd one out: it answers a question about a
+*set* of players rather than about a board or a pair. Its contract is that
+nothing is dropped silently — every requested id comes back either as a
+projection or as a typed reason it has none — because the consumer it exists
+for sums those players into a team score, where a missing row is not a smaller
+answer but a wrong one. See `docs/simulation-readiness.md`.
 
 The split exists so the interesting parts don't need a database. Tier
 boundaries, grade thresholds, toss-up cutoffs and the head-to-head integral are
@@ -740,6 +749,56 @@ The Tuesday chain runs in dependency order with an hour of slack between links:
 Wed 16:00  evaluate_model      re-measure what was just published
 ```
 
+### One week a firing is not one week of product
+
+`generate_projections` publishes the upcoming slate, and availability is
+measured in *published runs* — `/seasons` reports what has been projected, not
+what the warehouse holds, because offering a season no run covers produces an
+empty screen a user cannot explain. Both halves are right, and together they
+have a failure mode: an install whose weekly job has fired once has ten seasons
+in the warehouse and exactly **one** week in its selectors. Nothing is broken,
+no error is raised, and the product looks like it has one week of data because
+in the only sense the API measures, it does.
+
+`backfill_projections` walks the same generator over every week the feature
+layer supports:
+
+```powershell
+python -m nflfp.jobs run backfill_projections --publish
+python -m nflfp.jobs run backfill_projections --seasons 2024 2025
+python -m nflfp.jobs run backfill_projections --skip-existing   # after a new season
+```
+
+It is `MANUAL`, for the reason `invalidate_cache` is: this is a catch-up run,
+not a cadence. Once the history is published the weekly job keeps it current,
+and a cron would spend an hour a week rewriting boards for seasons that ended
+years ago.
+
+Every week goes through **`generate_week` unchanged**. That is the whole design
+constraint — a historical importer running beside the live path is two
+implementations that drift, and the symptom is a 2019 board that cannot be
+reconciled with a 2025 one. What the backfill adds is a `FitCache` that
+memoises the inputs which provably do not vary within a season: the completed
+history, a season's feature rows, and the residual model's scored output. That
+is sound only because a model's `predict` is row-wise, so scoring a range once
+and slicing it per week is identical to scoring each week separately —
+`generate_week(cache=None)` remains the definition, and a test asserts the two
+agree exactly.
+
+It is worth 5x: 141 weeks in ~3 minutes rather than ~15.
+
+**Weeks are refused, never approximated.** The held-out distribution refits on
+everything before the *previous* season, so the first two seasons in a
+warehouse have a full training set and no residual history at all. Projecting
+them anyway would store point estimates whose intervals came from a model
+fitted on nothing — precisely what Layer 3b exists to prevent. On a 2016-2025
+warehouse that refuses 34 weeks (2016 and 2017) with the reason recorded in the
+job log, and publishes 141.
+
+`GET /api/v1/seasons` is then the honest answer to "what does this deployment
+have", and the frontend's Settings page renders it as a coverage table rather
+than leaving it to be inferred from a dropdown.
+
 ### Retraining is continuous; *checking* it is the job
 
 `generate_projections` refits from scratch every week, so there is no separate
@@ -815,7 +874,7 @@ one costs latency rather than correctness.
 | | TTL | why |
 |---|---|---|
 | `/meta/*`, `/teams` | 3600s | frozen constants and a registry; changes on deploy |
-| `/games`, `/seasons` | 600–900s | the schedule moves only for a flexed kickoff |
+| `/games`, `/seasons` | 600–900s | the schedule moves for a flexed kickoff; availability moves on a publish |
 | slates, rankings, matchups, start/sit | 300s | see below |
 | `/search` | 60s | cheap query, unbounded term cardinality |
 | `/health*` | never | a cached liveness check is not a liveness check |
@@ -1074,7 +1133,11 @@ Nothing here is asserted without a check that fails loudly:
 | Production path rejects leakage | train rows at/after target week | `ValueError`, per-row count |
 | No distribution means not stored | position with no residuals | dropped and counted |
 | Emitted cron ≡ registry | `schedule --emit` vs `REGISTRY` | schedules and commands match |
-| A manual job gets no cron service | `invalidate_cache` | no file emitted, absent from `run-all` |
+| A manual job gets no cron service | `invalidate_cache`, `backfill_projections` | no file emitted, absent from `run-all` |
+| Backfill ≡ the weekly job | `FitCache` vs `cache=None` | identical residual samples |
+| A backfilled week sees no future | cached range sliced per week | strictly increasing, prefix only |
+| Too little history is refused | 2016-17, no residual fold | 34 weeks skipped with a reason, 141 published |
+| One number across every view | board / rankings / profile / compare / single | 0 mismatches over 6 slates |
 | Logging installs one handler | configure twice | 1 handler, no doubled lines |
 | Player index does not skip on paging | two pages of 2 | 4 distinct ids |
 | Player index is stably ordered | full listing | alphabetical |
@@ -1190,7 +1253,12 @@ railway run python -m nflfp.pipeline full
 railway run alembic upgrade head
 railway run python -m nflfp.jobs run build_features
 railway run python -m nflfp.jobs run generate_projections --publish
+railway run python -m nflfp.jobs run backfill_projections --publish
 ```
+
+The backfill is what makes the season and week selectors describe the
+warehouse rather than the last cron firing. Skipping it leaves a deployment
+that works correctly and offers exactly one week.
 
 Until that completes, every endpoint returns `503` naming the command it is
 waiting on rather than a 500.
@@ -1220,6 +1288,17 @@ All seven layers are done. What remains is modelling and scale, not structure.
    rate need `raw_pbp`, which is opt-in and not loaded. Those feature
    definitions already declare the dependency and skip themselves until it
    exists.
+5. **The Matchup Simulation Engine** — **built**, stateless, at
+   `POST /api/v1/simulations`, and documented in
+   `docs/simulation-readiness.md`. Lineup payloads in, two score distributions
+   and a win probability out; nothing stored. Phase 6B then fitted and scored a
+   correlation structure over it and kept the independent sampler as the
+   default on the evidence.
+   Three of the four things that used to block an honest version still do — no
+   K/DST projections, no user or roster tables (which want authentication
+   first), and unquantified injury impact — and all three are refused or
+   disclosed rather than papered over. The fourth, player independence, is now
+   measured rather than assumed.
 
 ## Documented gaps
 
@@ -1272,9 +1351,25 @@ stored score over the derived one.
   each letter every week. The magnitude claim travels beside the grade in
   points; a client showing only the letter is showing half the picture.
 - **Head-to-head assumes independence.** Wrong for teammates and for players
-  facing each other. Both are detected and disclosed in `caveats` rather than
-  corrected. A correlated simulation is the fix, and `load_distribution()`
-  already returns the full stored distribution it would need.
+  facing each other, and both are detected and disclosed in `caveats` rather
+  than corrected. Phase 6B measured how wrong: a quarterback and his own
+  receiver correlate **+0.24**, opposing quarterbacks +0.14, and everything not
+  involving a quarterback is within 0.05 of zero. A fitted correlation structure
+  now exists (`POST /simulations` with `correlation_mode: game_environment`) and
+  is **not** the default, because on 4,320 held-out matchups it did not beat the
+  independent baseline. The same backtest disproved the reason this section used
+  to give for wanting it: the lineup-level interval is not too narrow, it is
+  slightly too **wide** — 82.3% coverage on a nominal 80% — because the outcome
+  curve's tail extension over-disperses a seven-player sum by more than
+  independence under-disperses it. Phase 6C measured those tail factors at the
+  lineup level and **recommends `LOWER_TAIL_FACTOR = 1.0` / `UPPER_TAIL_FACTOR =
+  2.0`, awaiting approval — the shipped values are still 1.5 / 2.5.** It also
+  found that the two errors were cancelling: on stacked lineups under the
+  recalibrated tails, correlation moves 80% coverage from 0.783 onto 0.802,
+  where under the current tails it made an already-wide interval wider. So
+  correlation is worth re-testing for promotion once the tails land, on interval
+  calibration rather than on Brier. `rosters.correlation_groups()` still reports
+  the structure under the default mode. See `docs/simulation-readiness.md`.
 - **No authentication.** `dependencies.current_principal` returns an anonymous
   principal, so adding auth is one function plus a router dependency rather than
   a signature change across every endpoint. The cache is already excluded for
