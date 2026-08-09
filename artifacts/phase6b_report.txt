@@ -1,0 +1,106 @@
+======================================================================================================================
+PHASE 6B — CORRELATED MATCHUP SIMULATION
+======================================================================================================================
+panel: 38,061 leakage-free player-week(s), seasons 2019-2025, half_ppr / shrinkage_eb
+
+MARGINAL CALIBRATION — PIT of the panel's own outcomes (0.100 is flat)
+  A correlation estimated from these inherits whatever is wrong here.
+  [0.0,0.1)   all 0.1157   startable 0.0996
+  [0.1,0.2)   all 0.1247   startable 0.0919
+  [0.2,0.3)   all 0.0849   startable 0.1010
+  [0.3,0.4)   all 0.0904   startable 0.1027
+  [0.4,0.5)   all 0.0876   startable 0.0964
+  [0.5,0.6)   all 0.1173   startable 0.1129
+  [0.6,0.7)   all 0.0894   startable 0.0975
+  [0.7,0.8)   all 0.1053   startable 0.1068
+  [0.8,0.9)   all 0.0848   startable 0.0905
+  [0.9,1.0)   all 0.0999   startable 0.1006
+
+FULL-SAMPLE FIT (for reporting only — the evaluation refits weekly)
+correlation model 1.0.0 (game_environment), half_ppr / shrinkage_eb
+  fitted on 18,209 player-week(s), 87,491 pair(s), through 2025w18, projection floor 6.0
+  position      game    team     own   shared
+  QB           0.399   0.917   0.000    1.000
+  RB           0.028   0.044   0.999    0.003
+  WR           0.176   0.162   0.971    0.057
+  TE           0.132   0.166   0.977    0.045
+  weighted RMSE 0.0241
+  implied correlations (observed in brackets):
+    QB-QB opp   +0.159 [+0.143]
+    QB-RB same  +0.052 [+0.062]
+    QB-RB opp   +0.011 [+0.031]
+    QB-WR same  +0.218 [+0.236]
+    QB-WR opp   +0.070 [+0.073]
+    QB-TE same  +0.205 [+0.218]
+    QB-TE opp   +0.053 [+0.061]
+    RB-RB same  +0.003 [-0.037]
+    RB-RB opp   +0.001 [-0.039]
+    RB-WR same  +0.012 [-0.014]
+    RB-WR opp   +0.005 [-0.002]
+    RB-TE same  +0.011 [+0.005]
+    RB-TE opp   +0.004 [+0.021]
+    WR-WR same  +0.057 [+0.004]
+    WR-WR opp   +0.031 [+0.050]
+    WR-TE same  +0.050 [  --  ]
+    WR-TE opp   +0.023 [  --  ]
+    TE-TE same  +0.045 [+0.026]
+    TE-TE opp   +0.017 [-0.031]
+  saved to artifacts\correlation_model_half_ppr.json
+
+RESIDUALS, worst first — cells the structure could not reach
+  WR-WR same       observed +0.0043   fitted +0.0570   gap -0.0527
+  TE-TE opp        observed -0.0315   fitted +0.0173   gap -0.0488
+  TE-WR same       observed +0.0079   fitted +0.0499   gap -0.0420
+  RB-RB same       observed -0.0368   fitted +0.0027   gap -0.0395
+  RB-RB opp        observed -0.0386   fitted +0.0008   gap -0.0394
+  RB-WR same       observed -0.0136   fitted +0.0121   gap -0.0256
+  TE-WR opp        observed +0.0460   fitted +0.0231   gap +0.0229
+  QB-RB opp        observed +0.0308   fitted +0.0113   gap +0.0195
+
+WALK-FORWARD EVALUATION — seasons [2022, 2023, 2024, 2025]
+  72 of 72 evaluated week(s) have a prior-fitted structure
+
+matchup backtest — 72 week(s), 4,320 matchup(s) per arm, 910.9s
+======================================================================================================================
+ALL MATCHUPS
+  independent    n= 4,320  Brier=0.22969  logloss=0.65081  ECE=0.0094  maxCE=0.0478  cov80=0.8228  cov50=0.5332  width= 52.2  CRPS=10.7732  drift=1.6251  extreme=0.0000
+  correlated     n= 4,320  Brier=0.22921  logloss=0.64969  ECE=0.0128  maxCE=0.0648  cov80=0.8287  cov50=0.5416  width= 53.1  CRPS=10.7771  drift=1.6329  extreme=0.0000
+  Brier delta -0.000478   log loss delta -0.001124   (negative favours the correlated candidate)
+
+PAIRED DIFFERENCES — correlated minus independent, same lineups and seeds
+  brier        delta=-0.000478  se=0.000233  t=-2.06  n=4,320  (significant)
+  crps         delta=+0.003974  se=0.004506  t=+0.88  n=4,320  (indistinguishable from zero)
+  cov80_gap    delta=+0.005903  se=0.001438  t=+4.10  n=4,320  (significant)
+  width        delta=+0.894882  se=0.020257  t=+44.18  n=4,320  (significant)
+
+SHARED-GAME MATCHUPS
+  independent/shared n= 4,011  Brier=0.22977  logloss=0.65095  ECE=0.0103  maxCE=0.0472  cov80=0.8246  cov50=0.5327  width= 52.2  CRPS=10.7577  drift=1.6250  extreme=0.0000
+  correlated/shared n= 4,011  Brier=0.22926  logloss=0.64976  ECE=0.0126  maxCE=0.0847  cov80=0.8293  cov50=0.5409  width= 53.1  CRPS=10.7615  drift=1.6326  extreme=0.0000
+
+STACKED LINEUPS
+  independent/stack n= 1,549  Brier=0.22768  logloss=0.64693  ECE=0.0290  maxCE=0.0471  cov80=0.8134  cov50=0.5161  width= 52.2  CRPS=11.0279  drift=1.6379  extreme=0.0000
+  correlated/stack n= 1,549  Brier=0.22730  logloss=0.64607  ECE=0.0275  maxCE=0.0443  cov80=0.8280  cov50=0.5300  width= 54.1  CRPS=11.0355  drift=1.6420  extreme=0.0000
+
+WIN PROBABILITY CALIBRATION (independent | correlated)
+  bin                n   stated   actual         n   stated   actual
+  0.1-0.2         52    0.171    0.135        39    0.167    0.103
+  0.2-0.3        264    0.259    0.258       274    0.258    0.252
+  0.3-0.4        702    0.357    0.350       702    0.358    0.350
+  0.4-0.5      1,137    0.450    0.433     1,141    0.450    0.429
+  0.5-0.6      1,169    0.546    0.553     1,186    0.547    0.558
+  0.6-0.7        724    0.644    0.644       697    0.645    0.646
+  0.7-0.8        241    0.740    0.755       243    0.737    0.757
+  0.8-0.9         31    0.823    0.871        36    0.820    0.861
+  (max calibration error ignores bins under 30; read it, not ECE alone)
+
+TEAM TOTAL PIT (10 bins, 0.100 is calibrated)
+  [0.0,0.1)   independent 0.0931   correlated 0.0903
+  [0.1,0.2)   independent 0.0993   correlated 0.0978
+  [0.2,0.3)   independent 0.1041   correlated 0.1031
+  [0.3,0.4)   independent 0.1082   correlated 0.1082
+  [0.4,0.5)   independent 0.1051   correlated 0.1119
+  [0.5,0.6)   independent 0.1089   correlated 0.1098
+  [0.6,0.7)   independent 0.1091   correlated 0.1080
+  [0.7,0.8)   independent 0.0969   correlated 0.0983
+  [0.8,0.9)   independent 0.0914   correlated 0.0916
+  [0.9,1.0)   independent 0.0839   correlated 0.0810

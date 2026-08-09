@@ -419,3 +419,124 @@ async def build_warehouse(session) -> int:
     return int(run_id)
 
 
+#: Two full standard lineups, for the matchup simulation tests.
+#:
+#: The four players :data:`PLAYERS` holds are not enough to fill a starting
+#: lineup, and widening that list would change the board every existing API test
+#: asserts against. So these are **additive**: a separate id range inserted into
+#: the same stub schema by :func:`add_players`, leaving the original slate
+#: exactly as it was.
+#:
+#: The centres are chosen so team A is clearly stronger — a matchup whose winner
+#: is not in dispute is what makes an integration test's win probability
+#: assertable without pinning a stochastic number.
+SIM_TEAM_A = [
+    ("00-0001001", "Alpha QB", "QB", "KC", 22.0),
+    ("00-0001002", "Alpha RB1", "RB", "KC", 17.0),
+    ("00-0001003", "Alpha RB2", "RB", "SF", 15.0),
+    ("00-0001004", "Alpha WR1", "WR", "SF", 18.0),
+    ("00-0001005", "Alpha WR2", "WR", "DAL", 16.0),
+    ("00-0001006", "Alpha TE", "TE", "DAL", 12.0),
+    ("00-0001007", "Alpha Flex", "RB", "PHI", 14.0),
+]
+
+SIM_TEAM_B = [
+    ("00-0002001", "Bravo QB", "QB", "PHI", 13.0),
+    ("00-0002002", "Bravo RB1", "RB", "MIA", 8.0),
+    ("00-0002003", "Bravo RB2", "RB", "MIA", 7.0),
+    ("00-0002004", "Bravo WR1", "WR", "NYJ", 9.0),
+    ("00-0002005", "Bravo WR2", "WR", "NYJ", 8.5),
+    ("00-0002006", "Bravo TE", "TE", "LAR", 6.0),
+    ("00-0002007", "Bravo Flex", "WR", "LAR", 7.5),
+]
+
+#: A kicker with a dimension row and, by construction, no projection. The
+#: engine must refuse a lineup naming them with the reason rather than dropping
+#: them from the total.
+SIM_KICKER = ("00-0003001", "Kilo Kicker", "K", "KC", None)
+
+#: A projectable player with no published projection — a bye, or a run that has
+#: not covered them. A different refusal from the kicker's, and the difference
+#: is the whole point of the roster layer's `reason` codes.
+SIM_BENCHED = ("00-0003002", "Bye Receiver", "WR", "KC", None)
+
+
+async def add_players(session, run_id: int, specs, *, week: int = UPCOMING_WEEK) -> None:
+    """Insert extra players, and a projection for each that names an expectation.
+
+    A spec of ``(player_id, name, position, team, expected)`` with ``expected``
+    of ``None`` gets a dimension row and **no** projection, which is how the
+    unprojectable and unpublished cases are staged.
+
+    The percentiles are laid out around the expectation with the right skew the
+    real distributions have — the ceiling further from the median than the floor
+    — so a simulation run against this stub samples something shaped like what
+    it will sample in production.
+    """
+    for player_id, name, position, team, expected in specs:
+        await session.execute(
+            text(
+                "INSERT INTO raw_players (gsis_id, display_name, football_name,"
+                " position, latest_team, status, last_season, years_of_experience)"
+                " VALUES (:i, :n, :n, :p, :t, 'ACT', :s, 4)"
+            ),
+            {"i": player_id, "n": name, "p": position, "t": team, "s": SEASON},
+        )
+        if expected is None:
+            continue
+
+        projection_id = (
+            await session.execute(
+                text(
+                    "INSERT INTO projections (model_run_id, player_id, season, week,"
+                    " game_id, team, opponent, position, is_home, created_at,"
+                    " updated_at) VALUES (:r, :i, :s, :w, :g, :t, 'OPP', :p, true,"
+                    " now(), now()) RETURNING id"
+                ),
+                {
+                    "r": run_id,
+                    "i": player_id,
+                    "s": SEASON,
+                    "w": week,
+                    # Each player in their own game, so the default fixture
+                    # carries no cross-lineup correlation and a test that wants
+                    # one has to arrange it deliberately.
+                    "g": f"{SEASON}_{week}_{team}_OPP",
+                    "t": team,
+                    "p": position,
+                },
+            )
+        ).scalar_one()
+
+        # The spec's expectation is the PPR one; half-PPR is stored lower by a
+        # reception's worth of scoring. The two profiles must differ, or a
+        # simulation that ignored `scoring_profile` entirely would pass every
+        # test — it would sample the default profile and report a total for a
+        # league the user is not in, and nothing would notice.
+        for profile, points in (("ppr", expected), ("half_ppr", expected - 1.5)):
+            await session.execute(
+                text(
+                    "INSERT INTO projection_points (projection_id, scoring_profile,"
+                    " predicted_points, expected_points, floor_points, p25_points,"
+                    " median_points, p75_points, ceiling_points, standard_deviation,"
+                    " confidence, calibration_method, distribution_samples,"
+                    " extrapolated) VALUES (:p, :prof, :pred, :exp, :f, :q1, :med,"
+                    " :q3, :c, 6.4, 0.71, 'heldout_residual_quantiles_v1', 1200,"
+                    " false)"
+                ),
+                {
+                    "p": projection_id,
+                    "prof": profile,
+                    "pred": points + 0.4,
+                    "exp": points,
+                    "f": max(0.0, points * 0.35),
+                    "q1": max(0.0, points * 0.65),
+                    "med": points * 0.94,
+                    "q3": points * 1.30,
+                    "c": points * 1.80,
+                },
+            )
+
+    await session.commit()
+
+

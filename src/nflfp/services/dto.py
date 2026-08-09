@@ -28,6 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
+from .distributions import OutcomeCurve
 from .grading import MatchupGrade
 
 # ---------------------------------------------------------------------------
@@ -126,6 +127,34 @@ class PointDistribution:
         calibrated mean is absent, which happens for runs written before the
         distribution layer existed."""
         return self.expected if self.expected is not None else self.predicted
+
+    def curve(self) -> OutcomeCurve | None:
+        """The reconstructed outcome curve for this distribution.
+
+        Every probabilistic question in the product — tier boundaries, start/sit
+        odds, and any future lineup simulation — is asked of a curve rather than
+        of a point estimate, so the translation from stored percentiles to curve
+        happens here and nowhere else. It lived in two places before and the two
+        had already drifted: one propagated ``extrapolated`` and ``samples`` and
+        the other silently dropped them, which meant the same projection was
+        honest about its own thinness in the start/sit path and quietly
+        confident in the tiering path.
+
+        Returns:
+            The curve, or ``None`` when fewer than three percentiles are stored.
+            A missing distribution is a normal state, not an error; see
+            :meth:`~nflfp.services.distributions.OutcomeCurve.from_percentiles`.
+        """
+        return OutcomeCurve.from_percentiles(
+            p10=self.floor,
+            p25=self.p25,
+            median=self.median,
+            p75=self.p75,
+            p90=self.ceiling,
+            expected=self.expected,
+            extrapolated=self.extrapolated,
+            samples=self.samples,
+        )
 
 
 @dataclass(frozen=True)
@@ -343,6 +372,33 @@ class PlayerProjection:
     injury: InjuryContext | None = None
     model: ModelRef | None = None
 
+    # -- correlation ---------------------------------------------------------
+    # Every probabilistic combination in this codebase assumes independence, and
+    # these two predicates are how a caller finds out where that assumption is
+    # false. They live on the projection because they are facts about a *pair of
+    # projections* and nothing else; keeping them private inside the start/sit
+    # module made them invisible to any other consumer that combines players,
+    # which is precisely the consumer most exposed to getting correlation wrong.
+
+    def shares_game_with(self, other: "PlayerProjection") -> bool:
+        """Both players are in the same NFL game.
+
+        Their outcomes are correlated: game script, pace and weather are shared
+        inputs, and one player's production can suppress the other's directly
+        when they are on opposite sides.
+        """
+        return self.game_id is not None and self.game_id == other.game_id
+
+    def is_teammate_of(self, other: "PlayerProjection") -> bool:
+        """Both players are on the same NFL team.
+
+        The strongest correlation available: teammates divide a single set of
+        plays, so their projections are competing for the same finite pool of
+        targets and carries. Treating two receivers in one offence as
+        independent overstates both the ceiling and the floor of their sum.
+        """
+        return self.team is not None and self.team == other.team
+
 
 # ---------------------------------------------------------------------------
 # Rankings and slates
@@ -400,6 +456,27 @@ class SlateWindow:
     #: ``"explicit"``, ``"upcoming"`` or ``"latest_completed"``.
     resolution: str
     is_upcoming: bool
+
+
+@dataclass(frozen=True)
+class SeasonAvailability:
+    """A season a client may actually offer, and the weeks it can offer in it.
+
+    *Availability* is published projections, not schedule. A season the
+    warehouse holds games for but no run has ever covered has nothing to show,
+    and putting it in a picker promises a product the deployment cannot deliver
+    — the user selects it, every screen comes back empty, and the application
+    looks broken rather than unpublished.
+    """
+
+    season: int
+    #: Ascending. Never empty: a season with no published week is not available.
+    published_weeks: tuple[int, ...]
+
+    @property
+    def latest_published_week(self) -> int:
+        """The newest week with a board — what a picker should open on."""
+        return self.published_weeks[-1]
 
 
 # ---------------------------------------------------------------------------

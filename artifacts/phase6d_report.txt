@@ -1,0 +1,326 @@
+======================================================================================================================
+PHASE 6D — CORRELATION PROMOTION VALIDATION
+======================================================================================================================
+panel: 38,061 leakage-free player-week(s), half_ppr / shrinkage_eb
+production tail factors: L=1.00/U=2.00   (approved in Phase 6C; distributions.py ships 1.0 / 2.0)
+held-out seasons [2024, 2025]
+40 matchup(s)/week, 2,000 draw(s)/lineup
+both arms see identical lineups and identical realised outcomes; they differ by the sampler and by nothing else
+
+  THE COMPARISON IS 1.0/2.0 + independent  vs  1.0/2.0 + correlated. The old tail factors
+  do not appear below: they were superseded, and re-litigating them would spend the sample
+  on a configuration nothing can now ship.
+
+----------------------------------------------------------------------------------------------------------------------
+0. THE FITTED STRUCTURE, RE-ESTIMATED THROUGH THE MARGINALS THAT SHIP
+----------------------------------------------------------------------------------------------------------------------
+  a correlation is a property of the PIT and the PIT moved when the tails did, so the Phase 6B
+  fit is not reused; each held-out week's structure is fitted on weeks strictly before it
+  36 of 36 held-out week(s) have a prior-fitted structure (5s)
+  most recent fit: version 1.0.0
+  position       game     team      own   shared var
+  QB            0.385    0.923    0.001        1.000
+  RB            0.031    0.040    0.999        0.003
+  WR            0.168    0.157    0.973        0.053
+  TE            0.144    0.157    0.977        0.045
+
+----------------------------------------------------------------------------------------------------------------------
+1. ALL HELD-OUT MATCHUPS — the two production candidates
+----------------------------------------------------------------------------------------------------------------------
+  2,878 lineup(s), 1,439 matchup(s), 131s
+  lineup L=1.00/U=2.00   n= 2,878  knots[0.106 0.262 0.514 0.753 0.900]  cov80=0.7943  cov90=0.8919  CRPS=10.9306  PITdiv=0.0314  drift=+1.130 (+1.56%)
+  lineup L=1.00/U=2.00   n= 2,878  knots[0.099 0.258 0.511 0.756 0.905]  cov80=0.8065  cov90=0.8961  CRPS=10.9264  PITdiv=0.0354  drift=+1.121 (+1.55%)
+  matchup L=1.00/U=2.00  n= 1,439  Brier=0.23337  logloss=0.65870  ECE=0.0306  maxCE=0.0517  marginCRPS=15.2663  marginCov80=0.8131
+  matchup L=1.00/U=2.00  n= 1,439  Brier=0.23297  logloss=0.65797  ECE=0.0299  maxCE=0.0481  marginCRPS=15.2506  marginCov80=0.8075
+
+    metric                                  independent   correlated        delta
+    -----------------------------------------------------------------------------
+    80% interval coverage (0.800)                0.7943       0.8065       0.0122
+    90% interval coverage (0.900)                0.8919       0.8961       0.0042
+    lineup CRPS                                 10.9306      10.9264      -0.0041
+    score differential CRPS                     15.2663      15.2506      -0.0157
+    lineup PIT divergence                        0.0314       0.0354       0.0040
+    max calibration error                        0.0517       0.0481      -0.0036
+    --- secondary ---
+    win probability Brier                       0.23337      0.23297     -0.00040
+    win probability log loss                    0.65870      0.65797     -0.00074
+    ECE                                          0.0306       0.0299      -0.0008
+    --- context ---
+    lineup P50 coverage (0.500)                  0.5136       0.5108      -0.0028
+    mean 80% width                                49.16        49.93         0.77
+    differential 80% coverage (0.800)            0.8131       0.8075      -0.0056
+    win probs outside [0.05,0.95]                0.0000       0.0000       0.0000
+    expected score minus projection sum          +1.130       +1.121       -0.009
+
+    PAIRED DIFFERENCES — all lineups, correlated minus independent
+      lineup CRPS [negative]     delta=-0.004104  se=0.007683  t=  -0.53  n=2,878  (indistinguishable from zero)
+      lineup 80% coverage [toward 0.800] delta=+0.012161  se=0.002520  t=  +4.83  n=2,878  (significant)
+      lineup 90% coverage [toward 0.900] delta=+0.004170  se=0.001837  t=  +2.27  n=2,878  (significant)
+      lineup PIT centrality [toward 0.250] delta=-0.002668  se=0.000253  t= -10.54  n=2,878  (significant)
+      lineup 80% width [context] delta=+0.766587  se=0.030178  t= +25.40  n=2,878  (significant)
+      win probability Brier [negative] delta=-0.000397  se=0.000396  t=  -1.00  n=1,439  (indistinguishable from zero)
+      score differential CRPS [negative] delta=-0.015665  se=0.014800  t=  -1.06  n=1,439  (indistinguishable from zero)
+      differential 80% coverage [toward 0.800] delta=-0.005559  se=0.003402  t=  -1.63  n=1,439  (indistinguishable from zero)
+
+  LINEUP-TOTAL PIT (held-out, 0.100 is calibrated)
+    [0.0,0.1)   independent 0.1049   correlated 0.0983
+    [0.1,0.2)   independent 0.1022   correlated 0.1060
+    [0.2,0.3)   independent 0.1056   correlated 0.1032
+    [0.3,0.4)   independent 0.1028   correlated 0.1067
+    [0.4,0.5)   independent 0.0976   correlated 0.0962
+    [0.5,0.6)   independent 0.0938   correlated 0.1001
+    [0.6,0.7)   independent 0.0935   correlated 0.0938
+    [0.7,0.8)   independent 0.0994   correlated 0.0994
+    [0.8,0.9)   independent 0.1001   correlated 0.1018
+    [0.9,1.0)   independent 0.1001   correlated 0.0945
+
+  WIN PROBABILITY CALIBRATION (independent | correlated)
+    bin                n   stated   actual         n   stated   actual
+    0.1-0.2         25    0.170    0.200        22    0.165    0.182
+    0.2-0.3        107    0.260    0.308       105    0.260    0.295
+    0.3-0.4        214    0.353    0.369       216    0.354    0.370
+    0.4-0.5        334    0.450    0.461       348    0.452    0.460
+    0.5-0.6        371    0.549    0.509       367    0.551    0.507
+    0.6-0.7        252    0.647    0.595       251    0.648    0.614
+    0.7-0.8        115    0.739    0.765       107    0.737    0.785
+    0.8-0.9         19    0.829    0.842        21    0.825    0.714
+    0.9-1.0          2    0.923    1.000         2    0.910    1.000
+    (max calibration error ignores bins under 30; read it, not ECE alone)
+
+----------------------------------------------------------------------------------------------------------------------
+2. BY POPULATION — lineup-level, from the strata of the run above
+----------------------------------------------------------------------------------------------------------------------
+  every lineup is classified by what it holds, not by what the generator was asked for
+  nominal cov80 = 0.800, cov90 = 0.900; buckets overlap where a lineup is more than one thing
+      opposing QB-RB  (n=222)
+      independent  cov80=0.7703  cov90=0.8694  CRPS=10.9408  PITdiv=0.1604  width= 49.1  drift=+1.155
+      correlated   cov80=0.7838  cov90=0.8829  CRPS=10.9382  PITdiv=0.2000  width= 49.9  drift=+1.109
+      opposing QB-TE  (n=89)
+      independent  cov80=0.7978  cov90=0.8652  CRPS=11.3415  PITdiv=0.1708  width= 49.3  drift=+1.128
+      correlated   cov80=0.8090  cov90=0.8764  CRPS=11.2944  PITdiv=0.1708  width= 50.4  drift=+1.120
+      opposing QB-WR  (n=228)
+      independent  cov80=0.7632  cov90=0.8596  CRPS=11.9907  PITdiv=0.1123  width= 49.0  drift=+1.090
+      correlated   cov80=0.7939  cov90=0.8640  CRPS=11.9867  PITdiv=0.1140  width= 50.2  drift=+1.143
+      opposing RB-RB  (n=160)
+      independent  cov80=0.7937  cov90=0.9000  CRPS=10.5136  PITdiv=0.3125  width= 49.3  drift=+1.114
+      correlated   cov80=0.8063  cov90=0.9187  CRPS=10.4470  PITdiv=0.3250  width= 50.1  drift=+1.107
+      opposing RB-TE  (n=243)
+      independent  cov80=0.8066  cov90=0.9053  CRPS=10.7875  PITdiv=0.1605  width= 48.9  drift=+1.088
+      correlated   cov80=0.8230  cov90=0.9136  CRPS=10.7969  PITdiv=0.1827  width= 49.6  drift=+1.107
+      opposing RB-WR  (n=574)
+      independent  cov80=0.7979  cov90=0.8902  CRPS=10.8700  PITdiv=0.0627  width= 49.4  drift=+1.123
+      correlated   cov80=0.8101  cov90=0.8972  CRPS=10.8678  PITdiv=0.0753  width= 50.1  drift=+1.125
+      opposing TE-WR  (n=256)
+      independent  cov80=0.7812  cov90=0.8867  CRPS=11.1229  PITdiv=0.1297  width= 49.3  drift=+1.127
+      correlated   cov80=0.7969  cov90=0.8984  CRPS=11.1248  PITdiv=0.1328  width= 50.2  drift=+1.163
+      opposing WR-WR  (n=205)
+      independent  cov80=0.7951  cov90=0.8878  CRPS=10.6781  PITdiv=0.1512  width= 49.0  drift=+1.105
+      correlated   cov80=0.8195  cov90=0.8976  CRPS=10.6663  PITdiv=0.1171  width= 49.9  drift=+1.103
+      stack shape QB+TE  (n=291)
+      independent  cov80=0.7766  cov90=0.8832  CRPS=10.9384  PITdiv=0.1203  width= 49.1  drift=+1.154
+      correlated   cov80=0.7973  cov90=0.8866  CRPS=10.9626  PITdiv=0.1148  width= 50.5  drift=+1.183
+      stack shape QB+TE+WR  (n=56)
+      independent  cov80=0.8750  cov90=0.8929  CRPS=11.6624  PITdiv=0.3929  width= 49.0  drift=+1.116
+      correlated   cov80=0.8750  cov90=0.8929  CRPS=11.5341  PITdiv=0.3571  width= 51.7  drift=+1.095
+      stack shape QB+WR  (n=819)
+      independent  cov80=0.7924  cov90=0.8938  CRPS=10.9666  PITdiv=0.0598  width= 49.1  drift=+1.137
+      correlated   cov80=0.8120  cov90=0.9023  CRPS=10.9690  PITdiv=0.0672  width= 50.7  drift=+1.141
+    opposing pair  (n=1,387)
+      independent  cov80=0.7924  cov90=0.8868  CRPS=10.9405  PITdiv=0.0559  width= 49.1  drift=+1.121
+      correlated   cov80=0.8082  cov90=0.8947  CRPS=10.9376  PITdiv=0.0617  width= 49.9  drift=+1.122
+    projection 0-66  (n=561)
+      independent  cov80=0.8111  cov90=0.9002  CRPS=10.3788  PITdiv=0.1130  width= 47.0  drift=+1.114
+      correlated   cov80=0.8307  cov90=0.9091  CRPS=10.3765  PITdiv=0.1305  width= 47.8  drift=+1.112
+    projection 66-79  (n=1,762)
+      independent  cov80=0.7872  cov90=0.8950  CRPS=10.9453  PITdiv=0.0409  width= 49.1  drift=+1.117
+      correlated   cov80=0.8008  cov90=0.8967  CRPS=10.9362  PITdiv=0.0386  width= 49.9  drift=+1.115
+    projection 79-inf  (n=555)
+      independent  cov80=0.8000  cov90=0.8739  CRPS=11.4415  PITdiv=0.1045  width= 51.4  drift=+1.191
+      correlated   cov80=0.8000  cov90=0.8811  CRPS=11.4514  PITdiv=0.0739  width= 52.1  drift=+1.149
+    related, no QB stack  (n=1,319)
+      independent  cov80=0.7930  cov90=0.8923  CRPS=10.8844  PITdiv=0.0417  width= 49.2  drift=+1.127
+      correlated   cov80=0.8014  cov90=0.8923  CRPS=10.8744  PITdiv=0.0358  width= 49.4  drift=+1.100
+    same-team stack  (n=1,194)
+      independent  cov80=0.7915  cov90=0.8903  CRPS=11.0065  PITdiv=0.0563  width= 49.1  drift=+1.139
+      correlated   cov80=0.8124  cov90=0.8987  CRPS=11.0070  PITdiv=0.0670  width= 50.7  drift=+1.150
+    unstacked (no shared game)  (n=365)
+      independent  cov80=0.8082  cov90=0.8959  CRPS=10.8488  PITdiv=0.1370  width= 49.3  drift=+1.116
+      correlated   cov80=0.8055  cov90=0.9014  CRPS=10.8509  PITdiv=0.1479  width= 49.3  drift=+1.105
+
+----------------------------------------------------------------------------------------------------------------------
+3. BY POPULATION — dedicated sweeps, so win probability is measurable too
+----------------------------------------------------------------------------------------------------------------------
+  a stratum of the run above carries lineup metrics only; Brier and maximum calibration error
+  are matchup-level, so each population below is drawn deliberately and scored end to end
+
+  same-team stacks (every lineup is a QB stack)
+    2,880 lineup(s), 1,440 matchup(s), 124s
+    metric                                  independent   correlated        delta
+    -----------------------------------------------------------------------------
+    80% interval coverage (0.800)                0.7951       0.8118       0.0167
+    90% interval coverage (0.900)                0.8976       0.9090       0.0115
+    lineup CRPS                                 10.9366      10.9334      -0.0032
+    score differential CRPS                     15.4180      15.4232       0.0052
+    lineup PIT divergence                        0.0257       0.0347       0.0090
+    max calibration error                        0.0873       0.0846      -0.0026
+    --- secondary ---
+    win probability Brier                       0.22286      0.22303      0.00017
+    win probability log loss                    0.63644      0.63680      0.00036
+    ECE                                          0.0275       0.0353       0.0078
+    --- context ---
+    lineup P50 coverage (0.500)                  0.5073       0.5045      -0.0028
+    mean 80% width                                49.21        50.89         1.68
+    differential 80% coverage (0.800)            0.7944       0.8042       0.0097
+    win probs outside [0.05,0.95]                0.0000       0.0000       0.0000
+    expected score minus projection sum          +1.165       +1.148       -0.017
+
+    PAIRED DIFFERENCES — same-team stacks (every lineup is a QB stack), correlated minus independent
+      lineup CRPS [negative]     delta=-0.003165  se=0.007887  t=  -0.40  n=2,880  (indistinguishable from zero)
+      lineup 80% coverage [toward 0.800] delta=+0.016667  se=0.002847  t=  +5.85  n=2,880  (significant)
+      lineup 90% coverage [toward 0.900] delta=+0.011458  se=0.002320  t=  +4.94  n=2,880  (significant)
+      lineup PIT centrality [toward 0.250] delta=-0.005709  se=0.000245  t= -23.34  n=2,880  (significant)
+      lineup 80% width [context] delta=+1.683644  se=0.027791  t= +60.58  n=2,880  (significant)
+      win probability Brier [negative] delta=+0.000173  se=0.000378  t=  +0.46  n=1,440  (indistinguishable from zero)
+      score differential CRPS [negative] delta=+0.005187  se=0.014817  t=  +0.35  n=1,440  (indistinguishable from zero)
+      differential 80% coverage [toward 0.800] delta=+0.009722  se=0.003533  t=  +2.75  n=1,440  (significant)
+
+  opposing pairs (every lineup holds a QB and an opposing skill player)
+    2,880 lineup(s), 1,440 matchup(s), 121s
+    metric                                  independent   correlated        delta
+    -----------------------------------------------------------------------------
+    80% interval coverage (0.800)                0.7906       0.7969       0.0062
+    90% interval coverage (0.900)                0.8938       0.8955       0.0017
+    lineup CRPS                                 10.9612      10.9697       0.0084
+    score differential CRPS                     15.3961      15.4061       0.0100
+    lineup PIT divergence                        0.0486       0.0437      -0.0049
+    max calibration error                        0.0262       0.0190      -0.0073
+    --- secondary ---
+    win probability Brier                       0.22833      0.22902      0.00069
+    win probability log loss                    0.64763      0.64907      0.00144
+    ECE                                          0.0134       0.0080      -0.0054
+    --- context ---
+    lineup P50 coverage (0.500)                  0.5028       0.5021      -0.0007
+    mean 80% width                                49.17        49.71         0.54
+    differential 80% coverage (0.800)            0.7931       0.7937       0.0007
+    win probs outside [0.05,0.95]                0.0000       0.0000       0.0000
+    expected score minus projection sum          +1.131       +1.142       +0.011
+
+    PAIRED DIFFERENCES — opposing pairs (every lineup holds a QB and an opposing skill player), correlated minus independent
+      lineup CRPS [negative]     delta=+0.008427  se=0.007333  t=  +1.15  n=2,880  (indistinguishable from zero)
+      lineup 80% coverage [toward 0.800] delta=+0.006250  se=0.002193  t=  +2.85  n=2,880  (significant)
+      lineup 90% coverage [toward 0.900] delta=+0.001736  se=0.001995  t=  +0.87  n=2,880  (indistinguishable from zero)
+      lineup PIT centrality [toward 0.250] delta=-0.001777  se=0.000237  t=  -7.50  n=2,880  (significant)
+      lineup 80% width [context] delta=+0.543816  se=0.027853  t= +19.52  n=2,880  (significant)
+      win probability Brier [negative] delta=+0.000692  se=0.000379  t=  +1.83  n=1,440  (indistinguishable from zero)
+      score differential CRPS [negative] delta=+0.010012  se=0.014122  t=  +0.71  n=1,440  (indistinguishable from zero)
+      differential 80% coverage [toward 0.800] delta=+0.000694  se=0.003028  t=  +0.23  n=1,440  (indistinguishable from zero)
+
+  quarterback duels (the two lineups' QBs face each other)
+    2,810 lineup(s), 1,405 matchup(s), 116s
+    metric                                  independent   correlated        delta
+    -----------------------------------------------------------------------------
+    80% interval coverage (0.800)                0.8096       0.8103       0.0007
+    90% interval coverage (0.900)                0.9068       0.9085       0.0018
+    lineup CRPS                                 10.7609      10.7580      -0.0030
+    score differential CRPS                     14.3539      14.3602       0.0063
+    lineup PIT divergence                        0.0612       0.0662       0.0050
+    max calibration error                        0.0400       0.0481       0.0081
+    --- secondary ---
+    win probability Brier                       0.22842      0.22861      0.00019
+    win probability log loss                    0.64842      0.64888      0.00046
+    ECE                                          0.0294       0.0298       0.0004
+    --- context ---
+    lineup P50 coverage (0.500)                  0.4943       0.4975       0.0032
+    mean 80% width                                49.25        49.63         0.38
+    differential 80% coverage (0.800)            0.8313       0.8327       0.0014
+    win probs outside [0.05,0.95]                0.0000       0.0000       0.0000
+    expected score minus projection sum          +1.138       +1.149       +0.011
+
+    PAIRED DIFFERENCES — quarterback duels (the two lineups' QBs face each other), correlated minus independent
+      lineup CRPS [negative]     delta=-0.002952  se=0.007299  t=  -0.40  n=2,810  (indistinguishable from zero)
+      lineup 80% coverage [toward 0.800] delta=+0.000712  se=0.002757  t=  +0.26  n=2,810  (indistinguishable from zero)
+      lineup 90% coverage [toward 0.900] delta=+0.001779  se=0.002279  t=  +0.78  n=2,810  (indistinguishable from zero)
+      lineup PIT centrality [toward 0.250] delta=-0.001081  se=0.000243  t=  -4.45  n=2,810  (significant)
+      lineup 80% width [context] delta=+0.376833  se=0.027489  t= +13.71  n=2,810  (significant)
+      win probability Brier [negative] delta=+0.000186  se=0.000383  t=  +0.49  n=1,405  (indistinguishable from zero)
+      score differential CRPS [negative] delta=+0.006295  se=0.014187  t=  +0.44  n=1,405  (indistinguishable from zero)
+      differential 80% coverage [toward 0.800] delta=+0.001423  se=0.002251  t=  +0.63  n=1,405  (indistinguishable from zero)
+
+  unstacked lineups (no two players in one lineup share a game)
+    448 lineup(s), 224 matchup(s), 20s
+    metric                                  independent   correlated        delta
+    -----------------------------------------------------------------------------
+    80% interval coverage (0.800)                0.7969       0.7991       0.0022
+    90% interval coverage (0.900)                0.9174       0.9174       0.0000
+    lineup CRPS                                 10.5152      10.5004      -0.0148
+    score differential CRPS                     14.4652      14.4690       0.0039
+    lineup PIT divergence                        0.1054       0.1018      -0.0036
+    max calibration error                        0.0724       0.0771       0.0046
+    --- secondary ---
+    win probability Brier                       0.22186      0.22151     -0.00035
+    win probability log loss                    0.63473      0.63391     -0.00081
+    ECE                                          0.0547       0.0632       0.0085
+    --- context ---
+    lineup P50 coverage (0.500)                  0.5290       0.5268      -0.0022
+    mean 80% width                                49.16        49.20         0.05
+    differential 80% coverage (0.800)            0.7946       0.7991       0.0045
+    win probs outside [0.05,0.95]                0.0000       0.0000       0.0000
+    expected score minus projection sum          +1.137       +1.181       +0.044
+
+    PAIRED DIFFERENCES — unstacked lineups (no two players in one lineup share a game), correlated minus independent
+      lineup CRPS [negative]     delta=-0.014802  se=0.018179  t=  -0.81  n=448  (indistinguishable from zero)
+      lineup 80% coverage [toward 0.800] delta=+0.002232  se=0.005911  t=  +0.38  n=448  (indistinguishable from zero)
+      lineup 90% coverage [toward 0.900] delta=+0.000000  se=0.005474  t=  +0.00  n=448  (indistinguishable from zero)
+      lineup PIT centrality [toward 0.250] delta=-0.000046  se=0.000650  t=  -0.07  n=448  (indistinguishable from zero)
+      lineup 80% width [context] delta=+0.046996  se=0.062410  t=  +0.75  n=448  (indistinguishable from zero)
+      win probability Brier [negative] delta=-0.000349  se=0.001060  t=  -0.33  n=224  (indistinguishable from zero)
+      score differential CRPS [negative] delta=+0.003880  se=0.034538  t=  +0.11  n=224  (indistinguishable from zero)
+      differential 80% coverage [toward 0.800] delta=+0.004464  se=0.010000  t=  +0.45  n=224  (indistinguishable from zero)
+
+----------------------------------------------------------------------------------------------------------------------
+4. MARGINAL PRESERVATION — correlation must change the joint, not a player
+----------------------------------------------------------------------------------------------------------------------
+  each player's own simulated percentiles under the two samplers, and — as the yardstick —
+  under the SAME sampler at a different seed. The second row is what Monte Carlo alone costs;
+  the first row only means something if it is larger.
+  12 matchup(s), 20,000 draws each, 15s
+    correlated vs independent          players=  168  maxKnot= 0.545 pts ( 3.29% of width)  meanKnot= 0.086  maxMean= 0.239
+    independent vs itself (control)    players=  168  maxKnot= 0.541 pts ( 2.95% of width)  meanKnot= 0.120  maxMean= 0.187
+
+----------------------------------------------------------------------------------------------------------------------
+5. TEAM-LEVEL EXPECTED SCORE VERSUS PROJECTION SUM
+----------------------------------------------------------------------------------------------------------------------
+  exact equality is not required and is not wanted — a right-skewed reconstruction puts its
+  mean above the sum of its medians. What is required is that the two samplers agree: a
+  correlation model may move a total's spread and may not move its centre.
+    population                                                      independent   correlated     delta
+    all lineups                                                         +1.1305      +1.1210   -0.0095
+    same-team stacks (every lineup is a QB stack)                       +1.1646      +1.1481   -0.0165
+    opposing pairs (every lineup holds a QB and an opposing skil        +1.1313      +1.1420   +0.0108
+    quarterback duels (the two lineups' QBs face each other)            +1.1376      +1.1485   +0.0109
+    unstacked lineups (no two players in one lineup share a game        +1.1368      +1.1808   +0.0439
+
+    all lineups: simulated mean 73.62 (independent) / 73.61 (correlated) against projection sum 72.49
+    the gap is +1.56% and +1.55%; it is a property of reconstructing a
+    right-skewed distribution from five percentiles, not of the sampler, and Phase 6C left it open
+    as a foundation question deliberately.
+
+----------------------------------------------------------------------------------------------------------------------
+6. PERFORMANCE
+----------------------------------------------------------------------------------------------------------------------
+  fourteen players, one core, in-process
+    iterations    independent     correlated    ratio
+         1,000         15.4 ms         32.6 ms     2.12x
+        10,000        148.3 ms        348.7 ms     2.35x
+        25,000        395.8 ms        821.5 ms     2.08x
+        50,000        742.7 ms       1629.8 ms     2.19x
+
+  end to end through the ASGI app against Postgres, 10,000 iterations
+    independent             180.3 ms
+    game_environment        326.8 ms
+
+======================================================================================================================
+PHASE 6D — no production default has been changed by this script.
+The correlated sampler remains behind correlation_mode: game_environment.
+The decision is recorded in docs/simulation-readiness.md.
+======================================================================================================================

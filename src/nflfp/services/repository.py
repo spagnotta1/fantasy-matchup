@@ -394,13 +394,22 @@ async def latest_completed_week(session: AsyncSession, season: int) -> int | Non
     ).scalar()
 
 
-async def seasons_available(session: AsyncSession) -> list[int]:
-    """Seasons present in the warehouse, newest first."""
-    await require_relations(session, "game_team")
+async def published_season_weeks(session: AsyncSession) -> list[tuple[int, int]]:
+    """Every ``(season, week)`` with a published model run, newest season first.
+
+    One query for the whole picker. The alternative — list the seasons, then ask
+    each for its weeks — is a request per season on the client's critical path
+    before a single number is on screen, and the answer is a few dozen rows.
+    """
+    await require_relations(session, "model_runs")
     result = await session.execute(
-        text("SELECT DISTINCT season FROM game_team ORDER BY season DESC")
+        text(
+            "SELECT DISTINCT season, week FROM model_runs "
+            "WHERE status = 'published' AND season IS NOT NULL AND week IS NOT NULL "
+            "ORDER BY season DESC, week"
+        )
     )
-    return [int(value) for value in result.scalars()]
+    return [(int(season), int(week)) for season, week in result.all()]
 
 
 async def published_weeks(session: AsyncSession, season: int) -> list[int]:
@@ -596,6 +605,36 @@ async def fetch_player(session: AsyncSession, player_id: str) -> dict | None:
         {"player_id": player_id},
     )
     return rows[0] if rows else None
+
+
+async def fetch_player_dimensions(
+    session: AsyncSession, player_ids: Sequence[str]
+) -> dict[str, dict]:
+    """Player dimension rows for a set of gsis ids, keyed by id.
+
+    The batched form of :func:`fetch_player`. It exists for the roster path,
+    which needs a position for every id that produced *no* projection so it can
+    say why — and doing that one id at a time would be a round-trip per gap on
+    the exact request that already has the most gaps.
+
+    Ids with no dimension row are simply absent from the mapping, so a caller
+    can distinguish "unknown player" from "known player, nothing published"
+    by membership rather than by a second query.
+    """
+    if not player_ids:
+        return {}
+    await require_relations(session, "raw_players")
+    rows = await _rows(
+        session,
+        """
+        SELECT gsis_id AS player_id, display_name, position, position_group,
+               latest_team, jersey_number, status
+        FROM raw_players
+        WHERE gsis_id = ANY(:player_ids)
+        """,
+        {"player_ids": list(player_ids)},
+    )
+    return {str(row["player_id"]): row for row in rows}
 
 
 #: Columns every player-dimension read returns, so `assemble.player_ref` sees

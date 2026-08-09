@@ -149,6 +149,24 @@ class TeamOut(Schema):
     logo_url: str | None = None
 
 
+class SeasonOut(Schema):
+    """A season that has something to show, and the weeks it has it for.
+
+    Build a season picker from this. It lists what is *published*, not what the
+    warehouse holds — those differ by about twenty-five seasons on a normal
+    install, and every one of the difference is a selection that produces an
+    empty screen.
+    """
+
+    season: int
+    published_weeks: list[int] = Field(
+        description="Weeks of this season with a published run, ascending. Never empty."
+    )
+    latest_published_week: int = Field(
+        description="The newest published week — what a picker should open on."
+    )
+
+
 class ModelRefOut(Schema):
     """Lineage. Travels with every projection, deliberately."""
 
@@ -689,8 +707,303 @@ class TeamOutlookOut(Schema):
 
 
 # ---------------------------------------------------------------------------
+# Matchup simulation
+# ---------------------------------------------------------------------------
+
+
+class LineupEntryIn(Schema):
+    """One player assigned to one slot."""
+
+    player_id: str = Field(description="gsis id.", min_length=1, max_length=64)
+    slot: str = Field(
+        description=(
+            "QB, RB, WR, TE or FLEX. FLEX accepts RB/WR/TE. K and DST are "
+            "recognised and refused with a reason — see /meta/lineup-slots."
+        ),
+        min_length=1,
+        max_length=16,
+    )
+
+
+class SimulationIn(Schema):
+    """A matchup simulation request.
+
+    Stateless: nothing here is stored, and the result is returned inline. Both
+    lineups must satisfy the same format — a simulation compares two totals, and
+    two lineups of different sizes do not produce comparable ones.
+    """
+
+    season: int | None = Field(
+        default=None,
+        ge=1999,
+        le=2200,
+        description="Defaults to the current league year.",
+    )
+    week: int | None = Field(
+        default=None,
+        ge=1,
+        le=22,
+        description="Defaults to the upcoming slate.",
+    )
+    scoring_profile: str | None = Field(
+        default=None,
+        description=(
+            "standard, half_ppr, ppr, ppr_te_premium. Defaults to the "
+            "configured profile; an unknown value is refused rather than "
+            "silently defaulted."
+        ),
+    )
+    simulation_count: int = Field(
+        default=10_000,
+        ge=100,
+        le=50_000,
+        description=(
+            "Monte Carlo draws. The upper bound is a transport limit, not a "
+            "statistical one: the endpoint holds a worker for the whole run, "
+            "and a larger simulation belongs in a background job."
+        ),
+    )
+    seed: int | None = Field(
+        default=None,
+        ge=0,
+        le=2**31 - 1,
+        description=(
+            "Reproducibility seed. Omitting it does **not** randomise the "
+            "result — a fixed default is used and echoed back, so a user "
+            "refreshing the page does not watch their win probability wander."
+        ),
+    )
+    correlation_mode: str = Field(
+        default="independent",
+        description=(
+            "How player outcomes are drawn.\n\n"
+            "`independent` (default, **production**): every player from their "
+            "own uniform. Teammates share an offence and opposing players share "
+            "game script, so the intervals are too narrow and the win "
+            "probability sits further from 50% than the evidence supports.\n\n"
+            "`game_environment` (**experimental**): players in the same game "
+            "share a fitted game factor and teammates additionally share their "
+            "offence's factor. Each player's own distribution is unchanged — "
+            "correlation moves the joint distribution, not the marginals. Not "
+            "the default, because it has not been shown to outperform the "
+            "independent baseline on held-out matchups; see "
+            "docs/simulation-readiness.md for exactly what was and was not "
+            "measured."
+        ),
+    )
+    team_a: list[LineupEntryIn] = Field(min_length=1, max_length=20)
+    team_b: list[LineupEntryIn] = Field(min_length=1, max_length=20)
+
+
+class SimulatedPlayerOut(Schema):
+    """One lineup slot and what it contributed. Provenance: ``model``.
+
+    The point estimates are read from the stored distribution, not produced by
+    the simulation. ``simulated_mean`` is the exception and is labelled as such:
+    it is the mean of this player's own draws, and its agreement with
+    ``expected_points`` is the cheapest check that the sampler drew from the
+    distribution it was handed.
+    """
+
+    provenance: Provenance = Provenance.MODEL
+    player_id: str
+    name: str
+    slot: str
+    position: str | None = None
+    team: str | None = None
+    game_id: str | None = None
+    expected_points: float | None = Field(
+        default=None, description="Calibrated mean from the published run."
+    )
+    floor: float | None = Field(default=None, description="P10")
+    ceiling: float | None = Field(default=None, description="P90")
+    simulated_mean: float = Field(
+        description="Derived: the mean of this player's sampled outcomes."
+    )
+
+
+class TeamSimulationOut(Schema):
+    """One team's simulated week. Provenance: ``derived``.
+
+    Every number here is a statistic of the sampled totals — a calculation
+    performed **above** the model, not an output of it. That distinction is the
+    reason this block is not labelled ``model`` despite consuming model
+    predictions exclusively.
+
+    ``projection_sum`` is the one exception and is called out in its own
+    description: it is the sum of the stored calibrated means.
+    """
+
+    provenance: Provenance = Provenance.DERIVED
+    expected_score: float = Field(description="Mean of the simulated team totals.")
+    median_score: float = Field(description="P50")
+    p10: float
+    p25: float
+    p75: float
+    p90: float
+    win_probability: float
+    loss_probability: float
+    tie_probability: float = Field(
+        description=(
+            "Totals are rounded to two decimals before comparison, the way a "
+            "fantasy platform scores. Reconstructed distributions are "
+            "continuous while real scoring is not, so this is a lower bound on "
+            "the true tie rate rather than an estimate of it."
+        )
+    )
+    projection_sum: float = Field(
+        description=(
+            "Model provenance: the sum of the stored calibrated means. Kept "
+            "beside expected_score because the two agreeing is the check that "
+            "the sampler drew from the stored distributions."
+        )
+    )
+    players: list[SimulatedPlayerOut]
+
+
+class SimulationRunOut(Schema):
+    """How the simulation was run. Provenance: ``derived``."""
+
+    provenance: Provenance = Provenance.DERIVED
+    iterations: int
+    seed: int = Field(
+        description=(
+            "Always present, including when the request named none. The same "
+            "lineups against the same published run with the same seed produce "
+            "the same numbers."
+        )
+    )
+    sampling_method: str = Field(
+        description=(
+            "How an outcome was drawn. `inverse_transform_from_stored_"
+            "percentiles`: u ~ U(0,1), then the stored quantile function at u. "
+            "No parametric family is fitted at any point."
+        )
+    )
+    correlation_mode: str = Field(
+        description=(
+            "`independent` or `game_environment`. The mode that actually ran, "
+            "read from the sampler rather than echoed from the request, so a "
+            "response can never describe a correlated simulation that was not "
+            "one."
+        )
+    )
+    correlation_model_version: str | None = Field(
+        default=None,
+        description=(
+            "Version of the fitted correlation structure, when one was used. "
+            "Null under `independent`. With `seed`, `iterations` and `model` "
+            "this is the fourth thing needed to reproduce a correlated result."
+        ),
+    )
+    lineup_format: str
+    model: ModelRefOut | None = Field(
+        default=None,
+        description=(
+            "The published run the sampled distributions came from. With "
+            "`seed` and `iterations` this is what makes a result reproducible "
+            "after a model rollout."
+        ),
+    )
+
+
+class SimulationAssumptionsOut(Schema):
+    """What the engine assumed. Provenance: ``derived``.
+
+    Served as fields rather than prose so a client can render a banner without
+    string-matching a caveat, and so the day a kicker model ships
+    `kicker_projection_available` flips on its own with no schema change.
+    """
+
+    provenance: Provenance = Provenance.DERIVED
+    player_independence: bool = Field(
+        description=(
+            "True: outcomes were drawn independently. The single largest known "
+            "error in this result. Teammates share an offence and opposing "
+            "players share game script, so the intervals are too narrow and the "
+            "win probability is further from 50% than the evidence supports.\n\n"
+            "False: a fitted correlation structure was applied. Derived from "
+            "`simulation.correlation_mode` rather than stored beside it, so the "
+            "flag and the sampler cannot disagree."
+        )
+    )
+    correlation_mode: str = Field(
+        description="Mirrors `simulation.correlation_mode`."
+    )
+    correlation_model_version: str | None = Field(
+        default=None,
+        description="Mirrors `simulation.correlation_model_version`.",
+    )
+    kicker_projection_available: bool
+    defense_projection_available: bool
+    injury_adjustment_applied: bool
+    matchup_adjustment_applied: bool = Field(
+        description=(
+            "False. matchup_score is NULL in the projection model; the matchup "
+            "grade is derived above the model and is not an input to it."
+        )
+    )
+    weather_adjustment_applied: bool
+    notes: list[str] = Field(
+        description="One sentence per assumption currently costing accuracy."
+    )
+
+
+class MatchupSimulationOut(Schema):
+    """The result of one simulated matchup.
+
+    Nothing here is persisted. Re-running the same request reproduces it, which
+    is the property that makes storing it a later product decision rather than a
+    prerequisite.
+    """
+
+    season: int
+    week: int
+    scoring_profile: str
+    simulation: SimulationRunOut
+    team_a: TeamSimulationOut
+    team_b: TeamSimulationOut
+    score_differential: float = Field(
+        description="Mean of (team_a total - team_b total). Positive favours A."
+    )
+    median_differential: float = Field(
+        description=(
+            "Median sampled margin. Differs from score_differential whenever "
+            "one lineup is more volatile than the other."
+        )
+    )
+    assumptions: SimulationAssumptionsOut
+
+
+# ---------------------------------------------------------------------------
 # Meta
 # ---------------------------------------------------------------------------
+
+
+class LineupSlotOut(Schema):
+    """One roster slot and the positions that may fill it.
+
+    Build a lineup editor from this rather than from a hard-coded eligibility
+    map. `supported: false` slots are recognised and refused with a reason;
+    `/meta/positions` says what each is blocked on.
+    """
+
+    slot: str
+    label: str
+    eligible_positions: list[str]
+    supported: bool
+    unsupported_positions: list[str] = Field(default_factory=list)
+    description: str = ""
+
+
+class LineupFormatOut(Schema):
+    """A league's starting lineup shape."""
+
+    name: str
+    label: str
+    size: int
+    requirements: list[dict]
+    description: str = ""
 
 
 class PositionSupportOut(Schema):

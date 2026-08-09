@@ -36,7 +36,7 @@ from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import grading
-from .distributions import HeadToHead, OutcomeCurve, compare as compare_curves
+from .distributions import HeadToHead, compare as compare_curves
 from .dto import Comparison, ComparisonEntry, PlayerProjection, StartSitAdvice
 from .errors import InvalidRequest, NotFound
 from .projections import get_projections_for_players
@@ -48,20 +48,6 @@ logger = logging.getLogger(__name__)
 MAX_COMPARISON_PLAYERS = 6
 
 
-def _curve(projection: PlayerProjection) -> OutcomeCurve | None:
-    points = projection.points
-    return OutcomeCurve.from_percentiles(
-        p10=points.floor,
-        p25=points.p25,
-        median=points.median,
-        p75=points.p75,
-        p90=points.ceiling,
-        expected=points.expected,
-        extrapolated=points.extrapolated,
-        samples=points.samples,
-    )
-
-
 def _entry(projection: PlayerProjection, win_probability: float | None = None) -> ComparisonEntry:
     return ComparisonEntry(
         projection=projection,
@@ -70,14 +56,6 @@ def _entry(projection: PlayerProjection, win_probability: float | None = None) -
         ceiling=projection.points.ceiling,
         win_probability=win_probability,
     )
-
-
-def _shares_game(a: PlayerProjection, b: PlayerProjection) -> bool:
-    return a.game_id is not None and a.game_id == b.game_id
-
-
-def _are_teammates(a: PlayerProjection, b: PlayerProjection) -> bool:
-    return a.team is not None and a.team == b.team
 
 
 def _availability_caveats(projection: PlayerProjection) -> list[str]:
@@ -174,7 +152,7 @@ def start_sit(a: PlayerProjection, b: PlayerProjection) -> StartSitAdvice:
     if a.player.player_id == b.player.player_id:
         raise InvalidRequest("cannot compare a player with themselves")
 
-    curve_a, curve_b = _curve(a), _curve(b)
+    curve_a, curve_b = a.points.curve(), b.points.curve()
     if curve_a is None or curve_b is None:
         missing = a.player.name if curve_a is None else b.player.name
         raise InvalidRequest(
@@ -182,7 +160,7 @@ def start_sit(a: PlayerProjection, b: PlayerProjection) -> StartSitAdvice:
             "probability needs a distribution, not a point estimate"
         )
 
-    correlated = _shares_game(a, b)
+    correlated = a.shares_game_with(b)
     head_to_head = compare_curves(curve_a, curve_b, correlated=correlated)
     verdict = grading.start_sit_verdict(head_to_head.win_probability)
 
@@ -192,7 +170,7 @@ def start_sit(a: PlayerProjection, b: PlayerProjection) -> StartSitAdvice:
         recommended = winner.player.player_id
 
     caveats = _availability_caveats(a) + _availability_caveats(b)
-    if _are_teammates(a, b):
+    if a.is_teammate_of(b):
         caveats.append(
             "These players share an offence. Their weekly outcomes are "
             "positively correlated through team plays and negatively "

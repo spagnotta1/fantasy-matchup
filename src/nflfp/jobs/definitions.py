@@ -46,7 +46,7 @@ from ..config import get_settings
 from ..etl import ingest_odds, ingest_weather, upcoming_games
 from ..features import build_features, refresh_features
 from ..providers import get_odds_provider, get_weather_provider
-from .registry import REGISTRY, Job, JobContext, JobOutcome
+from .registry import MANUAL, REGISTRY, Job, JobContext, JobOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -298,6 +298,61 @@ def generate_projections(context: JobContext) -> JobOutcome:
     return JobOutcome(records=result.projections_written, detail=result.as_detail())
 
 
+def backfill_projections(context: JobContext) -> JobOutcome:
+    """Publish a board for every week the feature layer can support.
+
+    ``generate_projections`` produces one week per firing, which means a fresh
+    deployment offers exactly one week in its selectors no matter how many
+    seasons the warehouse holds — the product looks like it has one week of
+    data because, in the only sense the API measures, it does. This walks the
+    same generator over the whole history so availability matches the
+    warehouse.
+
+    Options:
+        ``model``: override the configured model.
+        ``seasons``: restrict to specific seasons; every season with feature
+            rows if omitted.
+        ``skip_existing``: leave already-published weeks alone, which is what
+            makes a rerun cheap after a new season lands.
+        ``publish``: override :attr:`Settings.job_publish_projections`.
+
+    Registered as :data:`MANUAL`. This is a catch-up operation, not a cadence:
+    once the history is published, the weekly job keeps it current, and a cron
+    that reprojected ten seasons every week would spend an hour rewriting rows
+    that cannot have changed.
+    """
+    from ..predict.generate import generate_backfill
+
+    settings = get_settings()
+    options = context.options
+    model_name = options.get("model") or settings.projection_model
+    publish = options.get("publish")
+    if publish is None:
+        publish = settings.job_publish_projections
+
+    seasons = options.get("seasons")
+
+    result = generate_backfill(
+        context.session,
+        model_name=model_name,
+        seasons=[int(season) for season in seasons] if seasons else None,
+        publish=bool(publish),
+        skip_existing=bool(options.get("skip_existing", False)),
+        commit_each=True,
+    )
+
+    if not result.generated:
+        return JobOutcome(
+            skipped=True,
+            skip_reason=(
+                "no week was eligible for projection; "
+                f"{len(result.skipped)} skipped"
+            ),
+            detail=result.as_detail(),
+        )
+    return JobOutcome(records=result.projections_written, detail=result.as_detail())
+
+
 def invalidate_cache(context: JobContext) -> JobOutcome:
     """Retire the cache namespace by hand.
 
@@ -448,6 +503,19 @@ REGISTRY.register(
         # failure means an empty board on Thursday, which the API renders
         # correctly and unhelpfully as "projections coming soon".
         critical=True,
+    )
+)
+
+REGISTRY.register(
+    Job(
+        name="backfill_projections",
+        func=backfill_projections,
+        # Manual, for the same reason invalidate_cache is: this is a catch-up
+        # run, not a cadence. Once the history is published the weekly job
+        # keeps it current, and a cron would spend an hour a week rewriting
+        # boards for seasons that ended years ago.
+        schedule=MANUAL,
+        description="Publish a board for every week the feature layer supports.",
     )
 )
 

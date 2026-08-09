@@ -7,3 +7,11 @@ __pycache__/
 .env
 *.duckdb
 *.duckdb.wal
+
+# Frontend. `node_modules` is the largest thing in the tree by far and is
+# rebuilt from the lockfile inside the build stage; `dist` is excluded so a
+# stale local build can never be copied in and shadow the one the image builds.
+web/node_modules/
+web/dist/
+web/.env
+web/.env.*
