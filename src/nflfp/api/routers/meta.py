@@ -27,15 +27,23 @@ router = APIRouter(tags=["meta"])
 
 
 async def _cache_state() -> str:
-    """`ok`, `degraded` or `disabled`.
+    """`ok`, `degraded`, `disabled` or `misconfigured`.
 
     ``disabled`` is a healthy state, not a failure: running without a cache is
     a supported configuration, and reporting it as unhealthy would fail
     readiness on every local run and every single-instance deploy.
+
+    ``misconfigured`` is the one that matters — ``CACHE_BACKEND=redis`` with no
+    ``REDIS_URL``. It runs exactly like ``disabled`` and so used to report as
+    it, which meant an install paying full price on every request looked
+    identical to one that had opted out on purpose. Neither fails readiness:
+    the instance can serve every endpoint, just slowly, and taking a working
+    API out of rotation over a cache is the trade this module already refuses
+    to make elsewhere.
     """
     cache = get_cache()
     if isinstance(cache, NullCache):
-        return "disabled"
+        return "misconfigured" if cache.misconfigured else "disabled"
     if isinstance(cache, RedisCache) and cache.degraded:
         return "degraded"
     return "ok" if await cache.ping() else "degraded"

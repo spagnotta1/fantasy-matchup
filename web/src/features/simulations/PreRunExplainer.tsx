@@ -55,14 +55,20 @@ export function PreRunExplainer() {
 
         <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2">
           {items.map((item) => (
-            <div key={item.title} className="flex gap-2.5">
-              <span className="bg-surface-sunken text-ink-secondary mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full">
-                <item.icon aria-hidden className="size-3.5" />
-              </span>
-              <div className="min-w-0">
-                <dt className="text-ink text-xs font-semibold">{item.title}</dt>
-                <dd className="text-ink-muted text-xs leading-relaxed">{item.detail}</dd>
-              </div>
+            // A <dl> may only hold <dt>/<dd>, or a <div> that groups them —
+            // and that div may hold nothing else. The icon therefore lives
+            // inside the <dt> rather than beside it, and the <dd> is indented
+            // by the icon's width plus the gap so the two lines still align.
+            <div key={item.title} className="min-w-0">
+              <dt className="text-ink flex items-start gap-2.5 text-xs font-semibold">
+                <span className="bg-surface-sunken text-ink-secondary flex size-7 shrink-0 items-center justify-center rounded-full">
+                  <item.icon aria-hidden className="size-3.5" />
+                </span>
+                <span className="mt-1.5">{item.title}</span>
+              </dt>
+              <dd className="text-ink-muted ps-[2.375rem] text-xs leading-relaxed">
+                {item.detail}
+              </dd>
             </div>
           ))}
         </dl>

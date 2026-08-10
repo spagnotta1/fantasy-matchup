@@ -87,12 +87,23 @@ export function EmptyState({
   action,
   icon,
   className,
+  /**
+   * Heading level for the title.
+   *
+   * `h3` is right for the usual case — an empty panel sitting inside a section
+   * that already has its own heading. It is wrong when the empty state *is* the
+   * page, as on the 404 route, where the page would otherwise have no `h1` at
+   * all and a screen reader's heading list would come back blank. The level is
+   * a property of where the component is used, so the caller names it.
+   */
+  titleAs: Title = 'h3',
 }: {
   title: string
   description: ReactNode
   action?: ReactNode
   icon?: ReactNode
   className?: string
+  titleAs?: 'h1' | 'h2' | 'h3'
 }) {
   return (
     <div
@@ -101,7 +112,7 @@ export function EmptyState({
       <span className="bg-surface-sunken text-ink-muted flex size-10 items-center justify-center rounded-full">
         {icon ?? <Inbox aria-hidden className="size-5" />}
       </span>
-      <h3 className="text-ink text-sm font-semibold">{title}</h3>
+      <Title className="text-ink text-sm font-semibold">{title}</Title>
       <p className="text-ink-secondary max-w-sm text-sm leading-relaxed">{description}</p>
       {action && <div className="mt-1">{action}</div>}
     </div>

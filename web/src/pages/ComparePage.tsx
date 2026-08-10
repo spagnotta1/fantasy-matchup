@@ -93,6 +93,8 @@ export default function ComparePage() {
         <Card>
           <EmptyState
             icon={<GitCompareArrows aria-hidden className="size-5" />}
+            // Directly under the page's h1 with no section between, so h2.
+            titleAs="h2"
             title="Pick two players to compare"
             description={`Search above to add players — two at a minimum, ${MAX_COMPARISON_PLAYERS} at most. Each pair gets a win probability computed from both players' published outcome distributions.`}
           />

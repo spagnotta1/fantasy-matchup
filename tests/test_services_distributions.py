@@ -14,7 +14,6 @@ from __future__ import annotations
 import pytest
 
 from nflfp.services.distributions import (
-    INTEGRATION_POINTS,
     OutcomeCurve,
     compare,
     probability_beats,
@@ -155,18 +154,45 @@ class TestProbabilityBeats:
         a, b = curve(), curve()
         assert probability_beats(a, b, margin=5.0) < probability_beats(a, b)
 
-    def test_grid_resolution_barely_moves_the_answer(self):
-        a = curve()
-        b = curve(median=11.0, expected=12.0)
-        coarse = probability_beats(a, b, points=64)
-        fine = probability_beats(a, b, points=4096)
-        assert abs(coarse - fine) < 0.01
-        assert INTEGRATION_POINTS >= 64
+    def test_agrees_with_a_brute_force_quadrature(self):
+        # The closed form replaced a 512-point grid. This is the test that says
+        # it integrates the same function: a very fine quadrature is the
+        # independent second opinion, and it is the *less* accurate of the two,
+        # which is why the tolerance is a quadrature error rather than a
+        # tolerance for the thing under test.
+        def brute_force(a, b, margin=0.0, points=8192):
+            step = 1.0 / points
+            total = sum(
+                b.cdf(a.quantile((index + 0.5) * step) - margin)
+                for index in range(points)
+            )
+            return min(1.0, max(0.0, total * step))
 
-    def test_rejects_a_degenerate_grid(self):
+        cases = [
+            (curve(), curve(median=11.0, expected=12.0), 0.0),
+            (curve(), curve(p10=4.0, p25=7.0, median=11.0, p75=16.0, p90=24.0), 3.5),
+            (curve(), curve(), -2.0),
+            # A bench player: floor and lower quartile both pinned at zero puts a
+            # genuine jump in the CDF, which is where an endpoint-sampling
+            # implementation would disagree.
+            (
+                curve(p10=0.0, p25=0.0, median=1.5, p75=5.0, p90=12.0, expected=2.4),
+                curve(),
+                0.0,
+            ),
+        ]
+        for a, b, margin in cases:
+            assert probability_beats(a, b, margin=margin) == pytest.approx(
+                brute_force(a, b, margin), abs=1e-3
+            )
+
+    def test_takes_no_resolution_argument(self):
+        # The closed form has no grid to tune. A caller passing `points=` is
+        # working from the old signature and should hear about it rather than
+        # silently getting an answer at a resolution that no longer exists.
         c = curve()
-        with pytest.raises(ValueError):
-            probability_beats(c, c, points=1)
+        with pytest.raises(TypeError):
+            probability_beats(c, c, points=64)  # type: ignore[call-arg]
 
 
 class TestCompare:

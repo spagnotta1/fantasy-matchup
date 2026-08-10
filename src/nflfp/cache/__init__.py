@@ -86,9 +86,11 @@ def build_backend(settings: Settings | None = None) -> CacheBackend:
     if backend == "redis":
         if not settings.redis_url:
             logger.warning(
-                "CACHE_BACKEND=redis but REDIS_URL is unset; running uncached"
+                "CACHE_BACKEND=redis but REDIS_URL is unset; running uncached. "
+                "Every cached endpoint now recomputes on every request; "
+                "/health/ready reports cache=misconfigured until this is set."
             )
-            return NullCache()
+            return NullCache(misconfigured=True)
         logger.info("redis cache enabled")
         return RedisCache(
             settings.redis_url, timeout_seconds=settings.cache_timeout_seconds

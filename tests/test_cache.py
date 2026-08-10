@@ -107,11 +107,32 @@ class TestBackendResolution:
         settings = Settings(cache_backend="redis", redis_url=None)
         assert isinstance(build_backend(settings), NullCache)
 
+    def test_a_missing_redis_url_is_marked_as_a_mistake_not_a_choice(self):
+        """The two ways to end up uncached are not the same state.
+
+        They run identically — every call is a miss either way — which is
+        exactly why the difference has to be recorded here rather than inferred
+        later. An install that asked for Redis and never got a URL pays full
+        price on every request and looks, from the outside, like one that opted
+        out on purpose.
+        """
+        from nflfp.config import Settings
+
+        accident = build_backend(Settings(cache_backend="redis", redis_url=None))
+        assert isinstance(accident, NullCache) and accident.misconfigured
+
+        deliberate = build_backend(Settings(cache_backend="null"))
+        assert isinstance(deliberate, NullCache) and not deliberate.misconfigured
+
     def test_the_master_switch_wins(self):
         from nflfp.config import Settings
 
         settings = Settings(cache_enabled=False, cache_backend="memory")
-        assert isinstance(build_backend(settings), NullCache)
+        cache = build_backend(settings)
+        assert isinstance(cache, NullCache)
+        # Turning the cache off is a decision, even when the backend was left
+        # at `redis` — the switch is the more specific instruction.
+        assert not cache.misconfigured
 
     def test_memory_is_selectable_but_never_a_fallback(self):
         """An in-process cache silently ignores epoch bumps from other

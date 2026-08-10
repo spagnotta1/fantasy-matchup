@@ -63,13 +63,24 @@ class CacheBackend(Protocol):
 class NullCache:
     """The backend used when no ``REDIS_URL`` is configured.
 
-    Not a degraded mode — it is the correct configuration for local development
-    and for a single-instance deploy that does not need one. Every call is a
-    miss, so the read path behaves exactly as it did before Layer 6, and no
-    caller needs an ``if cache is not None`` branch.
+    Usually not a degraded mode — it is the correct configuration for local
+    development and for a single-instance deploy that does not need one. Every
+    call is a miss, so the read path behaves exactly as it did before Layer 6,
+    and no caller needs an ``if cache is not None`` branch.
+
+    ``misconfigured`` separates the two ways of arriving here, which are not the
+    same state and used to be indistinguishable. Asking for no cache
+    (``CACHE_BACKEND=null``, or ``CACHE_ENABLED=false``) is a decision.
+    Asking for Redis and not supplying a URL is a mistake, and one that costs
+    roughly 20x on every uncached endpoint — which is exactly the kind of
+    problem that reads as "the app is slow" rather than as a missing variable.
+    Both run identically; only the health report differs.
     """
 
     name = "null"
+
+    def __init__(self, *, misconfigured: bool = False) -> None:
+        self.misconfigured = misconfigured
 
     async def get(self, key: str) -> bytes | None:
         return None

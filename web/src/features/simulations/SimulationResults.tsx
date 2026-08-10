@@ -1,3 +1,6 @@
+import { SlidersHorizontal } from 'lucide-react'
+
+import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { StatCard } from '@/components/ui/StatCard'
 import { InfoTip } from '@/components/ui/Tooltip'
@@ -34,11 +37,14 @@ export function SimulationResults({
   meta,
   labelA,
   labelB,
+  /** Sends the reader back to the run controls. See `AdjustAndRerun`. */
+  onAdjust,
 }: {
   result: MatchupSimulation
   meta: ResponseMeta
   labelA: string
   labelB: string
+  onAdjust?: () => void
 }) {
   const { team_a: teamA, team_b: teamB } = result
   const leaderLabel = teamA.win_probability >= teamB.win_probability ? labelA : labelB
@@ -152,8 +158,46 @@ export function SimulationResults({
         </Card>
 
         <AssumptionsPanel assumptions={result.assumptions} simulation={result.simulation} />
+
+        {onAdjust && <AdjustAndRerun onAdjust={onAdjust} />}
       </div>
     </div>
+  )
+}
+
+/**
+ * The way back to the controls.
+ *
+ * Measured on a Pixel 7: a finished run makes this page 8.8 screens tall, and
+ * the run controls sit seven screens above the end of the results. Reading a
+ * result and wanting a different one — a different correlation mode, more
+ * draws, a swapped flex — meant scrolling all the way back with nothing on
+ * screen to suggest that was even the next step.
+ *
+ * Deliberately not a "run again" button. A run is fully determined by its
+ * lineups, seed, iteration count, correlation mode and model run, all of which
+ * are unchanged at this point, so re-running from here would spend ten thousand
+ * draws to redraw the identical screen. What the reader wants is not this
+ * result again; it is a different question, and the controls are where a
+ * question gets changed.
+ */
+function AdjustAndRerun({ onAdjust }: { onAdjust: () => void }) {
+  return (
+    <Card>
+      <CardBody className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-ink text-sm font-medium">Ask a different question</p>
+          <p className="text-ink-secondary mt-0.5 text-sm leading-relaxed">
+            Change the lineups, the correlation mode or the number of draws. This same run repeated
+            would return this same result.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={onAdjust}>
+          <SlidersHorizontal aria-hidden className="size-4" />
+          Adjust and run again
+        </Button>
+      </CardBody>
+    </Card>
   )
 }
 

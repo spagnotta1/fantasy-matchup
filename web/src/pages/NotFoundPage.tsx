@@ -12,6 +12,8 @@ export default function NotFoundPage() {
     <Card>
       <EmptyState
         icon={<Compass aria-hidden className="size-5" />}
+        // The only heading on this route, so it is the page's h1.
+        titleAs="h1"
         title="This page doesn't exist"
         description="The link may be out of date, or the address may have a typo in it."
         action={

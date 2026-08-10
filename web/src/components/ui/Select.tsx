@@ -55,7 +55,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           id={selectId}
           aria-describedby={hintId}
           className={cn(
-            'bg-surface border-line text-ink w-full appearance-none rounded-[var(--radius-control)] border',
+            'bg-surface border-line-input text-ink w-full appearance-none rounded-[var(--radius-control)] border',
             'pr-9 font-medium transition-colors',
             'hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-55',
             size === 'sm' ? 'h-8 pl-2.5 text-xs' : 'h-10 pl-3 text-sm',
