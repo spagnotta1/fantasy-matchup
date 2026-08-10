@@ -10,6 +10,11 @@ lost its ``applied_to_projection`` flag.
 from __future__ import annotations
 
 from ..services import dto, simulation
+from ..services.draft import aggregate as draft_aggregate
+from ..services.draft import engine as draft_engine
+from ..services.draft import pool as draft_pool
+from ..services.draft import service as draft_service
+from ..services.draft import settings as draft_settings_module
 from . import schemas
 from .provenance import Provenance
 
@@ -364,4 +369,267 @@ def game(row: dict) -> schemas.GameOut:
         home_spread=row.get("home_spread"),
         total_line=row.get("total_line"),
         is_upcoming=bool(row.get("is_upcoming")),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Mock draft
+# ---------------------------------------------------------------------------
+#
+# The historical evidence attached to a roster pick is looked up from the pool
+# rather than carried on the pick. The engine's SimulatedPick holds only what a
+# draft decision needed, and threading six seasons of a player's history through
+# ten thousand simulations in order to display fifteen of them would be a great
+# deal of copying for a presentation concern.
+
+
+def draft_settings(settings: draft_settings_module.DraftSettings) -> schemas.DraftSettingsOut:
+    return schemas.DraftSettingsOut(
+        season=settings.season,
+        teams=settings.teams,
+        rounds=settings.rounds,
+        scoring_profile=settings.scoring_profile,
+        draft_format=settings.draft_format,
+        roster=[
+            schemas.RosterSlotIn(slot=r.slot, count=r.count) for r in settings.roster
+        ],
+        starters=settings.starters,
+        bench=settings.bench,
+        simulations=settings.simulations,
+        seed=settings.seed,
+    )
+
+
+def historical_evidence(
+    evidence: draft_pool.HistoricalEvidence | None,
+) -> schemas.HistoricalEvidenceOut | None:
+    if evidence is None:
+        return None
+    return schemas.HistoricalEvidenceOut(
+        seasons=[
+            schemas.HistoricalSeasonOut(
+                season=s.season,
+                games_played=s.games_played,
+                team_games=s.team_games,
+                total_points=s.total_points,
+                points_per_game=s.points_per_game,
+                weekly_stdev=s.weekly_stdev,
+                position_rank=s.position_rank,
+                position_percentile=s.position_percentile,
+            )
+            for s in evidence.seasons
+        ],
+        seasons_observed=evidence.seasons_observed,
+        expected_games=evidence.expected_games,
+        availability_rate=evidence.availability_rate,
+        availability_basis=evidence.availability_basis,
+        consistency_percentile=evidence.consistency_percentile,
+        consistency_label=evidence.consistency_label,
+        trend=evidence.trend,
+        trend_detail=evidence.trend_detail,
+    )
+
+
+def pick_rationale(pick: draft_engine.SimulatedPick) -> schemas.PickRationaleOut | None:
+    rationale = pick.rationale
+    if rationale is None:
+        return None
+    return schemas.PickRationaleOut(
+        explanation=draft_aggregate.explain_pick(pick.position, pick.name, rationale),
+        slot=rationale.slot,
+        marginal_value=rationale.marginal_value,
+        value_over_next_available=rationale.value_over_next_available,
+        expected_next_best_value=rationale.expected_next_best_value,
+        next_best_player_id=rationale.next_best_player_id,
+        next_best_player_name=rationale.next_best_player_name,
+        next_pick_overall=rationale.next_pick_overall,
+        survival_at_next_pick=rationale.survival_at_next_pick,
+        scarcity=rationale.scarcity,
+        tier_index=rationale.tier_index,
+        tier_size=rationale.tier_size,
+        tier_remaining=rationale.tier_remaining,
+        runner_up_id=rationale.runner_up_id,
+        runner_up_name=rationale.runner_up_name,
+        runner_up_margin=rationale.runner_up_margin,
+    )
+
+
+def value_distribution(
+    distribution: draft_aggregate.ValueDistribution,
+) -> schemas.ValueDistributionOut:
+    return schemas.ValueDistributionOut(
+        mean=distribution.mean,
+        median=distribution.median,
+        stdev=distribution.stdev,
+        p10=distribution.p10,
+        p25=distribution.p25,
+        p75=distribution.p75,
+        p90=distribution.p90,
+        minimum=distribution.minimum,
+        maximum=distribution.maximum,
+        observations=distribution.observations,
+        standard_error=distribution.standard_error,
+    )
+
+
+def seat_analysis(
+    analysis: draft_aggregate.SeatAnalysis,
+    history: dict[str, draft_pool.HistoricalEvidence],
+) -> schemas.SeatAnalysisOut:
+    starters = set(analysis.representative.starters)
+    return schemas.SeatAnalysisOut(
+        draft_position=analysis.draft_position,
+        simulations=analysis.simulations,
+        roster_value=value_distribution(analysis.roster_value),
+        starter_points=value_distribution(analysis.starter_points),
+        picks=list(analysis.picks),
+        waits=list(analysis.waits),
+        representative_index=analysis.representative_index,
+        roster=[
+            schemas.SimulatedPickOut(
+                overall=pick.overall,
+                round_number=pick.round_number,
+                player_id=pick.player_id,
+                name=pick.name,
+                position=pick.position,
+                team=pick.team,
+                season_value=pick.season_value,
+                projected_points_per_game=pick.projected_points_per_game,
+                expected_games=pick.expected_games,
+                value_over_replacement=pick.value_over_replacement,
+                is_starter=pick.player_id in starters,
+                rationale=pick_rationale(pick),
+                historical=historical_evidence(history.get(pick.player_id)),
+            )
+            for pick in analysis.representative.picks
+        ],
+        round_positions=[
+            schemas.RoundPositionShareOut(
+                round_number=s.round_number, position=s.position, share=s.share
+            )
+            for s in analysis.round_positions
+        ],
+        position_strength=[
+            schemas.PositionStrengthOut(
+                position=s.position,
+                mean_starter_points=s.mean_starter_points,
+                mean_value_over_replacement=s.mean_value_over_replacement,
+                mean_starters=s.mean_starters,
+            )
+            for s in analysis.position_strength
+        ],
+        insights=[
+            schemas.StrategyInsightOut(
+                kind=i.kind,
+                headline=i.headline,
+                detail=i.detail,
+                evidence=dict(i.evidence),
+            )
+            for i in analysis.insights
+        ],
+        availability=[
+            schemas.PlayerAvailabilityOut(
+                player_id=a.player_id,
+                name=a.name,
+                position=a.position,
+                season_value=a.season_value,
+                reference_pick=a.reference_pick,
+                next_reference_pick=a.next_reference_pick,
+                first_pick_probability=a.first_pick_probability,
+                next_pick_probability=a.next_pick_probability,
+                drafted_before_next_pick=a.drafted_before_next_pick,
+                mean_selection_pick=a.mean_selection_pick,
+                selected_rate=a.selected_rate,
+            )
+            for a in analysis.availability
+        ],
+    )
+
+
+def draft_pool_summary(summary: draft_service.PoolSummary) -> schemas.DraftPoolOut:
+    return schemas.DraftPoolOut(
+        players=summary.players,
+        positions=list(summary.positions),
+        season=summary.season,
+        board_week=summary.board_week,
+        season_games=summary.season_games,
+        history_seasons=list(summary.history_seasons),
+        players_without_history=summary.players_without_history,
+        replacement=[
+            schemas.ReplacementLevelOut(
+                position=level.position,
+                starters=level.starters,
+                value=level.value,
+                player_id=level.player_id,
+                flex_share=level.flex_share,
+            )
+            for level in summary.replacement
+        ],
+    )
+
+
+def _methodology(
+    *,
+    calibration_drafts: int,
+    history_weight: float,
+    noise: float,
+    elapsed_seconds: float,
+    settings: draft_settings_module.DraftSettings,
+) -> schemas.DraftMethodologyOut:
+    return schemas.DraftMethodologyOut(
+        calibration_drafts=calibration_drafts,
+        history_weight=history_weight,
+        noise=noise,
+        elapsed_seconds=elapsed_seconds,
+        seed=settings.seed,
+        simulations=settings.simulations,
+    )
+
+
+def draft_analysis(
+    analysis: draft_service.DraftAnalysis,
+    history: dict[str, draft_pool.HistoricalEvidence],
+) -> schemas.DraftAnalysisOut:
+    return schemas.DraftAnalysisOut(
+        settings=draft_settings(analysis.settings),
+        seat=seat_analysis(analysis.seat, history),
+        pool=draft_pool_summary(analysis.pool),
+        methodology=_methodology(
+            calibration_drafts=analysis.calibration_drafts,
+            history_weight=analysis.history_weight,
+            noise=analysis.noise,
+            elapsed_seconds=analysis.elapsed_seconds,
+            settings=analysis.settings,
+        ),
+    )
+
+
+def draft_comparison(
+    comparison: draft_service.DraftPositionComparison,
+    history: dict[str, draft_pool.HistoricalEvidence],
+) -> schemas.DraftComparisonOut:
+    return schemas.DraftComparisonOut(
+        settings=draft_settings(comparison.settings),
+        seats=[
+            schemas.SeatSummaryOut(
+                draft_position=seat.draft_position,
+                roster_value=value_distribution(seat.roster_value),
+                starter_points=value_distribution(seat.starter_points),
+                percentile=seat.percentile,
+                is_best=seat.is_best,
+            )
+            for seat in comparison.comparison.seats
+        ],
+        best_position=comparison.comparison.best_position,
+        spread=comparison.comparison.spread,
+        spread_is_resolvable=comparison.comparison.spread_is_resolvable,
+        detail=[seat_analysis(analysis, history) for analysis in comparison.seats],
+        pool=draft_pool_summary(comparison.pool),
+        methodology=_methodology(
+            calibration_drafts=comparison.calibration_drafts,
+            history_weight=comparison.history_weight,
+            noise=comparison.noise,
+            elapsed_seconds=comparison.elapsed_seconds,
+            settings=comparison.settings,
+        ),
     )

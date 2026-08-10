@@ -19,6 +19,7 @@ const RankingsPage = lazy(() => import('@/pages/RankingsPage'))
 const MatchupsPage = lazy(() => import('@/pages/MatchupsPage'))
 const ComparePage = lazy(() => import('@/pages/ComparePage'))
 const SimulationPage = lazy(() => import('@/pages/SimulationPage'))
+const MockDraftPage = lazy(() => import('@/pages/MockDraftPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
       { path: 'matchups/:gameId', element: <MatchupsPage /> },
       { path: 'compare', element: <ComparePage /> },
       { path: 'simulation', element: <SimulationPage /> },
+      { path: 'mock-draft', element: <MockDraftPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

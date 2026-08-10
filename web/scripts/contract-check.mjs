@@ -35,6 +35,7 @@ const players = await load('/src/api/players.ts')
 const matchups = await load('/src/api/matchups.ts')
 const advice = await load('/src/api/advice.ts')
 const simulations = await load('/src/api/simulations.ts')
+const draft = await load('/src/api/draft.ts')
 
 const results = []
 async function check(name, fn) {
@@ -286,6 +287,90 @@ if (board?.data?.length) {
   } else {
     results.push({ name: 'simulation run', ok: false, note: 'could not build two full lineups' })
   }
+}
+
+// ---- mock draft ----------------------------------------------------------
+// The draft endpoints are the newest and the most structurally different: a
+// nested request body, a response holding twelve seats of detail, and three
+// provenances inside one player card. The Zod schemas here are what stop a
+// backend field rename surfacing as `NaN` on a roster row.
+const draftConfig = await check('mock-draft config', () => draft.getDraftConfig())
+const draftSeason = draftConfig?.data?.draftable_seasons?.[0]
+
+if (draftSeason) {
+  const request = {
+    season: draftSeason,
+    teams: 12,
+    rounds: 15,
+    scoring_profile: 'ppr',
+    simulations: 50,
+    seed: 20260101,
+  }
+
+  const analysis = await check('mock-draft analyze', () =>
+    draft.analyzeDraftPosition({ ...request, draft_position: 4 }),
+  )
+
+  // The claim the whole feature rests on: season value is a projected rate
+  // multiplied by an availability estimate, never a blend of a projection with
+  // a historical actual. Checked against the live numbers rather than trusted.
+  const pick = analysis?.data?.seat?.roster?.[0]
+  if (pick) {
+    const derived = pick.projected_points_per_game * pick.expected_games
+    results.push({
+      name: 'season value is rate x games',
+      ok: Math.abs(derived - pick.season_value) < 0.01,
+      note: `${pick.name}: ${pick.projected_points_per_game.toFixed(2)} x ${pick.expected_games.toFixed(2)} = ${derived.toFixed(1)} vs ${pick.season_value.toFixed(1)}`,
+    })
+    results.push({
+      name: 'every pick explains itself',
+      ok: analysis.data.seat.roster.every(
+        (entry) => entry.rationale && entry.rationale.explanation.includes(entry.name),
+      ),
+      note: `${analysis.data.seat.roster.length} picks, each with a derived reason`,
+    })
+    results.push({
+      name: 'history predates the draft',
+      ok: analysis.data.seat.roster.every((entry) =>
+        (entry.historical?.seasons ?? []).every((s) => s.season < draftSeason),
+      ),
+      note: `all seasons < ${draftSeason}`,
+    })
+  }
+
+  const comparison = await check('mock-draft compare', () =>
+    draft.compareDraftPositions({ ...request, simulations: 50 }),
+  )
+  if (comparison?.data) {
+    results.push({
+      name: 'every seat is compared',
+      ok:
+        comparison.data.seats.length === request.teams &&
+        comparison.data.detail.length === request.teams,
+      note: `${comparison.data.seats.length} seats, best ${comparison.data.best_position}, spread ${comparison.data.spread.toFixed(1)}${comparison.data.spread_is_resolvable ? '' : ' (within noise)'}`,
+    })
+  }
+
+  // K and DST are refused here exactly as they are on the rankings board.
+  await expectRefusal('mock-draft K slot refused', () =>
+    draft.analyzeDraftPosition({
+      ...request,
+      draft_position: 1,
+      roster: [
+        { slot: 'QB', count: 1 },
+        { slot: 'K', count: 1 },
+      ],
+    }),
+  )
+  await expectRefusal('mock-draft budget refused', () =>
+    draft.compareDraftPositions({ ...request, simulations: 10000 }),
+  )
+} else {
+  results.push({
+    name: 'mock-draft analyze',
+    ok: false,
+    note: 'no draftable season; run the projection job for week 1 of a completed season',
+  })
 }
 
 // ---- the workflow's own helpers -----------------------------------------

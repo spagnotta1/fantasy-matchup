@@ -1080,5 +1080,497 @@ def slate_window_out(window: dto.SlateWindow) -> SlateWindowOut:
     )
 
 
+# ---------------------------------------------------------------------------
+# Mock draft
+# ---------------------------------------------------------------------------
+#
+# Every simulated number below is `derived`, without exception. A draft outcome
+# is a calculation performed above the model, over a pool the model never ranked
+# and against opponents the model knows nothing about; labelling any of it
+# `model` would extend the foundation's measured guarantees to numbers that were
+# never measured against a held-out residual.
+#
+# Three provenances appear in one player card and the split is the point:
+# `projected_points_per_game` is `model`, the completed seasons beside it are
+# `actual`, and everything computed from either — expected games, season value,
+# draft value, availability — is `derived`.
+
+
+class RosterSlotIn(Schema):
+    """One starting-lineup requirement."""
+
+    slot: str = Field(description="A slot code from GET /meta/lineup-slots.")
+    count: int = Field(ge=0, le=10, description="How many the league starts.")
+
+
+class DraftSettingsIn(Schema):
+    """League configuration for a mock draft.
+
+    Everything a draft needs and nothing it does not: there is no user, no saved
+    league and no persistence, so the whole configuration travels on the request
+    and the response is reproducible from it plus the published run and the seed.
+    """
+
+    season: int = Field(
+        ge=1999,
+        le=2200,
+        description=(
+            "Season being drafted. Must have a published week 1 board — "
+            "`GET /mock-draft/config` lists the seasons that do. The board is "
+            "read as a per-game rate; the season itself is never used."
+        ),
+    )
+    teams: int = Field(default=12, ge=4, le=20)
+    rounds: int = Field(default=15, ge=1, le=25)
+    scoring_profile: str | None = Field(
+        default=None,
+        description=(
+            "standard, half_ppr, ppr, ppr_te_premium. Defaults to the "
+            "configured profile; an unknown value is refused rather than "
+            "silently defaulted."
+        ),
+    )
+    draft_format: str = Field(
+        default="snake",
+        description="`snake` reverses every even round; `linear` does not.",
+    )
+    roster: list[RosterSlotIn] | None = Field(
+        default=None,
+        description=(
+            "Starting-lineup requirements. Defaults to QB1/RB2/WR2/TE1/FLEX1. "
+            "A K or DST slot is **refused**, with the reason and the blockers: "
+            "no validated projection exists for either, and drafting a position "
+            "with no projected value would put an invented number into every "
+            "roster total."
+        ),
+    )
+    simulations: int | None = Field(
+        default=None,
+        ge=50,
+        le=10_000,
+        description=(
+            "Simulated drafts. A comparison runs this many for each seat, and "
+            "the request is refused if the total exceeds what one worker should "
+            "hold. `meta` reports the wall time it actually took."
+        ),
+    )
+    seed: int | None = Field(
+        default=None,
+        ge=0,
+        le=2**31 - 1,
+        description=(
+            "Reproducibility seed. Omitting it does **not** randomise the "
+            "result — a fixed default is used and echoed back."
+        ),
+    )
+    history_weight: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=0.8,
+        description=(
+            "How much the simulated opposing managers weight last completed "
+            "season's actual points against value over replacement. **An "
+            "assumption, not a measurement**: this repository holds no "
+            "average-draft-position data to fit it against. Exposed so a "
+            "conclusion's sensitivity to it can be checked."
+        ),
+    )
+    noise: float | None = Field(
+        default=None,
+        ge=0.05,
+        le=1.5,
+        description=(
+            "Spread of the randomness in opposing managers' selections, in "
+            "units of the consensus score. Also an assumption. Zero would make "
+            "every simulated draft identical and every availability percentage "
+            "0% or 100%."
+        ),
+    )
+
+
+class DraftAnalysisIn(DraftSettingsIn):
+    """A request to analyse one draft position."""
+
+    draft_position: int = Field(
+        ge=1, le=20, description="The seat to analyse, 1-based."
+    )
+
+
+class HistoricalSeasonOut(Schema):
+    """One completed season of actual production. `provenance: actual`."""
+
+    season: int
+    games_played: int
+    team_games: int
+    total_points: float
+    points_per_game: float
+    weekly_stdev: float | None = None
+    position_rank: int | None = None
+    position_percentile: float | None = None
+
+
+class HistoricalEvidenceOut(Schema):
+    """What history says about a player, and how firmly.
+
+    `provenance: derived` for every band and estimate here; the `seasons` inside
+    it are `actual`. The two are separated because one is a recorded fact and
+    the other is an inference from it.
+    """
+
+    provenance: Provenance = Provenance.DERIVED
+    seasons: list[HistoricalSeasonOut] = Field(default_factory=list)
+    seasons_observed: int
+    expected_games: float = Field(
+        description=(
+            "Estimated games available, shrunk toward a position prior. Counts "
+            "weeks in which the player recorded a stat line, so it cannot "
+            "separate an injury from a healthy scratch or a growing role."
+        )
+    )
+    availability_rate: float | None = Field(
+        default=None,
+        description=(
+            "The player's own unshrunk rate. Null when they have no completed "
+            "season, in which case the estimate is the prior alone."
+        ),
+    )
+    availability_basis: str = Field(
+        description="`player_history` or `position_prior`."
+    )
+    consistency_percentile: float | None = None
+    consistency_label: str | None = Field(
+        default=None,
+        description=(
+            "High/Moderate/Low, banded **within position among this board**. "
+            "Always a relative claim, never an absolute one."
+        ),
+    )
+    trend: str | None = Field(
+        default=None, description="rising / steady / declining, or null below two seasons."
+    )
+    trend_detail: str | None = None
+
+
+class DraftPlayerOut(Schema):
+    """A draftable player, with each number's origin kept apart."""
+
+    player_id: str
+    name: str
+    position: str
+    team: str | None = None
+    projected_points_per_game: float = Field(
+        description="`provenance: model` — the published week 1 expected points."
+    )
+    expected_games: float = Field(description="`provenance: derived`.")
+    season_value: float = Field(
+        description=(
+            "`provenance: derived` — points per game times expected games. A "
+            "draft-day rate, not a forecast of how the season unfolds."
+        )
+    )
+    value_over_replacement: float | None = None
+    floor_per_game: float | None = Field(
+        default=None,
+        description=(
+            "Published P10 for that week. A **weekly** percentile: it is not "
+            "multiplied by a season and must not be presented as a season floor."
+        ),
+    )
+    ceiling_per_game: float | None = None
+    extrapolated: bool = False
+    historical: HistoricalEvidenceOut | None = None
+
+
+class PickRationaleOut(Schema):
+    """The numbers that decided a pick.
+
+    Not prose about a pick — the actual values the engine compared. `explanation`
+    is assembled from them mechanically, so it cannot describe a calculation
+    that did not happen.
+    """
+
+    explanation: str
+    slot: str = Field(description="starter / flex / bench.")
+    marginal_value: float
+    value_over_next_available: float
+    expected_next_best_value: float
+    next_best_player_id: str | None = None
+    next_best_player_name: str | None = None
+    next_pick_overall: int | None = None
+    survival_at_next_pick: float
+    scarcity: float
+    tier_index: int | None = None
+    tier_size: int | None = None
+    tier_remaining: int | None = None
+    runner_up_id: str | None = None
+    runner_up_name: str | None = None
+    runner_up_margin: float | None = None
+
+
+class SimulatedPickOut(Schema):
+    """One selection in the representative simulated draft."""
+
+    overall: int
+    round_number: int
+    player_id: str
+    name: str
+    position: str
+    team: str | None = None
+    season_value: float
+    projected_points_per_game: float
+    expected_games: float
+    value_over_replacement: float
+    is_starter: bool
+    rationale: PickRationaleOut | None = None
+    historical: HistoricalEvidenceOut | None = None
+
+
+class ValueDistributionOut(Schema):
+    """Where a quantity landed across the simulations. `provenance: derived`."""
+
+    mean: float
+    median: float
+    stdev: float
+    p10: float
+    p25: float
+    p75: float
+    p90: float
+    minimum: float
+    maximum: float
+    observations: int
+    standard_error: float = Field(
+        description=(
+            "Monte Carlo error on the mean. The number that says whether a gap "
+            "between two draft positions is a finding or a rounding of noise."
+        )
+    )
+
+
+class RoundPositionShareOut(Schema):
+    """How often a round went to a position."""
+
+    round_number: int
+    position: str
+    share: float
+
+
+class PositionStrengthOut(Schema):
+    """Mean starting value assembled at one position."""
+
+    position: str
+    mean_starter_points: float
+    mean_value_over_replacement: float
+    mean_starters: float
+
+
+class PlayerAvailabilityOut(Schema):
+    """How likely a player is to survive to one of this seat's picks."""
+
+    player_id: str
+    name: str
+    position: str
+    season_value: float
+    reference_pick: int
+    next_reference_pick: int | None = None
+    first_pick_probability: float
+    next_pick_probability: float
+    drafted_before_next_pick: float
+    mean_selection_pick: float | None = None
+    selected_rate: float = Field(
+        description=(
+            "Share of calibration drafts in which the player was drafted at "
+            "all — the denominator that separates 'goes late' from 'usually "
+            "goes undrafted'."
+        )
+    )
+
+
+class StrategyInsightOut(Schema):
+    """A finding the simulations support, with the numbers behind it."""
+
+    kind: str
+    headline: str
+    detail: str
+    evidence: dict[str, float | int | str | None] = Field(default_factory=dict)
+
+
+class ReplacementLevelOut(Schema):
+    """The zero point for one position under this league."""
+
+    position: str
+    starters: int
+    value: float
+    player_id: str | None = None
+    flex_share: int
+
+
+class DraftPoolOut(Schema):
+    """What the board was built from."""
+
+    provenance: Provenance = Provenance.DERIVED
+    players: int
+    positions: list[str]
+    season: int
+    board_week: int
+    season_games: int
+    history_seasons: list[int]
+    players_without_history: int
+    replacement: list[ReplacementLevelOut] = Field(default_factory=list)
+
+
+class SeatAnalysisOut(Schema):
+    """Everything the product says about one draft position."""
+
+    provenance: Provenance = Provenance.DERIVED
+    draft_position: int
+    simulations: int
+    roster_value: ValueDistributionOut
+    starter_points: ValueDistributionOut
+    picks: list[int]
+    waits: list[int] = Field(
+        description=(
+            "Picks that elapse between each selection and the next. The seat "
+            "asymmetry itself: seat 1 waits 22 then 2 in a twelve-team snake, "
+            "seat 6 waits 12 every time."
+        )
+    )
+    representative_index: int = Field(
+        description=(
+            "Which simulation the roster below is. The one whose roster value "
+            "is closest to the **median**, never the best — the best of ten "
+            "thousand drafts is a tail event, not a plan."
+        )
+    )
+    roster: list[SimulatedPickOut] = Field(default_factory=list)
+    round_positions: list[RoundPositionShareOut] = Field(default_factory=list)
+    position_strength: list[PositionStrengthOut] = Field(default_factory=list)
+    insights: list[StrategyInsightOut] = Field(default_factory=list)
+    availability: list[PlayerAvailabilityOut] = Field(default_factory=list)
+
+
+class DraftMethodologyOut(Schema):
+    """How the answer was produced, in the response that carries it."""
+
+    calibration_drafts: int
+    history_weight: float
+    noise: float
+    elapsed_seconds: float
+    seed: int
+    simulations: int
+    strategy: str = "value_over_next_available"
+
+
+class DraftAnalysisOut(Schema):
+    """One draft position, analysed."""
+
+    settings: "DraftSettingsOut"
+    seat: SeatAnalysisOut
+    pool: DraftPoolOut
+    methodology: DraftMethodologyOut
+
+
+class DraftSettingsOut(Schema):
+    """The configuration that produced a result, echoed for reproducibility."""
+
+    season: int
+    teams: int
+    rounds: int
+    scoring_profile: str
+    draft_format: str
+    roster: list[RosterSlotIn]
+    starters: int
+    bench: int
+    simulations: int
+    seed: int
+
+
+class SeatSummaryOut(Schema):
+    """One row of the draft-position comparison."""
+
+    draft_position: int
+    roster_value: ValueDistributionOut
+    starter_points: ValueDistributionOut
+    percentile: float = Field(
+        description=(
+            "Rank among the **seats**, not among rosters. Twelve observations, "
+            "presented as the ranking it is."
+        )
+    )
+    is_best: bool
+
+
+class DraftComparisonOut(Schema):
+    """Every seat, ranked, and whether the ranking survives its own noise."""
+
+    provenance: Provenance = Provenance.DERIVED
+    settings: DraftSettingsOut
+    seats: list[SeatSummaryOut]
+    best_position: int = Field(
+        description=(
+            "The seat with the highest simulated mean roster value. Highest "
+            "simulated value under these assumptions — not the best seat in any "
+            "absolute sense, and not a prediction."
+        )
+    )
+    spread: float
+    spread_is_resolvable: bool = Field(
+        description=(
+            "Whether the best-to-worst gap exceeds the Monte Carlo error on the "
+            "two means it is computed from. When false the ranking is noise and "
+            "must not be presented as a recommendation."
+        )
+    )
+    detail: list[SeatAnalysisOut] = Field(
+        default_factory=list,
+        description="Per-seat detail, so a client can inspect any seat's roster.",
+    )
+    pool: DraftPoolOut
+    methodology: DraftMethodologyOut
+
+
+class DraftLimitsOut(Schema):
+    """Bounds a client builds its configuration form from.
+
+    Served so the form's validation and the server's cannot drift apart — the
+    same reason `/meta/positions` exists.
+    """
+
+    min_teams: int
+    max_teams: int
+    min_rounds: int
+    max_rounds: int
+    min_simulations: int
+    max_simulations: int
+    default_simulations: int
+    max_total_drafts: int
+    default_seed: int
+    draft_formats: list[str]
+    default_roster: list[RosterSlotIn]
+    scoring_profiles: list[str]
+
+
+class DraftConfigOut(Schema):
+    """Everything a client needs to build a valid draft request."""
+
+    limits: DraftLimitsOut
+    draftable_seasons: list[int] = Field(
+        description=(
+            "Seasons with a published week 1 board. A season with a schedule "
+            "but no board cannot be drafted, and offering it would produce an "
+            "empty screen with no explanation."
+        )
+    )
+    draftable_positions: list[str]
+    unavailable_positions: list[dict] = Field(
+        default_factory=list,
+        description=(
+            "Positions recognised but not draftable, each with the reason and "
+            "what it is blocked on. Straight from the position registry."
+        ),
+    )
+
+
 MetaOut.model_rebuild()
 WeekOut.model_rebuild()
+DraftAnalysisOut.model_rebuild()
+DraftComparisonOut.model_rebuild()

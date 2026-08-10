@@ -26,7 +26,15 @@ from .caching import ResponseCacheMiddleware
 from .errors import install_error_handlers
 from .middleware import RequestContextMiddleware
 from .provenance import PROVENANCE_LEGEND
-from .routers import advice, matchups, meta, players, projections, simulations
+from .routers import (
+    advice,
+    draft,
+    matchups,
+    meta,
+    players,
+    projections,
+    simulations,
+)
 from .spa import mount_frontend
 
 logger = logging.getLogger(__name__)
@@ -227,6 +235,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         matchups.router,
         advice.router,
         simulations.router,
+        draft.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 

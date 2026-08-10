@@ -24,6 +24,20 @@ export const API_PREFIX = '/api/v1'
 const DEFAULT_TIMEOUT_MS = 15_000
 /** A simulation holds a worker for the whole Monte Carlo run. */
 export const LONG_TIMEOUT_MS = 60_000
+/**
+ * A mock draft runs *complete drafts*, not iterations of a sum.
+ *
+ * Measured at ~8.3 ms per simulated draft on a developer machine, so the API's
+ * own per-request cap of 15,000 drafts is around two minutes of worker time.
+ * The 60-second budget above would abandon a request the server was going to
+ * answer — and it would look to the user like a failure rather than like the
+ * long-running job it is.
+ *
+ * This is a transport bound, not an endorsement: anything past a few thousand
+ * drafts belongs in a background job, which is how this codebase already treats
+ * the projection run. The product's defaults sit far below it.
+ */
+export const DRAFT_TIMEOUT_MS = 180_000
 
 export type QueryValue = string | number | boolean | null | undefined | Array<string | number>
 
