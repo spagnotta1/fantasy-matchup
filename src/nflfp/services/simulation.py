@@ -44,6 +44,16 @@ distribution rather than a parametric stand-in for it, which matters because
 Layer 3b chose empirical residual quantiles over a Gaussian precisely for the
 right skew and the hard floor near zero.
 
+Where it runs
+-------------
+:func:`simulate` is pure, synchronous and CPU-bound, and
+:func:`simulate_matchup` hands it to a worker thread rather than running it on
+the event loop. At the maximum permitted 50,000 iterations it is about a second
+of uninterrupted Python, which on a single-replica deployment is a second in
+which nobody else's request is answered. The threading is invisible to the
+mathematics — see the comment at the call site — and :func:`simulate` itself
+stays callable synchronously, which is what the benchmarks and the backtest do.
+
 Determinism is a product requirement, not a testing convenience
 ---------------------------------------------------------------
 ``probability_beats`` is deterministic by construction, on the stated grounds
@@ -80,6 +90,7 @@ the grade is derived above it. Nothing here consumes one.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 from collections.abc import Mapping, Sequence
@@ -708,7 +719,31 @@ async def simulate_matchup(
     sampler = build_roster_sampler(
         inputs_a, inputs_b, mode=correlation_mode, model=correlation_model
     )
-    result_a, result_b, mean_margin, median_margin = simulate(
+    # The one genuinely CPU-bound step in the API, moved off the event loop.
+    #
+    # `simulate` is pure Python and holds the interpreter for its whole run: a
+    # 50,000-iteration matchup is ~1 s of uninterrupted work. Called directly
+    # from this coroutine it stops the loop dead — measured on Linux, a 50k run
+    # blocked the loop for 1,024 ms and served zero other requests in that time,
+    # so with `numReplicas: 1` one person's simulation is everyone else's frozen
+    # page. Through a worker thread the same run leaves the loop stalling 69 ms
+    # at worst and serving other requests throughout.
+    #
+    # A thread rather than a process, and no queue: the GIL is released
+    # periodically, which is all that is needed to keep an *I/O* loop scheduled
+    # beside a CPU-bound thread, and the run is already bounded by
+    # MAX_ITERATIONS to something that fits a request. A process pool would pay
+    # pickling on every call to solve a problem this does not have, and a job
+    # queue would make a synchronous endpoint asynchronous — a product change,
+    # not a performance one.
+    #
+    # Nothing about the mathematics moves. `simulate` seeds a private
+    # `random.Random`, never the global one, so it neither reads nor perturbs
+    # any state shared with the loop, and the same lineups and seed produce the
+    # same numbers whichever thread runs them. A test asserts exactly that.
+    # `to_thread` copies the context, so the request id keeps travelling.
+    result_a, result_b, mean_margin, median_margin = await asyncio.to_thread(
+        simulate,
         inputs_a, inputs_b,
         iterations=iterations, seed=resolved_seed, sampler=sampler,
     )

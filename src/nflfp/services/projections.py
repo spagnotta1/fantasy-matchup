@@ -128,15 +128,33 @@ async def get_slate(
         )
 
     projections = [assemble.player_projection(row) for row in rows]
-    total = await repository.count_projections(
-        session,
-        season=window.season,
-        week=window.week,
-        scoring_profile=profile,
-        positions=wanted_positions,
-        teams=[t.strip().upper() for t in teams] if teams else None,
-        model_name=model_name,
-    )
+
+    # A short page is its own count.
+    #
+    # The rows come back ordered and then limited, so fewer rows than the limit
+    # means the end of the result set was reached and the total is what has
+    # already been read. The count query is then a second full pass over
+    # `projections` joined to `projection_points` to be told a number this
+    # process is holding — and it is the *usual* case, not an edge one: the web
+    # client asks for 500 and a slate is about 400, so every board on the site
+    # was paying for it.
+    #
+    # A full page is genuinely ambiguous — there may or may not be more behind
+    # it — and still asks. So does an empty one, further up: zero rows cannot
+    # distinguish an empty slate from an offset past the end, and inventing
+    # `offset + 0` for it would answer the second case wrongly.
+    if len(rows) < limit:
+        total = offset + len(rows)
+    else:
+        total = await repository.count_projections(
+            session,
+            season=window.season,
+            week=window.week,
+            scoring_profile=profile,
+            positions=wanted_positions,
+            teams=[t.strip().upper() for t in teams] if teams else None,
+            model_name=model_name,
+        )
 
     return (
         Slate(

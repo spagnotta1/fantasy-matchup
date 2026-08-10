@@ -1041,9 +1041,16 @@ class HealthOut(Schema):
     cache: str | None = Field(
         default=None,
         description=(
-            "Cache backend state: `ok`, `degraded`, or `disabled`. A degraded "
-            "cache never degrades overall status — the read path behind it is "
-            "the query that was fast enough to ship before it existed."
+            "Cache backend state: `ok`, `degraded`, `disabled` or "
+            "`misconfigured`. A degraded cache never degrades overall status — "
+            "the read path behind it is the query that was fast enough to ship "
+            "before it existed.\n\n"
+            "`disabled` means no cache was asked for. `misconfigured` means one "
+            "was — `CACHE_BACKEND=redis` — and `REDIS_URL` is unset, so every "
+            "cached endpoint is recomputing on every request. Both serve "
+            "correct responses and neither fails readiness; they are separated "
+            "because the second is a variable somebody forgot and reads as "
+            "\"the app is slow\"."
         ),
     )
     checks: dict[str, str] = Field(

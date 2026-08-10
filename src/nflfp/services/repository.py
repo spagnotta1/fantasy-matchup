@@ -57,7 +57,13 @@ Row = Mapping[str, Any]
 #: missing is the ordinary aftermath of a ``pipeline full`` publish, which drops
 #: ``raw_*`` with ``CASCADE``.
 APP_RELATIONS = ("model_runs", "projections", "projection_points")
-WAREHOUSE_RELATIONS = ("player_week", "game_team", "upcoming_games", "raw_players")
+WAREHOUSE_RELATIONS = (
+    "player_week",
+    "game_team",
+    "upcoming_games",
+    "raw_players",
+    "raw_teams",
+)
 FEATURE_RELATIONS = (
     "feat_player_usage",
     "feat_game_context",
@@ -66,10 +72,20 @@ FEATURE_RELATIONS = (
     "feat_training_dataset",
 )
 
+#: Every relation the read path guards on, which is what makes one round-trip
+#: enough. See :func:`_load_relations`.
+KNOWN_RELATIONS = APP_RELATIONS + WAREHOUSE_RELATIONS + FEATURE_RELATIONS
+
 #: How long a relation-existence check is trusted, in seconds. Existence changes
 #: only when the pipeline runs, so re-asking on every request would be a
 #: round-trip spent confirming something that changes weekly. A minute is short
 #: enough that a rebuild is picked up before anyone files a bug.
+#:
+#: Deliberately still a TTL and not a process-lifetime answer. The states this
+#: bounds are real and recoverable — a matview dropped by ``pipeline full`` and
+#: rebuilt ten seconds later, a first deploy whose pipeline has not run yet —
+#: and an API that had to be restarted to notice the fix would be worse than the
+#: round-trip it saved.
 _RELATION_CACHE_TTL = 60.0
 _relation_cache: dict[str, tuple[float, bool]] = {}
 
@@ -91,6 +107,50 @@ def _profile_column(scoring_profile: str, prefix: str = "fp_") -> str:
     return f"{prefix}{scoring_profile}"
 
 
+async def _load_relations(session: AsyncSession, wanted: Sequence[str]) -> None:
+    """Refresh the existence cache for ``wanted``, in a single round-trip.
+
+    Two things are going on here, and both are about round-trips rather than
+    about the answer.
+
+    **One query, not one per relation.** ``fetch_projections`` guards seven
+    relations and the window resolution guards another, so the old
+    one-``SELECT``-per-name loop opened a cold slate with eight sequential
+    round-trips before the first useful byte of SQL — on a managed Postgres,
+    more latency than the query they were protecting.
+
+    **The whole known set, not just the ones asked for.** Checking thirteen
+    names costs exactly what checking one costs: the work is a catalog lookup
+    per name against pages already in shared buffers, and the round-trip is the
+    price. So a miss on any relation refreshes all of them, which means the
+    first request after the TTL expires pays one round-trip and every guard for
+    the next minute — on that request and every other — is answered from memory.
+
+    Names outside :data:`KNOWN_RELATIONS` are included too, so an ad-hoc check
+    still works; it simply does not get the batching benefit of being expected.
+    """
+    now = time.monotonic()
+    stale = [
+        name
+        for name in wanted
+        if (cached := _relation_cache.get(name)) is None
+        or now - cached[0] >= _RELATION_CACHE_TTL
+    ]
+    if not stale:
+        return
+
+    batch = sorted(set(stale) | set(KNOWN_RELATIONS))
+    rows = await session.execute(
+        text(
+            "SELECT name, to_regclass(name) IS NOT NULL AS present "
+            "FROM unnest(CAST(:names AS text[])) AS t(name)"
+        ),
+        {"names": batch},
+    )
+    for name, present in rows.all():
+        _relation_cache[str(name)] = (now, bool(present))
+
+
 async def relation_exists(session: AsyncSession, relation: str) -> bool:
     """Whether a table, view or matview is present in the search path.
 
@@ -98,18 +158,9 @@ async def relation_exists(session: AsyncSession, relation: str) -> bool:
     relation — the only form of this check that does not abort the surrounding
     transaction on a miss.
     """
-    now = time.monotonic()
+    await _load_relations(session, (relation,))
     cached = _relation_cache.get(relation)
-    if cached is not None and now - cached[0] < _RELATION_CACHE_TTL:
-        return cached[1]
-
-    found = (
-        await session.execute(
-            text("SELECT to_regclass(:relation) IS NOT NULL"), {"relation": relation}
-        )
-    ).scalar_one()
-    _relation_cache[relation] = (now, bool(found))
-    return bool(found)
+    return cached[1] if cached is not None else False
 
 
 async def require_relations(session: AsyncSession, *relations: str) -> None:
@@ -117,10 +168,16 @@ async def require_relations(session: AsyncSession, *relations: str) -> None:
 
     Raises:
         DataUnavailable: naming the first missing relation and the command
-            that creates it.
+            that creates it. Reported in the order the caller listed them, not
+            the order the batch happens to return: the caller lists the relation
+            whose absence explains the most first, and an operator following the
+            remedy for a dependent matview when the table under it is the thing
+            that is missing has been sent the wrong way.
     """
+    await _load_relations(session, relations)
     for relation in relations:
-        if not await relation_exists(session, relation):
+        cached = _relation_cache.get(relation)
+        if cached is None or not cached[1]:
             raise DataUnavailable(relation)
 
 
