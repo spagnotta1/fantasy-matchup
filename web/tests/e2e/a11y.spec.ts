@@ -206,3 +206,53 @@ test('form controls all have accessible names', async ({ page }) => {
   }
   expect(offenders, `unlabelled form controls:\n${offenders.join('\n')}`).toEqual([])
 })
+
+test('tooltips are never clipped by a scrolling or rounded ancestor', async ({ page }) => {
+  // The board is the hard case: its chips sit inside an `overflow-x-auto`
+  // table wrapper, inside a Card that clips its own corners, under a nav that
+  // does the same. An absolutely-positioned bubble loses its first characters
+  // to any one of them.
+  await page.goto('/rankings')
+  await settle(page)
+
+  const triggers = page.locator('[aria-describedby], span[tabindex="0"]')
+  const total = Math.min(await triggers.count(), 14)
+  expect(total, 'expected tooltip triggers on the board').toBeGreaterThan(0)
+
+  const clipped: string[] = []
+  for (let i = 0; i < total; i++) {
+    const trigger = triggers.nth(i)
+    if (!(await trigger.isVisible())) continue
+    await trigger.scrollIntoViewIfNeeded()
+    await trigger.hover()
+
+    const bubble = page.locator('[role="tooltip"]')
+    if ((await bubble.count()) === 0) continue
+    await expect(bubble.first()).toBeVisible()
+
+    const verdict = await bubble.first().evaluate((tip) => {
+      const r = tip.getBoundingClientRect()
+      const vw = document.documentElement.clientWidth
+      const vh = document.documentElement.clientHeight
+      if (r.left < -0.5 || r.right > vw + 0.5 || r.top < -0.5 || r.bottom > vh + 0.5) {
+        return `outside the viewport: ${JSON.stringify({ left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), vw })}`
+      }
+      // And not cut off by anything between it and the document.
+      for (let el = tip.parentElement; el; el = el.parentElement) {
+        const s = getComputedStyle(el)
+        if (s.overflowX === 'visible' && s.overflowY === 'visible') continue
+        const e = el.getBoundingClientRect()
+        if (r.left < e.left - 0.5 || r.right > e.right + 0.5 || r.top < e.top - 0.5 || r.bottom > e.bottom + 0.5) {
+          return `clipped by ${el.tagName}.${String(el.className).split(' ').slice(0, 2).join('.')}`
+        }
+      }
+      return null
+    })
+    if (verdict) clipped.push(`${i}: ${verdict}`)
+
+    // Move away so the next hover starts clean.
+    await page.mouse.move(0, 0)
+  }
+
+  expect(clipped, `clipped tooltips:\n${clipped.join('\n')}`).toEqual([])
+})
