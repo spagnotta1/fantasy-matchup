@@ -26,6 +26,17 @@ export default defineConfig(({ mode }) => {
         '/api': { target, changeOrigin: true },
       },
     },
+    // `preview` serves the built bundle, and it needs the same proxy for the
+    // same reason: without it the only way to exercise a production build is to
+    // deploy it, which makes the deploy the first place a bundling problem can
+    // show up. Point VITE_DEV_API_PROXY at the deployed API to QA the real
+    // thing — the frontend cannot tell the difference, which is the point.
+    preview: {
+      port: 4173,
+      proxy: {
+        '/api': { target, changeOrigin: true },
+      },
+    },
     build: {
       // Route-level code splitting is handled by React.lazy; this keeps the
       // charting library out of the initial bundle, which is the single

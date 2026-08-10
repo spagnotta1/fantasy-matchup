@@ -135,7 +135,21 @@ export default function SimulationPage() {
   )
 
   const resultsRef = useRef<HTMLDivElement>(null)
+  const controlsRef = useRef<HTMLDivElement>(null)
   const slotSignature = expandSlots(catalog.format).join(',')
+
+  /**
+   * Back to the run controls from the bottom of a result.
+   *
+   * Focus moves as well as the scroll position, for the same reason the route
+   * change does it: a keyboard or screen-reader user who activates this needs
+   * their next Tab to land in the controls, not back at the top of the results
+   * they just left.
+   */
+  const onAdjust = useCallback(() => {
+    controlsRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })
+    controlsRef.current?.focus({ preventScroll: true })
+  }, [])
 
   // Build the empty lineups once the format arrives. `catalog.format` is
   // memoised by the hook, so this settles after one pass rather than rebuilding
@@ -348,6 +362,7 @@ export default function SimulationPage() {
             </p>
           )}
 
+          <div ref={controlsRef} tabIndex={-1} className="scroll-mt-24 outline-none">
           <RunControls
             correlationMode={correlationMode}
             onCorrelationModeChange={setCorrelationMode}
@@ -365,6 +380,7 @@ export default function SimulationPage() {
               { label: LABEL_B, ...readinessB },
             ]}
           />
+          </div>
         </>
       )}
 
@@ -381,6 +397,7 @@ export default function SimulationPage() {
             meta={run.data.meta}
             labelA={LABEL_A}
             labelB={LABEL_B}
+            onAdjust={onAdjust}
           />
         ) : (
           <PreRunExplainer />

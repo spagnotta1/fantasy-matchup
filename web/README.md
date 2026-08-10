@@ -244,3 +244,47 @@ API gap worth closing for this view.
 Everything a `VITE_`-prefixed variable holds ends up in the client bundle. There
 are no secrets here and there must never be: the API is anonymous, requires no
 credentials, and nothing in this directory should ever hold one.
+
+## Browser QA
+
+`tests/e2e` is a Playwright suite covering what unit tests cannot: rendered
+colour, focus order, tap targets, and whether a phone-width layout overflows.
+
+```bash
+npm run test:e2e                       # both viewports, against the deployment
+E2E_BASE_URL=http://localhost:4173 npm run test:e2e   # against a local build
+npm run test:contrast                  # design-token contrast audit, no server
+```
+
+The default target is the deployed origin, because most of what the suite asks
+about — a published week with real projections in it, gzip, SPA deep links —
+only exists there. To test a change before it ships, build it and point the
+suite at a local preview:
+
+```bash
+npm run build
+VITE_DEV_API_PROXY=https://<your-api-host> npm run preview -- --port 4173
+E2E_BASE_URL=http://localhost:4173 npm run test:e2e
+```
+
+`preview` proxies `/api` exactly as `dev` does, so a production bundle can be
+exercised against the real API without deploying it first.
+
+Four specs, by what they protect:
+
+| spec | what breaks without it |
+|---|---|
+| `a11y.spec.ts` | axe (WCAG 2.1 AA) on every route, one `h1` per page, no skipped heading levels, skip link, focus-on-navigation, visible focus rings, labelled controls, keyboard-only simulation |
+| `walkthrough.spec.ts` | the dashboard→board→player→matchup path, slate state surviving a reload, share links, the error/empty states, a full simulation |
+| `responsive.spec.ts` | horizontal overflow at phone width, the fixed nav not covering content, cards replacing the table, 44px tap targets |
+| `data-states.spec.ts` | K/DST refusals, nothing published, an empty board, slow and failed requests, a missing projection, a 400-player board |
+
+`token-contrast.mjs` is the one to run when touching the palette. It parses the
+token blocks out of `styles/index.css` — not a copy of them — resolves every
+`oklch()` through a real browser canvas, and checks every pairing the UI draws
+in both themes. It prints the smallest lightness that would fix each failure and
+exits non-zero, so it works as a pre-commit check. `axe` only sees the colours
+on the page it is given; this sees the ones a future component will reach for.
+
+Two workers, always. Every run goes through one API instance behind one cache,
+and the default worker count measures contention rather than the app.

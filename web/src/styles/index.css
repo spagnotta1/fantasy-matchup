@@ -25,16 +25,44 @@
   --app-surface-hover: oklch(96% 0.008 250);
   --app-border: oklch(90% 0.008 250);
   --app-border-strong: oklch(83% 0.012 250);
+  /* The edge of a control the user can type in or open, kept separate from
+     `--app-border` on purpose.
+
+     A card divider is decoration and may be as faint as it likes. The outline
+     of a text field is the only thing that says "this is a text field", which
+     puts it under WCAG 1.4.11 and its 3:1 floor. `--app-border` measures
+     1.25:1 on a card — fine for a rule between rows, not enough to locate an
+     input. Raising `--app-border` itself to clear 3:1 would drag every table
+     line and card edge up with it and turn a calm layout into a grid of boxes,
+     so the control edge gets its own token and the structural lines keep the
+     weight they were designed with. */
+  --app-border-input: oklch(66% 0.012 250);
 
   --app-text: oklch(22% 0.015 255);
   --app-text-secondary: oklch(45% 0.014 255);
-  --app-text-muted: oklch(58% 0.012 255);
+  /* 53%, not the 58% this started at. Muted text is the smallest type in the
+     product — 11px and 12px captions — and at 58% it measured 4.26:1 on white,
+     3.97:1 on the page background and 3.73:1 on a sunken panel: below AA on
+     every surface it is actually drawn on, worst exactly where the type is
+     smallest. 53% clears 4.5:1 against all three (5.29 / 4.92 / 4.63) and is
+     still visibly a step down from `--app-text-secondary`, which is the whole
+     job of the token. */
+  --app-text-muted: oklch(53% 0.012 255);
   --app-text-inverted: oklch(99% 0 0);
 
   /* Brand. A cool teal, not a league colour — this product is not a clone of
-     any of them, and the accent is the first thing that says so. */
-  --app-accent: oklch(58% 0.115 205);
-  --app-accent-hover: oklch(52% 0.118 205);
+     any of them, and the accent is the first thing that says so.
+
+     53.5% rather than the original 58%. The accent is a *background* — primary
+     buttons, the logo badge, the active nav pill — carrying `--app-on-accent`
+     text at 14px bold, which is not WCAG "large" text and so needs 4.5:1. At
+     58% that pairing measured 3.88:1. Darkening the background is the only
+     available direction, the foreground being already within a percent of
+     white. 53.5% gives 4.63:1 on the text and 4.75:1 against the card surface,
+     so it doubles as a legal non-text mark. Hover moves down in step to keep
+     the press feedback the same size it always was. */
+  --app-accent: oklch(53.5% 0.115 205);
+  --app-accent-hover: oklch(48% 0.118 205);
   --app-accent-soft: oklch(94% 0.035 205);
   --app-accent-text: oklch(41% 0.105 205);
   --app-on-accent: oklch(99% 0 0);
@@ -49,7 +77,12 @@
   --app-negative-soft: oklch(95% 0.035 22);
   --app-negative-text: oklch(47% 0.17 22);
 
-  --app-caution: oklch(70% 0.14 75);
+  /* 67%, down from 70%. Amber is the one hue that cannot be both a warning and
+     legible while it stays bright: at 70% it measured 2.73:1 against a card,
+     under the 3:1 that non-text indicators need, so a caution meter fill or
+     dot could vanish for a low-vision reader — the one reader it exists for.
+     `--app-caution-text` is a separate, much darker token and is unaffected. */
+  --app-caution: oklch(67% 0.14 75);
   --app-caution-soft: oklch(95.5% 0.05 80);
   --app-caution-text: oklch(48% 0.11 65);
 
@@ -98,6 +131,7 @@
     --app-surface-hover: oklch(27% 0.018 255);
     --app-border: oklch(30% 0.016 255);
     --app-border-strong: oklch(40% 0.02 255);
+    --app-border-input: oklch(51.5% 0.02 255);
 
     --app-text: oklch(96% 0.004 255);
     --app-text-secondary: oklch(76% 0.012 255);
@@ -150,6 +184,7 @@
   --app-surface-hover: oklch(27% 0.018 255);
   --app-border: oklch(30% 0.016 255);
   --app-border-strong: oklch(40% 0.02 255);
+  --app-border-input: oklch(51.5% 0.02 255);
 
   --app-text: oklch(96% 0.004 255);
   --app-text-secondary: oklch(76% 0.012 255);
@@ -193,6 +228,7 @@
   --color-surface-hover: var(--app-surface-hover);
   --color-line: var(--app-border);
   --color-line-strong: var(--app-border-strong);
+  --color-line-input: var(--app-border-input);
 
   --color-ink: var(--app-text);
   --color-ink-secondary: var(--app-text-secondary);

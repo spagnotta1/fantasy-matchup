@@ -89,26 +89,34 @@ export function AssumptionsPanel({
 
         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           {flags.map((flag) => (
-            <div key={flag.label} className="flex gap-2.5">
-              <span
-                className={cn(
-                  'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full',
-                  flag.ok ? 'bg-positive-soft text-positive-text' : 'bg-surface-sunken text-ink-muted',
-                )}
-              >
-                {flag.ok ? (
-                  <Check aria-hidden className="size-3" />
-                ) : (
-                  <X aria-hidden className="size-3" />
-                )}
-              </span>
-              <div className="min-w-0">
-                <dt className="text-ink text-xs font-semibold">
+            // The status glyph belongs inside the <dt>: a <dl>'s grouping
+            // <div> may contain only <dt> and <dd>, so an icon sitting beside
+            // them breaks the list semantics for a screen reader. The <dd> is
+            // indented by the glyph's width plus the gap to keep the alignment.
+            <div key={flag.label} className="min-w-0">
+              <dt className="text-ink flex items-start gap-2.5 text-xs font-semibold">
+                <span
+                  className={cn(
+                    'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full',
+                    flag.ok
+                      ? 'bg-positive-soft text-positive-text'
+                      : 'bg-surface-sunken text-ink-muted',
+                  )}
+                >
+                  {flag.ok ? (
+                    <Check aria-hidden className="size-3" />
+                  ) : (
+                    <X aria-hidden className="size-3" />
+                  )}
+                </span>
+                <span>
                   {flag.label}
                   <span className="sr-only">: {flag.ok ? 'included' : 'not included'}</span>
-                </dt>
-                <dd className="text-ink-muted text-xs leading-relaxed">{flag.detail}</dd>
-              </div>
+                </span>
+              </dt>
+              <dd className="text-ink-muted ps-[1.625rem] text-xs leading-relaxed">
+                {flag.detail}
+              </dd>
             </div>
           ))}
         </dl>

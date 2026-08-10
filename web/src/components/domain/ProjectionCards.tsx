@@ -43,7 +43,14 @@ export function ProjectionCards({
     <div className="space-y-6">
       {groupByTier(entries).map((group) => (
         <section key={group.tier} aria-labelledby={`tier-${group.tier}`}>
-          <h3
+          {/*
+            h2, not h3. A tier is a top-level division of the board, and the
+            page's h1 is the only heading above it — the table view expresses
+            the same grouping with rows rather than headings, so this is the
+            one place the level is visible, and at h3 it skipped a level for
+            anyone navigating the card view by heading.
+          */}
+          <h2
             id={`tier-${group.tier}`}
             className="text-ink-secondary mb-2 text-xs font-semibold tracking-wide uppercase"
           >
@@ -51,7 +58,7 @@ export function ProjectionCards({
             <span className="text-ink-muted ml-2 font-normal normal-case">
               {group.entries.length} {group.entries.length === 1 ? 'player' : 'players'}
             </span>
-          </h3>
+          </h2>
           <CardGrid
             entries={group.entries}
             scaleMax={scaleMax}
