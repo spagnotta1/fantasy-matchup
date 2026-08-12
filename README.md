@@ -658,6 +658,10 @@ GET /api/v1/meta/cache                   which endpoints are cached, and why
 GET /api/v1/health                       liveness + database + cache
 GET /api/v1/health/live                  process only — the platform's check
 GET /api/v1/health/ready                 dependencies — the load balancer's
+
+POST /api/v1/mock-draft/analyze          one draft position, simulated
+POST /api/v1/mock-draft/compare          every draft position, ranked
+GET  /api/v1/mock-draft/config           bounds, and which seasons can be drafted
 ```
 
 Every response is `{"data": ..., "meta": ...}`. `meta` carries the resolved
@@ -1014,6 +1018,240 @@ the job that exhausted the budget succeeds. The cron services are the ones to
 watch: invisible between runs, then all starting within an hour of each other
 on a Tuesday.
 
+## Layer 8 — the Mock Draft
+
+```powershell
+POST /api/v1/mock-draft/analyze     one seat, simulated many times
+POST /api/v1/mock-draft/compare     every seat, ranked
+GET  /api/v1/mock-draft/config      bounds, and which seasons can be drafted
+```
+
+*Given a league and a draft slot, what roster is that seat likely to build, and
+which slot builds the strongest one?* It is a **consumer** of the frozen
+foundation in exactly the sense the simulation engine is: no model is invoked,
+no projection is computed, and every point estimate it uses came out of a
+published `projection_points` row.
+
+### There is no season-long projection, and none is invented
+
+This is the constraint the whole design follows from, so it is stated first.
+`shrinkage_eb` projects **one week** from a trailing four-game usage window.
+Weeks 2-18 of a season are not projectable before weeks 1-17 have happened —
+`feat_player_usage` has no row for a game nobody has played — so a season-long
+number would mean a second, unvalidated model, which the frozen-foundation rule
+forbids.
+
+What is used instead keeps the halves apart and labels both:
+
+```
+season_value  =  expected_points_per_game   provenance: model    (published week 1 board)
+              x  expected_games_played      provenance: derived  (historical availability)
+```
+
+The model supplies the rate and nothing else. History supplies availability,
+volatility and trend — quantities the model does not estimate and never has. The
+two are **multiplied, never averaged**, so no historical number is ever blended
+into a projected one. A player who scored 300 points last season and is projected
+for 11 points a game is projected for 11 points a game here too.
+
+The obvious cost is that this is a *draft-day rate*, not a forecast of how a
+season unfolds: no in-season injury, trade or role change is in it. That sentence
+is in `meta.notices` on every response, where a client cannot render the board
+without it.
+
+### Which seasons can be drafted, and why that is a short list
+
+A draft for season S reads the published **week 1** board for S. That run is
+fitted only on data strictly before week 1 of S — `predict/generate.py` asserts
+it row by row — so it is exactly what a manager had on draft day.
+
+But week 1 of S is only projectable once S has begun, so the *current* season
+cannot be mock-drafted before it starts. `GET /mock-draft/config` serves
+`draftable_seasons` for precisely this reason, and the season picker is built
+from it rather than from the schedule.
+
+That constraint turns out to be a gift: every draftable season has since been
+played, so the strategy can be **backtested against what actually happened**.
+
+### Draft value, which is not projected points
+
+Four quantities, each built on the last:
+
+| | what it is |
+|---|---|
+| **replacement level** | what the worst starter at a position is worth once every team has filled its lineup. Flex slots are **allocated by auction** — each in turn to whichever eligible position offers the most valuable next player — so a receiver-heavy pool moves the levels on its own |
+| **value over replacement** | season value minus that. The number that makes positions comparable, and why the highest-scoring quarterback is not the first pick |
+| **marginal roster value** | adjusted for what the roster holds. A third back on a roster starting two earns their surplus only in the weeks the two ahead miss, so the bench weight is *derived from those two players' own availability estimates* rather than from a constant |
+| **value over next available** | marginal value now, minus the expected marginal value of what the position still offers at your next pick |
+
+The last is the strategy. A candidate is worth taking now to the extent that the
+position will be worse later, which is why the engine will pass on the highest
+value on the board. The expectation is an exact order statistic over the survival
+probabilities, not a sample:
+
+```
+E[best left] = sum_i  value_i * P(i survives) * prod_{j<i} (1 - P(j survives))
+```
+
+### Opposing managers are simulated, and that model is an assumption
+
+**There is no ADP data in this repository**, and inventing a number and calling
+it ADP would be the most misleading thing this feature could do — ADP is the one
+input a user would assume was observed. So the other eleven seats draft from a
+stated behavioural model: a standardised blend of value over replacement and last
+completed season's actual points, plus a positional-need bonus, sampled by
+Gumbel-max (which makes the selection exactly a softmax draw, with a stated
+distribution a test can check rather than "pick randomly from the top five").
+
+Its two parameters are **assumptions, not measurements** — nothing here can fit
+them — so they are request fields, and every response reports which values
+produced it. Blending a projection with a historical actual is exactly what the
+*value* side of this package refuses to do, and is right here, because this is
+not a value estimate: it is a model of what other people will do, and other
+people demonstrably over-weight last season.
+
+### Availability is calibrated, then read
+
+Two stages. A **calibration** batch runs complete drafts in which every seat uses
+the opponent model, recording where each player went; that produces a survival
+curve per player. The **analysis** batch then runs drafts in which the user's
+seat uses the real strategy and reads those curves.
+
+Calibrating without the user's strategy in it is deliberate — one seat in twelve
+barely moves the board, and a curve that already assumed the strategy would have
+the strategy optimising against its own shadow. The residual bias is real and is
+*measured*, not asserted: `evaluate.availability_calibration` bins the predicted
+probabilities against what was observed in drafts the strategy took part in.
+
+```
+Availability calibration, 2020-2025    ECE 0.002   worst band 0.025
+```
+
+### It beats its baselines, measured against seasons that happened
+
+`scripts/phase8e_evaluate.py` drafts seasons that have since been played and
+scores each resulting roster on **actual** points. Four strategies see an
+identical sequence of opponent behaviour — the seed keys on the seat and the
+index, not on the strategy — so any difference is the decision-making.
+
+```
+Mean actual points scored by the drafted starting lineup, 2020-2025
+  value_over_next_available       1352.9      +0.0
+  highest_season_value            1171.1    -181.8
+  highest_points_per_game         1148.3    -204.6
+  random                          1161.6    -191.3
+```
+
+It wins in **every one of the six seasons**, by 30 to 354 points against a
+standard error near 10. Note what that does *not* say: it beats these baselines
+against *these* opponents. Against real drafters the margin would differ, and
+nothing on disk can say by how much.
+
+### Leakage
+
+A draft for season S may see S-1 and earlier, and nothing else. The bound is a
+`<` in the query **and** re-asserted above the database by
+`history.assert_no_future_seasons`, which raises rather than filters — this is
+the failure that produces a spectacular, meaningless backtest, and it must fail
+loudly rather than degrade into a slightly optimistic one.
+
+### Architecture
+
+```
+POST /api/v1/mock-draft/analyze          api/routers/draft.py    (thin)
+        |
+        v
+services.draft.settings.validate_settings()   pure, pre-I/O
+        |
+        v
+services.draft.pool.build_pool()              3 queries; the only I/O
+        |
+        v
+services.draft.valuation                      replacement, scarcity, VOR — pure
+        |
+        v
+services.draft.engine.simulate_draft()        pure, seeded, no session
+        |
+        v
+services.draft.aggregate                      counts and sums only
+        |
+        v
+DraftAnalysis -> api/mappers -> Envelope[DraftAnalysisOut]
+```
+
+Only `pool.py` and `service.py` know what a database is; everything that decides
+anything is pure and seeded, which is why 135 of the feature's 162 tests need no
+Postgres. `service.py` hands the whole synchronous batch to `asyncio.to_thread`
+in one hop — three awaited calls would release and reacquire the loop three
+times, and each gap is a chance for another request to interleave CPU-bound work
+onto it.
+
+**Aggregates, never a transcript.** Ten thousand drafts is 150,000 selections per
+seat; the loop keeps counts and sums. The one complete draft that survives is the
+simulation whose roster value is **closest to the median**, replayed with its
+reasoning captured — never the best, because the best of ten thousand drafts
+happened because the board fell kindly and presenting it as "your roster" would
+promise an outcome most drafts do not produce.
+
+### Every recommendation is derived from the calculation
+
+`rationale` carries the marginal value, the expected value of waiting, the
+survival probability at the next pick, the tier state and the runner-up margin —
+the actual numbers the engine compared — and the sentence is assembled from them
+mechanically. It reads a little plainly, which is the correct trade against a
+fluent sentence that is not derived from anything:
+
+> **Davante Adams:** Fills a starting WR slot, worth 101 points above a
+> replacement-level WR; and survives to your next pick (#28) in only 20% of
+> simulations; waiting on WR would most likely leave DeVonta Smith at roughly 242
+> season points, a 15-point difference; tier 2 at WR has 2 player(s) left; chosen
+> over Drake London by 1 points of draft value.
+
+### Performance
+
+Measured before optimising, on one core of a developer machine, 12-team/15-round
+over a 354-player board:
+
+| | |
+|---|---|
+| pool retrieval (3 queries) | 458 ms |
+| availability calibration (200 drafts) | 1,341 ms |
+| analysis, per simulated draft | **8.27 ms**, flat from 100 to 10,000 |
+| 100 / 1,000 / 5,000 / 10,000 simulations | 0.83 s / 8.3 s / 41.3 s / 82.7 s |
+| comparison, 12 seats x 250 | 24.9 s |
+
+An index-array rewrite of the two inner loops took this from 33 ms to 8.3 ms per
+draft with **identical output** — the same seeds produce the same rosters, which
+is asserted by a test rather than eyeballed. `MAX_TOTAL_DRAFTS` bounds one
+request at 15,000 drafts, which is about two minutes of worker time; anything
+past a few thousand belongs in a background job, exactly as the projection run
+does.
+
+### What is deliberately not built
+
+No persistence, no authentication, no saved leagues, no draft history, and no
+live drafting where you make a pick and the board responds. A result is
+reproducible from `{settings, published run, historical panel, seed}` — all four
+of which travel in the response — so a stored copy would buy nothing that
+recomputing does not.
+
+**Rookies are absent from the pool entirely.** The model's features are a
+trailing four-game window; a player who has never played has no window, no
+projection and no pool entry. Real drafts spend early picks on them, so a
+simulated board is shallower at the top than a real one. That is a material gap
+rather than a rounding error, and it is stated in `meta.notices` rather than
+patched with an invented number.
+
+### Reproducing
+
+```powershell
+pytest tests/test_services_draft.py                       # no database
+$env:DATABASE_URL = "postgresql://..."
+pytest tests/test_api_draft.py                            # real SQL, real board
+python scripts/phase8e_evaluate.py --seasons 2020 2021 2022 2023 2024 2025
+python scripts/phase8_benchmark.py
+```
+
 ## Frozen foundation
 
 **Phase 3b is frozen.** `shrinkage_eb` is the validated model everything above
@@ -1094,6 +1332,11 @@ Nothing here is asserted without a check that fails loudly:
 | Bust calibration | max error | **0.014** |
 | Percentile ordering | 1,392 stored rows | 0 violations |
 | Train/serve feature parity | every registered model | enforced by `assert_available()` |
+| Draft strategy beats its baselines | actual points, 2020-2025 | **+182 vs best-available**, wins all 6 seasons |
+| Draft availability calibration | predicted vs observed survival | ECE **0.002**, worst band 0.025 |
+| No draft-time leakage | every historical row, every season | asserted above the query, raises on violation |
+| Draft engine determinism | same seed, before and after the index rewrite | identical rosters and values |
+| Draft optimisation is behaviour-preserving | 33 ms -> 8.3 ms per draft | identical output, asserted |
 | Historical immutability | publish a new model version | old rows unchanged, superseded not deleted |
 | Curve passes through stored percentiles | reconstruct, re-read P10-P90 | exact to 1e-9 |
 | Head-to-head is deterministic | same pair, repeated | identical; grid 64 vs 4096 differs < 0.01 |
@@ -1277,7 +1520,7 @@ Notes:
 
 ## Where this goes next
 
-All seven layers are done. What remains is modelling and scale, not structure.
+All eight layers are done. What remains is modelling and scale, not structure.
 
 1. **A better model** — `shrinkage_eb` clears the L4 baseline and is honest
    about its intervals, but it is still a shrunk average. The feature layer
@@ -1299,11 +1542,63 @@ All seven layers are done. What remains is modelling and scale, not structure.
    first), and unquantified injury impact — and all three are refused or
    disclosed rather than papered over. The fourth, player independence, is now
    measured rather than assumed.
+6. **The Mock Draft** — **built**, stateless, at `POST /api/v1/mock-draft/*`
+   and `/mock-draft` in the app. It is the first feature to need a *season*
+   number from a week-by-week model, and it gets one by multiplying the
+   published week 1 rate by an availability estimate rather than by fitting a
+   second model. Backtested against 2020-2025 actuals, where it beats every
+   baseline in every season. Two things would move it furthest: **real ADP
+   data**, which would turn the opponent model from an assumption into a fitted
+   one, and **rookies**, who have no projection and are therefore absent from a
+   board real drafters spend early picks on.
 
 ## Documented gaps
 
 These are known and deliberate. Each is stated here, surfaced through the API,
 and has a defined path forward — none is a surprise waiting for a user to find.
+
+### There is no ADP data, so the draft's opponent model is unvalidated
+
+The Mock Draft simulates eleven opposing managers, and nothing in this
+repository can say whether it simulates them *well*. There is no
+average-draft-position feed, no draft results, no league histories. The
+consensus board is therefore a **stated behavioural assumption** with two
+parameters exposed as request fields, and every response says so. Its measured
+result — that the strategy beats its baselines — is a statement about these
+opponents and not about real ones.
+
+Acquiring an ADP feed would turn the assumption into a fitted model and make
+`evaluate.py`'s availability calibration a claim about reality rather than about
+internal consistency. Until then, no number in that area is presented as
+validated.
+
+### Rookies have no projection and are absent from the draft pool
+
+The model's features are a trailing four-game usage window. A player who has
+never taken a snap has no window, so no projection, so no entry on a draft
+board. Real drafts spend early picks on rookies, which makes a simulated board
+shallower at the top than a real one — a material gap, and one this engine
+refuses to close by inventing a number for a player it has never seen.
+
+The path forward is a draft-capital and college-production prior, which is a
+model, and therefore a challenger to be judged by `ACCEPTANCE` rather than a
+patch to be dropped in.
+
+### A season projection is a rate times an availability estimate
+
+Not a season model. `season_value` reads the published week 1 projection as a
+points-per-game rate and multiplies by estimated games played, which assumes a
+player's role is roughly the shape it is in week 1 and models no in-season
+injury, trade or breakout. Measured against 2020-2025 actuals it correlates
+**0.34 to 0.72** with actual season points within position — the spread across
+seasons is as large as the spread across positions, which is itself the finding
+— and is biased low, most at quarterback (+15.4 points of actual over projected,
+pooled, against +1.0 at receiver).
+
+That positional bias is a property of the **frozen model**, not of the draft
+engine, and it is reported here rather than corrected there — a per-position
+scaling factor applied above the foundation would be an unvalidated second model
+wearing the first one's guarantees.
 
 ### Kickers and team defences are not projected
 

@@ -628,3 +628,279 @@ export type CacheRule = z.infer<typeof cacheRuleSchema>
 
 export const provenanceLegendSchema = z.record(z.string(), z.string())
 export type ProvenanceLegend = z.infer<typeof provenanceLegendSchema>
+
+// ---------------------------------------------------------------------------
+// Mock draft
+// ---------------------------------------------------------------------------
+//
+// Every simulated field below is `derived` on the wire. The split that matters
+// inside one player card: `projected_points_per_game` is `model`, the entries
+// in `historical.seasons` are `actual`, and everything computed from either —
+// expected games, season value, draft value, availability — is `derived`. The
+// UI is required to keep those apart, which is why they arrive in separate
+// objects rather than flattened onto one row.
+
+export const rosterSlotSchema = z.object({
+  slot: z.string(),
+  count: z.number(),
+})
+export type RosterSlot = z.infer<typeof rosterSlotSchema>
+
+export const draftLimitsSchema = z.object({
+  min_teams: z.number(),
+  max_teams: z.number(),
+  min_rounds: z.number(),
+  max_rounds: z.number(),
+  min_simulations: z.number(),
+  max_simulations: z.number(),
+  default_simulations: z.number(),
+  max_total_drafts: z.number(),
+  default_seed: z.number(),
+  draft_formats: z.array(z.string()),
+  default_roster: z.array(rosterSlotSchema),
+  scoring_profiles: z.array(z.string()),
+})
+export type DraftLimits = z.infer<typeof draftLimitsSchema>
+
+export const draftConfigSchema = z.object({
+  limits: draftLimitsSchema,
+  /** Seasons with a published week 1 board. Anything else cannot be drafted. */
+  draftable_seasons: z.array(z.number()),
+  draftable_positions: z.array(z.string()),
+  unavailable_positions: z.array(positionSupportSchema).default([]),
+})
+export type DraftConfig = z.infer<typeof draftConfigSchema>
+
+/** One completed season. `provenance: actual` — a recorded outcome. */
+export const historicalSeasonSchema = z.object({
+  season: z.number(),
+  games_played: z.number(),
+  team_games: z.number(),
+  total_points: z.number(),
+  points_per_game: z.number(),
+  weekly_stdev: maybeNumber,
+  position_rank: maybeNumber,
+  position_percentile: maybeNumber,
+})
+export type HistoricalSeason = z.infer<typeof historicalSeasonSchema>
+
+export const historicalEvidenceSchema = z.object({
+  provenance: provenanceSchema.default('derived'),
+  seasons: z.array(historicalSeasonSchema).default([]),
+  seasons_observed: z.number(),
+  expected_games: z.number(),
+  availability_rate: maybeNumber,
+  /** `player_history` or `position_prior` — branch on this, not on a count. */
+  availability_basis: z.string(),
+  consistency_percentile: maybeNumber,
+  consistency_label: maybeString,
+  trend: maybeString,
+  trend_detail: maybeString,
+})
+export type HistoricalEvidence = z.infer<typeof historicalEvidenceSchema>
+
+export const pickRationaleSchema = z.object({
+  explanation: z.string(),
+  slot: z.string(),
+  marginal_value: z.number(),
+  value_over_next_available: z.number(),
+  expected_next_best_value: z.number(),
+  next_best_player_id: maybeString,
+  next_best_player_name: maybeString,
+  next_pick_overall: maybeNumber,
+  survival_at_next_pick: z.number(),
+  scarcity: z.number(),
+  tier_index: maybeNumber,
+  tier_size: maybeNumber,
+  tier_remaining: maybeNumber,
+  runner_up_id: maybeString,
+  runner_up_name: maybeString,
+  runner_up_margin: maybeNumber,
+})
+export type PickRationale = z.infer<typeof pickRationaleSchema>
+
+export const simulatedPickSchema = z.object({
+  overall: z.number(),
+  round_number: z.number(),
+  player_id: z.string(),
+  name: z.string(),
+  position: z.string(),
+  team: maybeString,
+  season_value: z.number(),
+  projected_points_per_game: z.number(),
+  expected_games: z.number(),
+  value_over_replacement: z.number(),
+  is_starter: z.boolean(),
+  rationale: pickRationaleSchema.nullish(),
+  historical: historicalEvidenceSchema.nullish(),
+})
+export type SimulatedPick = z.infer<typeof simulatedPickSchema>
+
+export const valueDistributionSchema = z.object({
+  mean: z.number(),
+  median: z.number(),
+  stdev: z.number(),
+  p10: z.number(),
+  p25: z.number(),
+  p75: z.number(),
+  p90: z.number(),
+  minimum: z.number(),
+  maximum: z.number(),
+  observations: z.number(),
+  /** The number that says whether a gap between two seats is a finding. */
+  standard_error: z.number(),
+})
+export type ValueDistribution = z.infer<typeof valueDistributionSchema>
+
+export const roundPositionShareSchema = z.object({
+  round_number: z.number(),
+  position: z.string(),
+  share: z.number(),
+})
+export type RoundPositionShare = z.infer<typeof roundPositionShareSchema>
+
+export const positionStrengthSchema = z.object({
+  position: z.string(),
+  mean_starter_points: z.number(),
+  mean_value_over_replacement: z.number(),
+  mean_starters: z.number(),
+})
+export type PositionStrength = z.infer<typeof positionStrengthSchema>
+
+export const playerAvailabilitySchema = z.object({
+  player_id: z.string(),
+  name: z.string(),
+  position: z.string(),
+  season_value: z.number(),
+  reference_pick: z.number(),
+  next_reference_pick: maybeNumber,
+  first_pick_probability: z.number(),
+  next_pick_probability: z.number(),
+  drafted_before_next_pick: z.number(),
+  mean_selection_pick: maybeNumber,
+  selected_rate: z.number(),
+})
+export type PlayerAvailability = z.infer<typeof playerAvailabilitySchema>
+
+export const strategyInsightSchema = z.object({
+  kind: z.string(),
+  headline: z.string(),
+  detail: z.string(),
+  evidence: z.record(z.string(), z.union([z.number(), z.string(), z.null()])).default({}),
+})
+export type StrategyInsight = z.infer<typeof strategyInsightSchema>
+
+export const replacementLevelSchema = z.object({
+  position: z.string(),
+  starters: z.number(),
+  value: z.number(),
+  player_id: maybeString,
+  flex_share: z.number(),
+})
+export type ReplacementLevel = z.infer<typeof replacementLevelSchema>
+
+export const draftPoolSchema = z.object({
+  provenance: provenanceSchema.default('derived'),
+  players: z.number(),
+  positions: z.array(z.string()),
+  season: z.number(),
+  board_week: z.number(),
+  season_games: z.number(),
+  history_seasons: z.array(z.number()).default([]),
+  players_without_history: z.number(),
+  replacement: z.array(replacementLevelSchema).default([]),
+})
+export type DraftPoolSummary = z.infer<typeof draftPoolSchema>
+
+export const seatAnalysisSchema = z.object({
+  provenance: provenanceSchema.default('derived'),
+  draft_position: z.number(),
+  simulations: z.number(),
+  roster_value: valueDistributionSchema,
+  starter_points: valueDistributionSchema,
+  picks: z.array(z.number()),
+  waits: z.array(z.number()).default([]),
+  representative_index: z.number(),
+  roster: z.array(simulatedPickSchema).default([]),
+  round_positions: z.array(roundPositionShareSchema).default([]),
+  position_strength: z.array(positionStrengthSchema).default([]),
+  insights: z.array(strategyInsightSchema).default([]),
+  availability: z.array(playerAvailabilitySchema).default([]),
+})
+export type SeatAnalysis = z.infer<typeof seatAnalysisSchema>
+
+export const draftMethodologySchema = z.object({
+  calibration_drafts: z.number(),
+  history_weight: z.number(),
+  noise: z.number(),
+  elapsed_seconds: z.number(),
+  seed: z.number(),
+  simulations: z.number(),
+  strategy: z.string().default('value_over_next_available'),
+})
+export type DraftMethodology = z.infer<typeof draftMethodologySchema>
+
+export const draftSettingsSchema = z.object({
+  season: z.number(),
+  teams: z.number(),
+  rounds: z.number(),
+  scoring_profile: z.string(),
+  draft_format: z.string(),
+  roster: z.array(rosterSlotSchema),
+  starters: z.number(),
+  bench: z.number(),
+  simulations: z.number(),
+  seed: z.number(),
+})
+export type DraftSettings = z.infer<typeof draftSettingsSchema>
+
+export const draftAnalysisSchema = z.object({
+  settings: draftSettingsSchema,
+  seat: seatAnalysisSchema,
+  pool: draftPoolSchema,
+  methodology: draftMethodologySchema,
+})
+export type DraftAnalysis = z.infer<typeof draftAnalysisSchema>
+
+export const seatSummarySchema = z.object({
+  draft_position: z.number(),
+  roster_value: valueDistributionSchema,
+  starter_points: valueDistributionSchema,
+  percentile: z.number(),
+  is_best: z.boolean(),
+})
+export type SeatSummary = z.infer<typeof seatSummarySchema>
+
+export const draftComparisonSchema = z.object({
+  provenance: provenanceSchema.default('derived'),
+  settings: draftSettingsSchema,
+  seats: z.array(seatSummarySchema),
+  best_position: z.number(),
+  spread: z.number(),
+  /**
+   * False means the best-to-worst gap is inside the simulation's own error.
+   * The UI must not draw a winner when this is false.
+   */
+  spread_is_resolvable: z.boolean(),
+  detail: z.array(seatAnalysisSchema).default([]),
+  pool: draftPoolSchema,
+  methodology: draftMethodologySchema,
+})
+export type DraftComparison = z.infer<typeof draftComparisonSchema>
+
+export interface DraftRequest {
+  season: number
+  teams?: number
+  rounds?: number
+  scoring_profile?: string | null
+  draft_format?: string
+  roster?: RosterSlot[] | null
+  simulations?: number | null
+  seed?: number | null
+  history_weight?: number | null
+  noise?: number | null
+}
+
+export interface DraftAnalysisRequest extends DraftRequest {
+  draft_position: number
+}

@@ -12,7 +12,7 @@ import { settle } from './helpers'
 
 test.skip(({ isMobile }) => !isMobile, 'phone-width behaviour')
 
-const ROUTES = ['/', '/rankings', '/rankings/rb', '/players', '/matchups', '/simulation', '/compare', '/settings']
+const ROUTES = ['/', '/rankings', '/rankings/rb', '/players', '/matchups', '/simulation', '/mock-draft', '/compare', '/settings']
 
 
 for (const route of ROUTES) {

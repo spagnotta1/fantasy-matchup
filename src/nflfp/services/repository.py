@@ -1079,3 +1079,111 @@ async def fetch_defense_form(
         """,
         params,
     )
+
+
+# ---------------------------------------------------------------------------
+# Season history — what the draft engine reads
+# ---------------------------------------------------------------------------
+
+
+async def fetch_season_totals(
+    session: AsyncSession,
+    *,
+    before_season: int,
+    seasons_back: int,
+    scoring_profile: str,
+    positions: Sequence[str] | None = None,
+) -> list[dict]:
+    """Completed-season production per player, for seasons before a draft.
+
+    The single query behind every historical number the Mock Draft shows.
+    Aggregating in SQL rather than pulling ~19,000 player-weeks per season and
+    summing them in Python is the difference between one round-trip and a
+    hundred thousand rows crossing the wire for a screen that renders eight.
+
+    ``before_season`` is exclusive and is the leakage boundary: a draft for
+    season S may see S-1 and earlier and nothing else. It is expressed as a
+    ``<`` in the WHERE clause *and* re-asserted above the database by
+    :func:`~nflfp.services.draft.history.assert_no_future_seasons`, because a
+    silent off-by-one here produces a backtest that looks excellent and means
+    nothing.
+
+    Regular season only. Postseason weeks are not part of a fantasy season, and
+    including them would credit points to players on good teams that no fantasy
+    manager ever scored.
+
+    Args:
+        session: Open async session.
+        before_season: Exclusive upper bound — the season being drafted.
+        seasons_back: How many seasons before it to include.
+        scoring_profile: League format, selecting the ``fp_*`` column.
+        positions: Restrict to these positions.
+
+    Returns:
+        One row per (player, season): games played, total and mean points, the
+        weekly standard deviation, and the player's position that season.
+    """
+    points_column = _profile_column(scoring_profile)
+    await require_relations(session, "player_week")
+
+    clauses = [
+        "pw.season < :before_season",
+        "pw.season >= :from_season",
+        "pw.season_type = 'REG'",
+        f"pw.{points_column} IS NOT NULL",
+    ]
+    params: dict[str, Any] = {
+        "before_season": before_season,
+        "from_season": before_season - seasons_back,
+    }
+    if positions:
+        clauses.append("pw.position = ANY(:positions)")
+        params["positions"] = list(positions)
+
+    return await _rows(
+        session,
+        f"""
+        SELECT
+            pw.player_id,
+            max(pw.player_name)                     AS player_name,
+            max(pw.position)                        AS position,
+            pw.season,
+            count(*)                                AS games_played,
+            sum(pw.{points_column})                 AS total_points,
+            avg(pw.{points_column})                 AS points_per_game,
+            stddev_samp(pw.{points_column})         AS weekly_stdev
+        FROM player_week AS pw
+        WHERE {' AND '.join(clauses)}
+        GROUP BY pw.player_id, pw.season
+        ORDER BY pw.season DESC, sum(pw.{points_column}) DESC
+        """,
+        params,
+    )
+
+
+async def fetch_season_game_counts(session: AsyncSession) -> dict[int, int]:
+    """Regular-season games each team plays, by season.
+
+    Availability is games played over games *available to play*, and that
+    denominator is 16 before 2021 and 17 after. Reading it from the schedule
+    rather than hard-coding the rule means the seventeenth game arriving —
+    or an eighteenth — is a data change and not a code change, and it means the
+    number is right for the drafted season even when that season has not been
+    played, because ``game_team`` is built from the schedule.
+    """
+    await require_relations(session, "game_team")
+    rows = await _rows(
+        session,
+        """
+        SELECT season, max(games) AS games
+        FROM (
+            SELECT season, team, count(*) AS games
+            FROM game_team
+            WHERE game_type = 'REG'
+            GROUP BY season, team
+        ) AS per_team
+        GROUP BY season
+        """,
+        {},
+    )
+    return {int(row["season"]): int(row["games"]) for row in rows}

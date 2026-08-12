@@ -23,6 +23,7 @@ const ROUTES = [
   { path: '/players', name: 'players' },
   { path: '/matchups', name: 'matchups' },
   { path: '/simulation', name: 'simulation' },
+  { path: '/mock-draft', name: 'mock draft' },
   { path: '/compare', name: 'compare' },
   { path: '/settings', name: 'settings' },
   { path: '/no-such-page', name: '404' },

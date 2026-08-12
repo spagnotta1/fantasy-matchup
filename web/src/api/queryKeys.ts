@@ -9,7 +9,7 @@
 
 import type { BoardParams, SlateParams } from './projections'
 import type { PlayerListParams } from './players'
-import type { SimulationRequest } from './schemas'
+import type { DraftAnalysisRequest, DraftRequest, SimulationRequest } from './schemas'
 
 export const queryKeys = {
   /** Capability data: rarely changes, cached hard. */
@@ -71,5 +71,19 @@ export const queryKeys = {
   simulations: {
     all: ['simulations'] as const,
     run: (request: SimulationRequest) => [...queryKeys.simulations.all, 'run', request] as const,
+  },
+
+  /**
+   * Mock draft. `analyze` and `compare` key on the whole request because the
+   * whole request is what determines the answer — including the seed, which is
+   * why re-running with the same settings is a cache hit rather than a second
+   * minute of simulation.
+   */
+  draft: {
+    all: ['draft'] as const,
+    config: () => [...queryKeys.draft.all, 'config'] as const,
+    analyze: (request: DraftAnalysisRequest) =>
+      [...queryKeys.draft.all, 'analyze', request] as const,
+    compare: (request: DraftRequest) => [...queryKeys.draft.all, 'compare', request] as const,
   },
 } as const
