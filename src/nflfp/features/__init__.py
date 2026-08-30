@@ -13,7 +13,10 @@ The contract with everything above:
   produces the same feature values, so a backtest means something.
 
 Import order below is dependency order: defence and context views must be
-registered before the usage module's ``feat_training_dataset`` references them.
+registered before the usage module's ``feat_training_dataset`` references them,
+and the preseason slate comes last because it reads the game context those
+modules build. The slate is additive — no existing view references it, and
+training loads cannot see its rows.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from .base import REGISTRY, FeatureRegistry, FeatureView, lagged_window
 from . import defense as _defense  # noqa: E402,F401  (registers defensive views)
 from . import context as _context  # noqa: E402,F401  (registers game context)
 from . import usage as _usage      # noqa: E402,F401  (registers usage + dataset)
+from . import preseason as _preseason  # noqa: E402,F401  (registers the draft slate)
 
 from .build import (  # noqa: E402
     BuildResult,

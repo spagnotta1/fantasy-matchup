@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { Dices, Play, Settings2 } from 'lucide-react'
+import { Dices, Play, Settings2, Users } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -7,7 +7,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { Select } from '@/components/ui/Select'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { ROSTER_SLOT_ORDER, SLOT_LABELS, starterCount } from '@/hooks/useMockDraft'
-import { formatScoringProfile } from '@/utils/format'
+import { formatNumber, formatScoringProfile } from '@/utils/format'
 import type { DraftConfig } from '@/api/schemas'
 
 export interface DraftForm {
@@ -17,6 +17,7 @@ export interface DraftForm {
   scoringProfile: string
   draftFormat: string
   draftPosition: number
+  opponentSkill: string
   simulations: number
   seed: number
   roster: Record<string, number>
@@ -36,6 +37,14 @@ export interface DraftForm {
  * Kickers and defences are not in the slot list, and their absence is stated
  * rather than left to be noticed. A fantasy manager who starts a kicker will
  * otherwise assume the form forgot one.
+ *
+ * League skill sits in the main grid rather than under "Simulation options",
+ * and that placement is the point. It changes the result more than any other
+ * control here — against a casual room talent slides and almost any seat builds
+ * a strong roster, against a sharp one it does not — so a user who never opens
+ * a disclosure would be reading an answer to a question they did not know they
+ * were asking. The level's own measurements are rendered beneath it for the
+ * same reason: "Sharp" is an adjective, and 4.0 picks of scatter is not.
  */
 export function LeagueSettingsPanel({
   form,
@@ -59,6 +68,8 @@ export function LeagueSettingsPanel({
   const { limits } = config
   const totalDrafts = form.simulations * form.teams
   const comparisonTooLarge = totalDrafts > limits.max_total_drafts
+  const skills = limits.opponent_skills
+  const skill = skills.find((level) => level.name === form.opponentSkill) ?? null
 
   const simulationChoices = [100, 250, 500, 1000, 2500, 5000, 10000].filter(
     (value) => value >= limits.min_simulations && value <= limits.max_simulations,
@@ -129,7 +140,35 @@ export function LeagueSettingsPanel({
             onChange={(event) => onChange({ draftPosition: Number(event.target.value) })}
             options={rangeOptions(1, form.teams)}
           />
+          {skills.length > 0 && (
+            <Select
+              label="League skill"
+              value={form.opponentSkill}
+              onChange={(event) => onChange({ opponentSkill: event.target.value })}
+              options={skills.map((level) => ({
+                value: level.name,
+                label: level.label,
+              }))}
+              hint="How well the other managers draft"
+            />
+          )}
         </div>
+
+        {skill && (
+          <p className="text-ink-muted flex gap-2 text-xs leading-relaxed">
+            <Users aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+            <span>
+              {skill.summary}{' '}
+              <span className="text-ink-secondary">
+                Measured against this level: the 13th-ranked player on the board goes
+                within about {formatNumber(skill.scatter, 1)} picks of where they should,
+                and drafting well is worth roughly{' '}
+                {formatNumber(skill.strategy_edge, 0)} starting-lineup points over
+                drafting like the field.
+              </span>
+            </span>
+          </p>
+        )}
 
         <fieldset className="space-y-2">
           <legend className="text-ink text-sm font-semibold">Starting roster</legend>

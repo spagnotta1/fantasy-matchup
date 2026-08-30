@@ -1163,6 +1163,21 @@ class DraftSettingsIn(Schema):
             "result — a fixed default is used and echoed back."
         ),
     )
+    opponent_skill: str | None = Field(
+        default=None,
+        description=(
+            "How well the other managers draft: `casual`, `competitive` or "
+            "`sharp`. `GET /mock-draft/config` describes each level and what "
+            "it was measured to do.\n\n"
+            "**This is the setting that decides whether the result flatters "
+            "you.** Against a casual room, talent slides and a prepared "
+            "manager builds one of the best rosters most years; against a "
+            "sharp room it does not, and the draft position matters more than "
+            "the strategy. Defaults to `competitive`.\n\n"
+            "It sets `history_weight` and `noise` together; either may still "
+            "be given explicitly to override that half of the level."
+        ),
+    )
     history_weight: float | None = Field(
         default=None,
         ge=0.0,
@@ -1171,8 +1186,9 @@ class DraftSettingsIn(Schema):
             "How much the simulated opposing managers weight last completed "
             "season's actual points against value over replacement. **An "
             "assumption, not a measurement**: this repository holds no "
-            "average-draft-position data to fit it against. Exposed so a "
-            "conclusion's sensitivity to it can be checked."
+            "average-draft-position data to fit it against. Overrides the "
+            "`opponent_skill` level's value; exposed so a conclusion's "
+            "sensitivity to it can be checked."
         ),
     )
     noise: float | None = Field(
@@ -1181,9 +1197,11 @@ class DraftSettingsIn(Schema):
         le=1.5,
         description=(
             "Spread of the randomness in opposing managers' selections, in "
-            "units of the consensus score. Also an assumption. Zero would make "
-            "every simulated draft identical and every availability percentage "
-            "0% or 100%."
+            "units of the consensus score. Also an assumption, and also an "
+            "override of the `opponent_skill` level. Zero would make every "
+            "simulated draft identical and every availability percentage 0% "
+            "or 100%; large values make the board random, availability "
+            "uninformative and every draft position equally good."
         ),
     )
 
@@ -1415,6 +1433,18 @@ class DraftPoolOut(Schema):
     season_games: int
     history_seasons: list[int]
     players_without_history: int
+    rookies_absent: bool = Field(
+        default=True,
+        description=(
+            "The incoming rookie class is not on this board. The model "
+            "projects from a trailing four-game usage window and a player who "
+            "has never played has none, so rookies get no projection and no "
+            "pool entry. Real drafts spend the first five rounds on them, so a "
+            "client must surface this rather than let a board read as "
+            "complete. Served as a field, not only as prose in `notices`, so "
+            "it can be given its own treatment."
+        ),
+    )
     replacement: list[ReplacementLevelOut] = Field(default_factory=list)
 
 
@@ -1452,6 +1482,32 @@ class DraftMethodologyOut(Schema):
     """How the answer was produced, in the response that carries it."""
 
     calibration_drafts: int
+    opponent_skill: str = Field(
+        default="competitive",
+        description="The skill level the opposing managers were simulated at.",
+    )
+    opponent_skill_label: str = Field(
+        default="Competitive", description="Display name for that level."
+    )
+    opponent_overrides: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Which of `history_weight` and `noise` the request set explicitly, "
+            "overriding the level. Non-empty means the result is no longer the "
+            "level it names."
+        ),
+    )
+    board_scatter_ratio: float = Field(
+        default=0.0,
+        description=(
+            "The randomness in opposing selections divided by the median gap "
+            "between neighbouring players on their board, over the part of it "
+            "that gets drafted. One is a random term the size of one board "
+            "place. Large values mean the field is drafting close to at "
+            "random, talent slides for no reason, and every draft position "
+            "finishes equally strong; above 12 a notice says so."
+        ),
+    )
     history_weight: float
     noise: float
     elapsed_seconds: float
@@ -1528,6 +1584,36 @@ class DraftComparisonOut(Schema):
     methodology: DraftMethodologyOut
 
 
+class OpponentSkillOut(Schema):
+    """One opponent skill level, with what it was measured to do.
+
+    The two measurements are served rather than described in prose so a client
+    can show a user what they are choosing between in the units of the choice —
+    how far the board scatters, and how much a good draft is worth against it.
+    """
+
+    name: str
+    label: str
+    summary: str
+    history_weight: float
+    noise: float
+    scatter: float = Field(
+        description=(
+            "Standard deviation, in picks, of where the thirteenth-ranked "
+            "player on the board actually goes. Larger means talent slides "
+            "further from where it should."
+        )
+    )
+    strategy_edge: float = Field(
+        description=(
+            "Starting-lineup points a seat gains against this level by playing "
+            "value over next available instead of drafting like the field, at "
+            "a fixed seat and seed. How much room a good draft has."
+        )
+    )
+    is_default: bool = False
+
+
 class DraftLimitsOut(Schema):
     """Bounds a client builds its configuration form from.
 
@@ -1545,6 +1631,13 @@ class DraftLimitsOut(Schema):
     max_total_drafts: int
     default_seed: int
     draft_formats: list[str]
+    opponent_skills: list[OpponentSkillOut] = Field(
+        default_factory=list,
+        description=(
+            "The opponent skill levels, easiest room first. Exactly one has "
+            "`is_default` set."
+        ),
+    )
     default_roster: list[RosterSlotIn]
     scoring_profiles: list[str]
 

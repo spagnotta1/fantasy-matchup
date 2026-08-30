@@ -15,6 +15,7 @@ from ..services.draft import engine as draft_engine
 from ..services.draft import pool as draft_pool
 from ..services.draft import service as draft_service
 from ..services.draft import settings as draft_settings_module
+from ..services.draft import valuation as draft_valuation
 from . import schemas
 from .provenance import Provenance
 
@@ -555,6 +556,7 @@ def draft_pool_summary(summary: draft_service.PoolSummary) -> schemas.DraftPoolO
         season_games=summary.season_games,
         history_seasons=list(summary.history_seasons),
         players_without_history=summary.players_without_history,
+        rookies_absent=summary.rookies_absent,
         replacement=[
             schemas.ReplacementLevelOut(
                 position=level.position,
@@ -571,18 +573,36 @@ def draft_pool_summary(summary: draft_service.PoolSummary) -> schemas.DraftPoolO
 def _methodology(
     *,
     calibration_drafts: int,
-    history_weight: float,
-    noise: float,
+    opponents: draft_service.OpponentModel,
     elapsed_seconds: float,
     settings: draft_settings_module.DraftSettings,
 ) -> schemas.DraftMethodologyOut:
     return schemas.DraftMethodologyOut(
         calibration_drafts=calibration_drafts,
-        history_weight=history_weight,
-        noise=noise,
+        opponent_skill=opponents.skill.name,
+        opponent_skill_label=opponents.skill.label,
+        opponent_overrides=list(opponents.overridden),
+        board_scatter_ratio=round(opponents.scatter_ratio, 2),
+        history_weight=opponents.history_weight,
+        noise=opponents.noise,
         elapsed_seconds=elapsed_seconds,
         seed=settings.seed,
         simulations=settings.simulations,
+    )
+
+
+def opponent_skill(
+    level: draft_valuation.OpponentSkill, *, is_default: bool
+) -> schemas.OpponentSkillOut:
+    return schemas.OpponentSkillOut(
+        name=level.name,
+        label=level.label,
+        summary=level.summary,
+        history_weight=level.history_weight,
+        noise=level.noise,
+        scatter=level.scatter,
+        strategy_edge=level.strategy_edge,
+        is_default=is_default,
     )
 
 
@@ -596,8 +616,7 @@ def draft_analysis(
         pool=draft_pool_summary(analysis.pool),
         methodology=_methodology(
             calibration_drafts=analysis.calibration_drafts,
-            history_weight=analysis.history_weight,
-            noise=analysis.noise,
+            opponents=analysis.opponents,
             elapsed_seconds=analysis.elapsed_seconds,
             settings=analysis.settings,
         ),
@@ -627,8 +646,7 @@ def draft_comparison(
         pool=draft_pool_summary(comparison.pool),
         methodology=_methodology(
             calibration_drafts=comparison.calibration_drafts,
-            history_weight=comparison.history_weight,
-            noise=comparison.noise,
+            opponents=comparison.opponents,
             elapsed_seconds=comparison.elapsed_seconds,
             settings=comparison.settings,
         ),
