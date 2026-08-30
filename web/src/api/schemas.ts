@@ -646,6 +646,24 @@ export const rosterSlotSchema = z.object({
 })
 export type RosterSlot = z.infer<typeof rosterSlotSchema>
 
+/**
+ * One opponent skill level. `scatter` and `strategy_edge` are measured, not
+ * asserted: the first is how far the thirteenth-ranked player's actual pick
+ * varies, the second is the starting-lineup points a good strategy gains
+ * against this level. Show them — they are what the choice is between.
+ */
+export const opponentSkillSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  summary: z.string(),
+  history_weight: z.number(),
+  noise: z.number(),
+  scatter: z.number(),
+  strategy_edge: z.number(),
+  is_default: z.boolean().default(false),
+})
+export type OpponentSkill = z.infer<typeof opponentSkillSchema>
+
 export const draftLimitsSchema = z.object({
   min_teams: z.number(),
   max_teams: z.number(),
@@ -657,6 +675,7 @@ export const draftLimitsSchema = z.object({
   max_total_drafts: z.number(),
   default_seed: z.number(),
   draft_formats: z.array(z.string()),
+  opponent_skills: z.array(opponentSkillSchema).default([]),
   default_roster: z.array(rosterSlotSchema),
   scoring_profiles: z.array(z.string()),
 })
@@ -808,6 +827,13 @@ export const draftPoolSchema = z.object({
   season_games: z.number(),
   history_seasons: z.array(z.number()).default([]),
   players_without_history: z.number(),
+  /**
+   * True while the foundation projects from a trailing usage window: a rookie
+   * has no window, so no projection and no board entry. Give this its own
+   * treatment — a board that omits five rounds of a real draft must not read
+   * as complete.
+   */
+  rookies_absent: z.boolean().default(true),
   replacement: z.array(replacementLevelSchema).default([]),
 })
 export type DraftPoolSummary = z.infer<typeof draftPoolSchema>
@@ -831,6 +857,16 @@ export type SeatAnalysis = z.infer<typeof seatAnalysisSchema>
 
 export const draftMethodologySchema = z.object({
   calibration_drafts: z.number(),
+  opponent_skill: z.string().default('competitive'),
+  opponent_skill_label: z.string().default('Competitive'),
+  /** Non-empty means an explicit override moved the level off its own values. */
+  opponent_overrides: z.array(z.string()).default([]),
+  /**
+   * Opponent randomness over the median gap between neighbouring players on
+   * their board. One is a random term the size of one board place; large
+   * values mean the field is drafting close to at random.
+   */
+  board_scatter_ratio: z.number().default(0),
   history_weight: z.number(),
   noise: z.number(),
   elapsed_seconds: z.number(),
@@ -897,6 +933,8 @@ export interface DraftRequest {
   roster?: RosterSlot[] | null
   simulations?: number | null
   seed?: number | null
+  /** `casual` | `competitive` | `sharp`. Moves the result more than anything else. */
+  opponent_skill?: string | null
   history_weight?: number | null
   noise?: number | null
 }

@@ -32,10 +32,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ..errors import InvalidRequest
 from ..lineup import LineupSlot, slot as lookup_slot
 from ..positions import describe
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle, see validate_opponent_skill
+    from .valuation import OpponentSkill
 
 #: League sizes a draft may be configured for. Four is the smallest that makes a
 #: snake ordering meaningful; twenty is past the point where the player pool
@@ -71,6 +75,7 @@ CONSENSUS_BOUNDS: dict[str, tuple[float, float]] = {
     "history_weight": (0.0, 0.8),
     "noise": (0.05, 1.5),
 }
+
 
 #: Draft formats. ``snake`` reverses each round; ``linear`` does not. Linear is
 #: included because it is a real league setting and because it is the control
@@ -262,6 +267,38 @@ def validate_settings(
         simulations=int(simulations),
         seed=DEFAULT_SEED if seed is None else int(seed),
     )
+
+
+def validate_opponent_skill(name: str | None) -> OpponentSkill:
+    """Resolve an opponent skill level by name, or refuse it with the options.
+
+    Lives here rather than in :mod:`~nflfp.services.draft.valuation` so that the
+    whole of a request's configuration is refused before a query is spent, which
+    is the same reason every other check in this module is here. The import is
+    local because ``valuation`` imports this module for
+    :class:`DraftSettings` — the dependency runs that way and only that way.
+
+    Args:
+        name: A level code, or ``None`` for the default.
+
+    Returns:
+        The :class:`~nflfp.services.draft.valuation.OpponentSkill`.
+
+    Raises:
+        InvalidRequest: naming the valid levels, because an unrecognised skill
+            is a client that has a stale list and the list is short enough to
+            put in the error.
+    """
+    from .valuation import OPPONENT_SKILLS, opponent_skill
+
+    try:
+        return opponent_skill(name)
+    except KeyError:
+        raise InvalidRequest(
+            f"unknown opponent_skill {name!r}; expected one of "
+            f"{[level.name for level in OPPONENT_SKILLS]}",
+            field="opponent_skill",
+        ) from None
 
 
 def validate_draft_position(position: int, settings: DraftSettings) -> int:

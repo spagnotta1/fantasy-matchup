@@ -15,6 +15,15 @@ game that has not been played. Building a season projection would mean building
 a second model, which the frozen-foundation rule forbids and which would compete
 with the one that has been validated.
 
+Week 1 is also the one week of a season that is projectable *before the season
+starts*, because its trailing window is the tail of the season before. That is
+what makes an upcoming season draftable at all: :mod:`nflfp.features.preseason`
+assembles those rows from the coming season's schedule and rosters, and a
+published run over them reaches this module as an ordinary board. The pool does
+not know or care which it was handed — the one visible difference is that a
+board for an unplayed season has no rookies on it at all, and the notice below
+says so whichever season is drafted.
+
 So the published **week 1** board of the drafted season supplies a *rate*:
 ``expected_points`` for week 1 is read as this player's projected points in a
 game they play. That run is fitted only on data strictly before week 1 of its
@@ -382,9 +391,14 @@ def _notices(
         "shrunk toward a position prior. It counts weeks in which a player "
         "recorded a stat line, so it cannot separate an injury from a healthy "
         "scratch or a growing role.",
-        "Players with no prior usage — rookies above all — have no projection "
-        "and are absent from this pool entirely. Real drafts spend early picks "
-        "on them, so a simulated board is shallower at the top than a real one.",
+        "No rookies are on this board, and the gap is a large one. The model "
+        "projects from a trailing four-game usage window; a player who has "
+        "never played has no window, so the incoming class is absent entirely "
+        "rather than ranked low. Real drafts spend the first five rounds on "
+        "it. Two things follow: every pick after the first round lands on a "
+        "player a real draft would have taken earlier, and the late rounds "
+        "look deeper than they are. This is the veteran board, and a real "
+        "draft from the same seat will be harder than this one.",
     ]
     if not history_seasons:
         notices.append(

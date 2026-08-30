@@ -29,6 +29,13 @@ logger = logging.getLogger(__name__)
 #: The engine's only input. Named once, here, so the boundary is greppable.
 SOURCE_TABLE = "feat_training_dataset"
 
+#: Week 1 of a season nobody has played, in the same columns. Read **only** when
+#: :data:`SOURCE_TABLE` has nothing at all for a season, which is the one state
+#: in which the two cannot disagree: a season with recorded production never
+#: reaches it. Training must never load from here, and cannot — every target
+#: column in it is null, so ``completed_only`` returns nothing.
+PRESEASON_TABLE = "feat_preseason_slate"
+
 
 def load_rows(
     session: Session,
@@ -37,6 +44,7 @@ def load_rows(
     positions: Sequence[str] = POSITIONS,
     completed_only: bool = False,
     upcoming_only: bool = False,
+    source: str = SOURCE_TABLE,
 ) -> list[dict]:
     """Read player-weeks from the feature table.
 
@@ -46,13 +54,26 @@ def load_rows(
         positions: Restrict to these positions.
         completed_only: Only rows with a realised outcome — the training set.
         upcoming_only: Only rows without one — what there is to project.
+        source: Which feature table to read. Defaults to :data:`SOURCE_TABLE`
+            and is only ever moved to :data:`PRESEASON_TABLE`, by
+            :mod:`nflfp.predict.generate`, for a season with no rows at all.
 
     Returns:
         Rows as plain dicts, ordered chronologically then by player, which makes
         every downstream operation deterministic.
+
+    Raises:
+        ValueError: for mutually exclusive filters, or an unrecognised source.
+            The source is checked against a fixed pair rather than interpolated
+            freely, because it lands in a SQL string.
     """
     if completed_only and upcoming_only:
         raise ValueError("completed_only and upcoming_only are mutually exclusive")
+    if source not in (SOURCE_TABLE, PRESEASON_TABLE):
+        raise ValueError(
+            f"unknown feature source {source!r}; expected "
+            f"{SOURCE_TABLE!r} or {PRESEASON_TABLE!r}"
+        )
 
     clauses = ["position = ANY(:positions)"]
     params: dict[str, object] = {"positions": list(positions)}
@@ -65,11 +86,11 @@ def load_rows(
         clauses.append("fp_half_ppr_actual IS NULL")
 
     statement = text(
-        f"SELECT * FROM {SOURCE_TABLE} WHERE {' AND '.join(clauses)} "
+        f"SELECT * FROM {source} WHERE {' AND '.join(clauses)} "
         "ORDER BY season, week, player_id"
     )
     rows = [dict(row) for row in session.execute(statement, params).mappings()]
-    logger.info("loaded %d row(s) from %s", len(rows), SOURCE_TABLE)
+    logger.info("loaded %d row(s) from %s", len(rows), source)
     return rows
 
 

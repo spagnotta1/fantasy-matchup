@@ -40,6 +40,7 @@ from fastapi import APIRouter, status
 from ...services import positions as position_registry
 from ...services.catalog import scoring_profiles
 from ...services.draft import service
+from ...services.draft.valuation import DEFAULT_OPPONENT_SKILL, OPPONENT_SKILLS
 from .. import mappers, schemas
 from ..dependencies import DbSession
 
@@ -55,12 +56,25 @@ router = APIRouter(tags=["mock-draft"], prefix="/mock-draft")
         "client builds its configuration form from this rather than from "
         "hard-coded constants, which is what keeps the form's validation and "
         "the server's from drifting apart.\n\n"
-        "`draftable_seasons` lists seasons with a published **week 1** board. "
-        "That is the constraint that decides what can be drafted at all: the "
-        "frozen model projects one week from a trailing four-game usage "
-        "window, so a season with no completed games has no features and no "
-        "board. A season with a schedule but no published run would render as "
-        "an empty screen with no explanation, so it is not offered."
+        "`draftable_seasons` lists seasons with a published **week 1** board, "
+        "and that is the only constraint on what can be drafted. A season "
+        "with a schedule but no published run would render as an empty "
+        "screen with no explanation, so it is not offered.\n\n"
+        "An **upcoming** season qualifies. The frozen model projects a week "
+        "from a trailing four-game usage window, and a week 1 window is the "
+        "tail of the previous season — which is exactly what a manager has "
+        "on draft day. `feat_preseason_slate` assembles those rows from the "
+        "coming season's schedule and rosters, so `python -m nflfp.predict "
+        "project --season <year> --week 1 --publish` makes next season "
+        "draftable without a new model and without an invented number. What "
+        "it cannot supply is rookies: no completed games means no window, so "
+        "the incoming class is absent from the board and `pool.rookies_absent` "
+        "says so.\n\n"
+        "`opponent_skills` describes how well the other managers can be made "
+        "to draft, and each level carries the two things that were measured "
+        "about it: how far the board scatters, and what a good draft is worth "
+        "against it. A client should offer the choice rather than defaulting "
+        "it silently — it changes the answer more than any other setting."
     ),
 )
 async def draft_config(db: DbSession) -> schemas.Envelope[schemas.DraftConfigOut]:
@@ -79,6 +93,12 @@ async def draft_config(db: DbSession) -> schemas.Envelope[schemas.DraftConfigOut
                 max_total_drafts=service.MAX_TOTAL_DRAFTS,
                 default_seed=limits.default_seed,
                 draft_formats=list(limits.draft_formats),
+                opponent_skills=[
+                    mappers.opponent_skill(
+                        level, is_default=level.name == DEFAULT_OPPONENT_SKILL
+                    )
+                    for level in OPPONENT_SKILLS
+                ],
                 default_roster=[
                     schemas.RosterSlotIn(slot=r.slot, count=r.count)
                     for r in limits.default_roster
@@ -138,7 +158,13 @@ async def draft_config(db: DbSession) -> schemas.Envelope[schemas.DraftConfigOut
         "consensus board driving the other seats is a stated behavioural model "
         "that has not been validated against real drafts. Its two parameters "
         "are request fields so that a conclusion's sensitivity to them can be "
-        "checked."
+        "checked.\n\n"
+        "**`opponent_skill` decides how hard the room is, and it moves this "
+        "result more than anything else on the request.** A roster simulated "
+        "against a casual room is not evidence about a sharp one: the same "
+        "seat and seed that finish first in nine drafts of ten against "
+        "`casual` finish mid-table against `sharp`, because talent stops "
+        "sliding. Set it to the league you are actually in."
     ),
 )
 async def analyze_draft_position(
@@ -157,6 +183,7 @@ async def analyze_draft_position(
         draft_format=request.draft_format,
         simulations=request.simulations,
         seed=request.seed,
+        opponent_skill=request.opponent_skill,
         history_weight=request.history_weight,
         noise=request.noise,
     )
@@ -208,6 +235,7 @@ async def compare_draft_positions(
         draft_format=request.draft_format,
         simulations=request.simulations,
         seed=request.seed,
+        opponent_skill=request.opponent_skill,
         history_weight=request.history_weight,
         noise=request.noise,
     )

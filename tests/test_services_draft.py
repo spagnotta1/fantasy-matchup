@@ -28,6 +28,7 @@ from nflfp.services.draft.settings import (
     DEFAULT_ROSTER,
     RosterRequirement,
     validate_draft_position,
+    validate_opponent_skill,
     validate_settings,
 )
 from nflfp.services.errors import InvalidRequest
@@ -785,6 +786,122 @@ class TestOpponentModel:
             context.players[context.index_by_id[pid]].position for pid in drafted
         }
         assert positions == {"QB", "RB", "WR", "TE"}
+
+
+class TestOpponentSkill:
+    """The levels have to differ in the two ways they claim to differ.
+
+    These are the tests that stop the field quietly getting easier again. The
+    feature originally shipped with a noise of 0.35, which put the random term
+    some thirty-five times the gap between neighbouring players on the board:
+    talent slid several rounds, the user's seat finished first in nearly every
+    simulated league, and every draft position scored the same because the board
+    never resembled itself twice. Nothing failed. It looked like a working
+    simulation that happened to be generous.
+
+    So the properties asserted here are the ones that were false then: that the
+    board keeps its order, that a sharper level keeps it tighter, and that the
+    seats can still be told apart.
+    """
+
+    def test_levels_are_ordered_from_loose_to_tight(self):
+        levels = valuation.OPPONENT_SKILLS
+        assert [level.name for level in levels] == ["casual", "competitive", "sharp"]
+        assert [level.noise for level in levels] == sorted(
+            (level.noise for level in levels), reverse=True
+        )
+        assert [level.history_weight for level in levels] == sorted(
+            (level.history_weight for level in levels), reverse=True
+        )
+
+    def test_the_default_is_a_real_level(self):
+        assert valuation.opponent_skill(None) is valuation.opponent_skill(
+            valuation.DEFAULT_OPPONENT_SKILL
+        )
+        assert valuation.opponent_skill(None).name == "competitive"
+
+    def test_an_unknown_level_is_refused_with_the_options(self):
+        with pytest.raises(InvalidRequest) as excinfo:
+            validate_opponent_skill("expert")
+        assert "expert" in str(excinfo.value)
+        assert "sharp" in str(excinfo.value)
+
+    @staticmethod
+    def _scatter(pool, noise, history_weight):
+        settings = settings_for()
+        context = DraftContext.build(
+            pool, settings, noise=noise, history_weight=history_weight
+        )
+        return valuation.board_scatter_ratio(
+            context.consensus,
+            noise_scale=context.noise_scale,
+            drafted=settings.total_picks,
+        )
+
+    def test_every_level_keeps_the_board_in_order(self, pool):
+        """No shipped level may drown the board in its own randomness."""
+        for level in valuation.OPPONENT_SKILLS:
+            ratio = self._scatter(pool, level.noise, level.history_weight)
+            assert 0 < ratio < valuation.MAX_ORDERLY_SCATTER, (
+                f"{level.name} scatters the board by {ratio:.1f}x the gap "
+                "between neighbouring players"
+            )
+
+    def test_each_level_is_tighter_than_the_one_before(self, pool):
+        """The guard on the original defect, as a comparison rather than a bound.
+
+        The ratio divides by the density of one board, so its absolute value is
+        not portable between pools — see :func:`board_scatter_ratio`. Ordering
+        on a single pool is portable, and it is what the levels claim. A level
+        retuned to a plausible-looking noise that happens to sit out of order
+        fails here.
+        """
+        ratios = [
+            self._scatter(pool, level.noise, level.history_weight)
+            for level in valuation.OPPONENT_SKILLS
+        ]
+        assert ratios == sorted(ratios, reverse=True), dict(
+            zip((level.name for level in valuation.OPPONENT_SKILLS), ratios)
+        )
+
+    def test_every_level_is_tighter_than_the_original_default(self, pool):
+        """The regression, kept so the reason for the change stays legible.
+
+        The feature shipped at noise 0.35 and history weight 0.35. On a
+        full-sized board that put the random term ~36x the gap between
+        neighbouring players; the seat under analysis then finished first in 98%
+        of simulated leagues and the draft positions could not be told apart.
+        Every level must be a real improvement on it, not a rounding.
+        """
+        original = self._scatter(pool, 0.35, 0.35)
+        for level in valuation.OPPONENT_SKILLS:
+            assert self._scatter(pool, level.noise, level.history_weight) < original
+        # And the sharp end has to be a different regime, not a nudge.
+        sharp = valuation.opponent_skill("sharp")
+        assert self._scatter(pool, sharp.noise, sharp.history_weight) < original / 2
+
+    def test_a_sharper_level_holds_talent_closer_to_its_board_rank(self, pool):
+        """The measurable meaning of "sharp": less slide."""
+        settings = settings_for()
+
+        def mean_slide(level):
+            context = DraftContext.build(
+                pool,
+                settings,
+                noise=level.noise,
+                history_weight=level.history_weight,
+            )
+            model = calibrate_availability(context, drafts=60, seed=SEED)
+            # Where the top of the board actually went, against where it sat.
+            drifts = []
+            for rank, player in enumerate(context.players[:24], start=1):
+                mean = model.mean_pick.get(player.player_id)
+                if mean is not None:
+                    drifts.append(abs(mean - rank))
+            return sum(drifts) / len(drifts)
+
+        casual, competitive, sharp = valuation.OPPONENT_SKILLS
+        assert mean_slide(sharp) < mean_slide(competitive) < mean_slide(casual)
 
 
 class TestSeatAnalysis:

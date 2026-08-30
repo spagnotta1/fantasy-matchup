@@ -36,7 +36,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..cache import invalidate_all_sync
-from .dataset import SOURCE_TABLE, load_rows
+from .dataset import PRESEASON_TABLE, SOURCE_TABLE, load_rows
 from .distribution import ResidualDistribution
 from .persist import (
     ProjectionBundle,
@@ -215,8 +215,11 @@ def generate_week(
             week=week,
             skipped=True,
             skip_reason=(
-                f"no rows in feat_training_dataset for {season} week {week}; "
-                "the warehouse or the feature views may not be built yet"
+                f"no rows in {SOURCE_TABLE} or {PRESEASON_TABLE} for {season} "
+                f"week {week}; the warehouse or the feature views may not be "
+                "built yet. A season that has not started can only be "
+                f"projected for week 1, and only from {PRESEASON_TABLE}, which "
+                "needs that season's schedule and rosters ingested."
             ),
         )
 
@@ -585,12 +588,32 @@ def _history(session: Session, cache: FitCache | None) -> list[dict]:
 
 
 def _season_rows(session: Session, season: int, cache: FitCache | None) -> list[dict]:
-    """Every feature row for a season, loaded once per backfill."""
-    if cache is None:
-        return load_rows(session, seasons=[season])
-    if season not in cache.season_rows:
-        cache.season_rows[season] = load_rows(session, seasons=[season])
-    return cache.season_rows[season]
+    """Every feature row for a season, loaded once per backfill.
+
+    A season nobody has played yet has no rows in ``feat_training_dataset`` —
+    that table is built from recorded production, and there is none. Such a
+    season falls back to :data:`~nflfp.predict.dataset.PRESEASON_TABLE`, which
+    carries the same columns for week 1 built from the previous season's usage
+    window and the coming season's schedule.
+
+    The fallback is only ever reached when the primary table is empty for the
+    season, so a season in progress is never served preseason rows, and a
+    preseason row can never displace a real one.
+    """
+    if cache is not None and season in cache.season_rows:
+        return cache.season_rows[season]
+
+    rows = load_rows(session, seasons=[season])
+    if not rows:
+        rows = load_rows(session, seasons=[season], source=PRESEASON_TABLE)
+        if rows:
+            logger.info(
+                "%s has no rows in %s; projecting its week 1 from %s (%d row(s))",
+                season, SOURCE_TABLE, PRESEASON_TABLE, len(rows),
+            )
+    if cache is not None:
+        cache.season_rows[season] = rows
+    return rows
 
 
 def _fit_distribution(

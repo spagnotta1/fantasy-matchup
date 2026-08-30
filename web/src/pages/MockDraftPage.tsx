@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { TriangleAlert } from 'lucide-react'
 
 import { Card, CardBody } from '@/components/ui/Card'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -83,6 +84,12 @@ export default function MockDraftPage() {
         : (limits.scoring_profiles[0] ?? 'half_ppr'),
       draftFormat: limits.draft_formats[0] ?? 'snake',
       draftPosition: 4,
+      // The server marks its own default level rather than the form naming one,
+      // so retuning the opponent model does not need an edit here.
+      opponentSkill:
+        limits.opponent_skills.find((level) => level.is_default)?.name ??
+        limits.opponent_skills[0]?.name ??
+        'competitive',
       simulations: Math.min(limits.default_simulations, 500),
       seed: limits.default_seed,
       roster: fromRosterList(limits.default_roster),
@@ -117,6 +124,7 @@ export default function MockDraftPage() {
       scoring_profile: form.scoringProfile,
       draft_format: form.draftFormat,
       roster: toRosterList(form.roster),
+      opponent_skill: form.opponentSkill,
       simulations: form.simulations,
       seed: form.seed,
     }
@@ -243,6 +251,8 @@ export default function MockDraftPage() {
         <Refreshing active={isRefreshing} label="Simulating">
           {settings && selectedSeat && (
             <div className="space-y-6">
+              {pool?.rookies_absent && <RookieGap pool={pool} />}
+
               <SeatSummary seat={selectedSeat} isComparison={compared != null} />
 
               {compared && form && (
@@ -379,11 +389,30 @@ function Methodology({
               Availability was calibrated over {methodology.calibration_drafts.toLocaleString()}{' '}
               drafts in which every seat used the opponent model, then read during{' '}
               {methodology.simulations.toLocaleString()} drafts per seat in which yours did
-              not. The opponent model weights value over replacement at{' '}
+              not. The opposing managers drafted at the{' '}
+              <strong className="text-ink-secondary font-semibold">
+                {methodology.opponent_skill_label.toLowerCase()}
+              </strong>{' '}
+              skill level
+              {methodology.opponent_overrides.length > 0 && (
+                <>
+                  , adjusted by an explicit{' '}
+                  {methodology.opponent_overrides.join(' and ').replace(/_/g, ' ')}
+                </>
+              )}
+              : value over replacement at{' '}
               {Math.round((1 - methodology.history_weight) * 100)}% and last completed
               season&rsquo;s actual points at {Math.round(methodology.history_weight * 100)}%,
               with randomness added — an assumption, not a measurement, because this
               system holds no average-draft-position data to fit it against.
+            </p>
+            <p>
+              That randomness was {formatNumber(methodology.board_scatter_ratio, 1)}× the
+              median gap between neighbouring players on the opponents&rsquo; own board.
+              One would mean a manager who misplaces a player by a single board position;
+              the larger this is, the further talent slides for no reason and the closer
+              the draft positions finish to each other. Raise the league skill to tighten
+              it.
             </p>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1 text-xs sm:grid-cols-4">
               <Detail label="Seed" value={String(methodology.seed)} />
@@ -394,12 +423,57 @@ function Methodology({
                   .map((entry) => `${entry.position} ${formatNumber(entry.value, 0)}`)
                   .join(' · ')}
               />
+              <Detail label="League skill" value={methodology.opponent_skill_label} />
               <Detail label="Ran in" value={`${formatNumber(methodology.elapsed_seconds, 1)}s`} />
             </dl>
           </div>
         </details>
       </CardBody>
     </Card>
+  )
+}
+
+/**
+ * The rookie gap, given its own block above the results.
+ *
+ * It is also in `meta.notices`, and that is not enough. A board missing the
+ * whole incoming class is missing what a real draft spends its first five
+ * rounds on, and the effect is not a caveat about precision — it changes which
+ * players are available at every pick after the first round. A reader who takes
+ * these rosters as achievable without knowing that has been misled by omission,
+ * so this sits above the numbers rather than under a disclosure with five other
+ * sentences.
+ *
+ * Driven by `pool.rookies_absent` rather than by matching notice text, so the
+ * day a rookie model ships this disappears on its own.
+ */
+function RookieGap({ pool }: { pool: DraftPoolSummary }) {
+  return (
+    <aside
+      className="bg-caution-soft rounded-[var(--radius-card)] px-4 py-3"
+      aria-label="Board coverage notice"
+    >
+      <div className="flex gap-2.5">
+        <TriangleAlert aria-hidden className="text-caution-text mt-0.5 size-4 shrink-0" />
+        <div className="text-caution-text space-y-1.5 text-xs leading-relaxed">
+          <p>
+            <span className="font-semibold">
+              No rookies are on this board — it holds {pool.players} veterans and
+              nobody else.
+            </span>{' '}
+            The projection model reads a trailing four-game usage window, and a player
+            who has never played has none, so the incoming class is absent rather than
+            ranked low.
+          </p>
+          <p>
+            A real draft spends its first five rounds on that class. Every pick below
+            the first round here therefore lands on a player a real draft would have
+            taken earlier, and the late rounds look deeper than they are. Read this as
+            the veteran board: your real draft from this seat will be harder.
+          </p>
+        </div>
+      </div>
+    </aside>
   )
 }
 

@@ -49,6 +49,44 @@ and it is an **assumption, not a measurement** — there is nothing in this
 repository to fit it against. It is exposed as a request parameter so that the
 sensitivity of any conclusion to it can be checked, and every response says
 which value produced it.
+
+How sharp the opponents are, and why it is a setting
+-----------------------------------------------------
+The two parameters above do not describe *a* league. They describe how well one
+particular league drafts, and leagues differ enormously: a work league where
+half the room drafts off last year's leaderboard is a different opponent model
+from a twelve-year keeper league of people who read target share. Shipping one
+pair of numbers as though it covered both is what makes a simulation flatter its
+user.
+
+:data:`OPPONENT_SKILLS` is that dial. Each level fixes the pair, and the levels
+are separated on two measured quantities rather than on adjectives:
+
+* **How far the board scatters** — the standard deviation of a player's
+  selection point around their board rank. A sharp room drafts close to its
+  board; a casual one reaches, and talent slides.
+* **What a good strategy is worth against them** — the starting-lineup points a
+  seat gains by playing value over next available instead of drafting like the
+  field, holding the seat and the seed fixed. Against a casual room that edge is
+  worth a round or more of talent; against a sharp room it is small, which is
+  what "the field is good" means.
+
+A note on the noise, because its units matter
+----------------------------------------------
+The randomness is scaled by the standard deviation of the consensus score *over
+the whole pool*, and the pool is mostly players nobody drafts. That makes one
+unit of noise very large relative to the gaps at the top of the board, where
+adjacent players sit thousandths of a standard deviation apart. At the original
+default of 0.35 the random term was some thirty-five times the median gap
+between neighbouring players, which did not model a manager who occasionally
+reaches — it modelled a room drafting nearly at random. Two things followed, and
+both were bugs wearing a parameter's clothes: a top-fifteen player reached the
+third round often enough to build rosters no real draft would allow, and every
+seat finished equally strong, which left the seat comparison — the question this
+package exists to answer — measuring nothing. The levels below are all far under
+that, and :func:`board_scatter_ratio` is what states the relationship in one
+number so it can be asserted in a test and reported to a user instead of being
+rediscovered.
 """
 
 from __future__ import annotations
@@ -61,20 +99,121 @@ from dataclasses import dataclass
 from .pool import DraftPlayer, DraftPool
 from .settings import DraftSettings
 
+
+@dataclass(frozen=True)
+class OpponentSkill:
+    """How well the simulated opposing managers draft.
+
+    A named pair of the two opponent-model parameters, plus the sentence a user
+    reads when choosing it. Named rather than numeric because "0.14 noise and
+    0.25 history weight" is not a judgement anybody can make about their own
+    league, and "everyone in here knows what target share is" is.
+
+    Attributes:
+        name: Stable code, used on the wire and echoed in the response.
+        label: Short display name.
+        history_weight: See :data:`CONSENSUS_HISTORY_WEIGHT`.
+        noise: See :data:`CONSENSUS_NOISE`.
+        summary: What this level claims about a room, in a user's terms.
+        scatter: Standard deviation, in picks, of the selection point of the
+            player ranked thirteenth on the board — a late-first-round name, and
+            the rank where the levels separate most cleanly. Measured, and
+            carried here so the claim travels with the level rather than living
+            in a commit message.
+        strategy_edge: Starting-lineup points a seat gains against this level by
+            playing value over next available instead of drafting like the
+            field, at a fixed seat and seed. How much room a good draft has.
+    """
+
+    name: str
+    label: str
+    history_weight: float
+    noise: float
+    summary: str
+    scatter: float
+    strategy_edge: float
+
+
+#: The levels, easiest room first. :attr:`~OpponentSkill.scatter` and
+#: :attr:`~OpponentSkill.strategy_edge` were measured on a 445-player PPR board
+#: in a ten-team, fifteen-round league.
+OPPONENT_SKILLS: tuple[OpponentSkill, ...] = (
+    OpponentSkill(
+        name="casual",
+        label="Casual",
+        history_weight=0.45,
+        noise=0.22,
+        summary=(
+            "Drafts largely off last season's finish and reaches often. Talent "
+            "slides, and a prepared manager can expect to build one of the best "
+            "rosters in the room most years."
+        ),
+        scatter=9.2,
+        strategy_edge=91.6,
+    ),
+    OpponentSkill(
+        name="competitive",
+        label="Competitive",
+        history_weight=0.25,
+        noise=0.14,
+        summary=(
+            "Reads projections, still over-weights last season, and reaches "
+            "occasionally. A room that drafts sensibly without being hard to "
+            "beat."
+        ),
+        scatter=5.4,
+        strategy_edge=53.8,
+    ),
+    OpponentSkill(
+        name="sharp",
+        label="Sharp",
+        history_weight=0.12,
+        noise=0.09,
+        summary=(
+            "Drafts close to value over replacement, rarely reaches, and fills "
+            "roster needs deliberately. Talent does not slide, your draft "
+            "position matters far more than your strategy, and a good draft "
+            "buys a fraction of what it buys against a casual room."
+        ),
+        scatter=4.4,
+        strategy_edge=22.2,
+    ),
+)
+
+#: The level a request that names none is simulated at. ``competitive`` rather
+#: than ``sharp`` because it is the ordinary league, and rather than ``casual``
+#: because a default that hands the user the best roster in the room nine times
+#: in ten is not a simulation, it is a compliment.
+DEFAULT_OPPONENT_SKILL = "competitive"
+
+
+def opponent_skill(name: str | None) -> OpponentSkill:
+    """Look up a skill level by name; ``None`` gives the default.
+
+    Raises:
+        KeyError: for an unknown name. A caller on a request path should use
+            :func:`~nflfp.services.draft.settings.validate_opponent_skill`
+            instead, which raises the API's own error with the valid names in it.
+    """
+    wanted = DEFAULT_OPPONENT_SKILL if name is None else name
+    for level in OPPONENT_SKILLS:
+        if level.name == wanted:
+            return level
+    raise KeyError(wanted)
+
+
 #: How much the simulated opposing managers weight last season's actual finish
 #: against value over replacement, 0-1. **Assumed, not fitted** — see the module
-#: docstring. 0.35 places the modelled manager between a pure projection reader
-#: and a pure last-season reader, closer to the projection.
-CONSENSUS_HISTORY_WEIGHT = 0.35
+#: docstring. This is the ``competitive`` level's value, and the default a
+#: request inherits when it names neither a skill level nor an explicit weight.
+CONSENSUS_HISTORY_WEIGHT = 0.25
 
 #: Spread of the noise the opponent model adds, in units of the consensus score's
 #: own standard deviation. Zero would make every simulated draft identical and
-#: every availability percentage 0% or 100%; large values would make the board
-#: random and availability uninformative. 0.35 produces a distribution in which
-#: a player's actual selection point varies by roughly half a round at the top
-#: and more than a round in the middle, which is the shape a real draft has.
-#: Also an assumption; also a request parameter.
-CONSENSUS_NOISE = 0.35
+#: every availability percentage 0% or 100%; large values make the board random,
+#: availability uninformative and every seat equally good. This is the
+#: ``competitive`` level's value. Also an assumption; also a request parameter.
+CONSENSUS_NOISE = 0.14
 
 #: How strongly a simulated manager prefers a position they still need. Applied
 #: as a bonus in units of the consensus score's standard deviation. Without it
@@ -260,6 +399,71 @@ def consensus_scores(
         + weight * history_z.get(player_id, 0.0)
         for player_id in vor_z
     }
+
+
+def board_scatter_ratio(
+    consensus: Mapping[str, float], *, noise_scale: float, drafted: int
+) -> float:
+    """How large the opponents' randomness is against the board's own resolution.
+
+    The number is ``noise_scale / median gap between neighbouring players`` over
+    the part of the board that actually gets drafted. It answers the question
+    that the noise parameter on its own cannot: *does this much randomness model
+    a manager who sometimes reaches, or a room drafting out of a hat?*
+
+One is the break-even — a random term the size of the gap between adjacent
+    players, which moves a pick by about one board place. The larger it gets the
+    further talent slides to seats that did nothing to earn it, and the closer
+    every draft position finishes to every other, because the board stops
+    resembling itself twice.
+
+    **The number is not comparable between boards**, and the docstring says so
+    where a reader will hit it rather than in a note nobody opens. It divides by
+    the density of one particular board over the range that board drafts, and a
+    445-player pool drafting 150 is much denser through that range than a
+    226-player pool drafting 180. The same noise setting measured 35.7 on the
+    first and 16.3 on the second. So this is a diagnostic to be read against
+    :data:`MAX_ORDERLY_SCATTER` as a coarse floor-alarm, and to be *compared
+    between settings on one board*, which is the use that is actually sound —
+    it is what orders the levels in :data:`OPPONENT_SKILLS` and what a test
+    asserts about them.
+
+    Args:
+        consensus: Scores from :func:`consensus_scores`.
+        noise_scale: The Gumbel scale the engine will actually use, in the same
+            units — :attr:`~nflfp.services.draft.engine.DraftContext.noise_scale`,
+            not the raw ``noise`` request field.
+        drafted: Players the league will take, ``teams x rounds``. Beyond this
+            the board is not drafted and its density says nothing about how the
+            draft behaves.
+
+    Returns:
+        The ratio, or ``0.0`` when the board is too small or too flat to have a
+        resolution to compare against.
+    """
+    ordered = sorted(consensus.values(), reverse=True)[: max(2, drafted)]
+    gaps = [
+        first - second
+        for first, second in zip(ordered, ordered[1:])
+        if first - second > 0.0
+    ]
+    if not gaps:
+        return 0.0
+    return noise_scale / statistics.median(gaps)
+
+
+#: The point past which :func:`board_scatter_ratio` is describing a draft nobody
+#: would recognise, and a notice says so.
+#:
+#: Deliberately loose, because the ratio it bounds is not comparable between
+#: boards and a tight threshold would fire on a legitimate configuration for
+#: half the pools this runs against. It is set above the measured ratio of the
+#: loosest shipped level on a full-sized board (23) and below that of the
+#: original default (36) — the setting that let a top-fifteen player reach the
+#: third round and made every seat finish equally strong. So it catches a broken
+#: configuration, mostly one where a caller has raised ``noise`` by hand toward
+#: its ceiling of 1.5, and it does not second-guess the shipped levels.
+MAX_ORDERLY_SCATTER = 30.0
 
 
 def _standardise(values: Mapping[str, float]) -> dict[str, float]:
