@@ -117,6 +117,25 @@ class EspnOddsProvider:
                 continue
 
             quotes = self._parse(payload, now)
+            if not quotes:
+                # Distinct from "this one game has no line yet". The request
+                # succeeded and not a single market could be read out of it,
+                # which is what a shape change or an empty body looks like --
+                # and recording it under the August reason made a live outage
+                # indistinguishable from a slate nobody has priced yet.
+                logger.warning(
+                    "%s: %s week %s returned no readable markets",
+                    self.name, season, week,
+                )
+                for game in week_games:
+                    result.skipped[game.game_id] = (
+                        "provider returned no readable markets for this week"
+                    )
+                result.warnings.append(
+                    f"{season} week {week}: no markets parsed from the response"
+                )
+                continue
+
             for game in week_games:
                 quote = quotes.get((game.home_team, game.away_team))
                 if quote is None:

@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  ClipboardList,
   GitCompareArrows,
   LayoutDashboard,
   Settings,
@@ -64,13 +63,6 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Shuffle,
     description: 'Simulate a head-to-head fantasy week',
     primary: true,
-  },
-  {
-    to: '/mock-draft',
-    label: 'Mock Draft',
-    icon: ClipboardList,
-    description: 'Find the strongest draft position and roster strategy',
-    primary: false,
   },
   {
     to: '/compare',

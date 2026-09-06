@@ -57,11 +57,19 @@ def duck() -> duckdb.DuckDBPyConnection:
     return con
 
 
-def load_staging(con, ds: Dataset, start: int, end: int) -> tuple[int, list[str]]:
-    """Materialise one dataset into pgdb.stg_raw_<name>. Returns (rows, urls)."""
-    urls, _missing = resolve_urls(ds, start, end)
+def load_staging(
+    con, ds: Dataset, start: int, end: int
+) -> tuple[int, list[str], list[int]]:
+    """Materialise one dataset into pgdb.stg_raw_<name>.
+
+    Returns ``(rows, urls, missing_seasons)``. The third element used to be
+    discarded at the call site, which is how a season nflverse had not
+    published yet became a silent skip: `run` saw an empty URL list, printed
+    "skipped", and never learned *which* seasons were absent.
+    """
+    urls, missing = resolve_urls(ds, start, end)
     if not urls:
-        return 0, []
+        return 0, [], missing
 
     stg = f"{STAGING_PREFIX}raw_{ds.name}"
     url_list = ", ".join(f"'{u}'" for u in urls)
@@ -74,7 +82,7 @@ def load_staging(con, ds: Dataset, start: int, end: int) -> tuple[int, list[str]
         f"SELECT * FROM read_parquet([{url_list}], union_by_name = true)"
     )
     rows = con.execute(f"SELECT count(*) FROM pgdb.{stg}").fetchone()[0]
-    return rows, urls
+    return rows, urls, missing
 
 
 # --------------------------------------------------------------------------
@@ -90,9 +98,50 @@ def _staging_column_types(cur, stg: str) -> dict[str, str]:
     return dict(cur.fetchall())
 
 
+#: How much of the live row count a publish must retain before it is allowed
+#: to land. A refresh normally *grows* a season -- games accumulate -- so a
+#: publish that shrinks one materially is far more likely to be a partial
+#: upstream build than a genuine correction. The tolerance leaves room for
+#: nflverse withdrawing a handful of rows without tripping.
+#:
+#: This is the check that stops the worst version of a silent failure: nflverse
+#: regenerating a parquet from an incomplete build, and the pipeline swapping a
+#: truncated table over a good one inside a transaction that then commits
+#: cleanly and reports success.
+MIN_PUBLISH_RETENTION = 0.9
+
+
+def _row_count(cur, table: str) -> int:
+    cur.execute(f"SELECT count(*) FROM {table}")
+    return int(cur.fetchone()[0])
+
+
+def _assert_retains_rows(cur, name: str, live: str, stg: str) -> None:
+    """Refuse a swap that would drop most of the live table.
+
+    Raises inside the publish transaction, so the existing rollback puts the
+    live tables back untouched and `run` exits non-zero.
+    """
+    if not pg.table_exists(cur, live):
+        return
+    live_rows = _row_count(cur, live)
+    if not live_rows:
+        return
+    stg_rows = _row_count(cur, stg)
+    if stg_rows < live_rows * MIN_PUBLISH_RETENTION:
+        raise RuntimeError(
+            f"{name}: staging holds {stg_rows:,} rows against {live_rows:,} live "
+            f"({stg_rows / live_rows:.1%}); refusing to publish below "
+            f"{MIN_PUBLISH_RETENTION:.0%}. A partial upstream build looks exactly "
+            "like this. Re-run once the release is complete, or lower "
+            "MIN_PUBLISH_RETENTION deliberately if the shrinkage is real."
+        )
+
+
 def publish_full(cur, ds: Dataset) -> str:
     """Atomically swap staging in as the live table."""
     live, stg = f"raw_{ds.name}", f"{STAGING_PREFIX}raw_{ds.name}"
+    _assert_retains_rows(cur, ds.name, live, stg)
     cur.execute(f"DROP TABLE IF EXISTS {live} CASCADE")
     cur.execute(f"ALTER TABLE {stg} RENAME TO {live}")
     return "swap"
@@ -125,6 +174,15 @@ def publish_by_season(cur, ds: Dataset, seasons: list[int]) -> str:
     cur.execute(f"DELETE FROM {live} WHERE season = ANY(%s)", (seasons,))
     deleted = cur.rowcount
     cur.execute(f"INSERT INTO {live} ({col_sql}) SELECT {col_sql} FROM {stg}")
+    inserted = cur.rowcount
+    if deleted and inserted < deleted * MIN_PUBLISH_RETENTION:
+        raise RuntimeError(
+            f"{ds.name}: replaced {deleted:,} rows with {inserted:,} for seasons "
+            f"{seasons} ({inserted / deleted:.1%}); refusing to publish below "
+            f"{MIN_PUBLISH_RETENTION:.0%}. A refresh normally grows a season, so "
+            "a shrink this size is more likely a partial upstream build than a "
+            "correction."
+        )
     cur.execute(f"DROP TABLE {stg}")
 
     note = f"replaced {deleted:,} rows"
@@ -164,26 +222,70 @@ def run(mode: str, start: int, end: int, seasons: list[int], selected: list[Data
         label = f"  {ds.name:<16}"
         print(f"{label} loading ...", end="", flush=True)
         try:
-            rows, urls = load_staging(con, ds, lo, hi)
+            rows, urls, missing = load_staging(con, ds, lo, hi)
         except Exception as exc:
             print(f"\r{label} LOAD FAILED  {str(exc)[:80]}")
             failures.append((ds.name, traceback.format_exc()))
+            results.append((ds, 0, time.time() - t0, "failed"))
             continue
         dt = time.time() - t0
+
+        # A refresh names the seasons it wants. Not getting one of them is a
+        # failure, not a skip: the live table keeps last week's data while
+        # every downstream job -- features, projections, the warmer -- runs
+        # happily on top of it and reports success. In `full` mode a gap is
+        # ordinary (a season nflverse has not published yet is expected), so
+        # only the seasons explicitly asked for count.
+        wanted_missing = (
+            sorted(set(missing) & set(seasons)) if mode == "refresh" else []
+        )
+
         if not urls:
             print(f"\r{label} skipped (no published data for {lo}-{hi})")
             results.append((ds, 0, dt, "skipped"))
+            if mode == "refresh":
+                failures.append((
+                    ds.name,
+                    f"refresh asked for {lo}-{hi} and nflverse has published "
+                    f"nothing for it. Treated as a failure rather than a skip: "
+                    f"a refresh that quietly covers no seasons leaves stale "
+                    f"data live and every downstream job green.",
+                ))
             continue
+
+        if wanted_missing:
+            print(
+                f"\r{label} staged {rows:>10,} rows  ({dt:5.1f}s, "
+                f"{len(urls)} file(s))  INCOMPLETE: nothing published for "
+                f"{wanted_missing}"
+            )
+            results.append((ds, rows, dt, "incomplete"))
+            failures.append((
+                ds.name,
+                f"refresh asked for seasons {seasons} and nflverse has "
+                f"published nothing for {wanted_missing}. What was found is "
+                f"staged, but the run is a failure so the gap cannot pass "
+                f"unnoticed.",
+            ))
+            continue
+
         print(f"\r{label} staged {rows:>10,} rows  ({dt:5.1f}s, {len(urls)} file(s))")
         results.append((ds, rows, dt, "staged"))
     con.close()
 
-    staged = [r for r in results if r[3] == "staged"]
+    staged = [r for r in results if r[3] in ("staged", "incomplete")]
     if not staged:
         print("\nnothing staged — nothing to publish")
+        failures.append((
+            "staging",
+            "no dataset produced a single row. The run had nothing to "
+            "publish, which is an upstream outage or a broken selection "
+            "rather than a successful no-op.",
+        ))
 
     # ---- phase 2: publish (one transaction) -------------------------------
     total_rows = 0
+    published = False
     if staged:
         print("\npublishing ...")
         try:
@@ -205,6 +307,7 @@ def run(mode: str, start: int, end: int, seasons: list[int], selected: list[Data
                 views = warehouse.rebuild_views(cur)
                 conn.commit()
             print(f"  views rebuilt: {', '.join(views)}")
+            published = True
         except Exception:
             failures.append(("publish", traceback.format_exc()))
             print("  PUBLISH FAILED — rolled back, live tables untouched")
@@ -213,6 +316,32 @@ def run(mode: str, start: int, end: int, seasons: list[int], selected: list[Data
     # ---- finalise ---------------------------------------------------------
     status = "ok" if not failures else "failed"
     with pg.connect(autocommit=True) as conn, conn.cursor() as cur:
+        # Every *selected* dataset gets a row, not only the ones that reached
+        # the publish loop. Without this a skipped or failed dataset is simply
+        # absent, so afterwards there is no telling "the refresh did not cover
+        # injuries" from "it covered injuries and found nothing" -- and an
+        # `--only` run looks identical to a full one. The published rows were
+        # already written inside the publish transaction (and rolled back with
+        # it if it failed), so ON CONFLICT fills in the rest.
+        error_by_dataset = dict(failures)
+        for ds, rows, dt, outcome in results:
+            action = outcome
+            if outcome in ("staged", "incomplete") and not published:
+                action = "publish_failed"
+            cur.execute(
+                "INSERT INTO pipeline_run_datasets "
+                "(run_id, dataset, action, rows_loaded, duration_ms, error) "
+                "VALUES (%s,%s,%s,%s,%s,%s) "
+                "ON CONFLICT (run_id, dataset) DO NOTHING",
+                (
+                    run_id,
+                    ds.name,
+                    action,
+                    rows if published else 0,
+                    int(dt * 1000),
+                    error_by_dataset.get(ds.name),
+                ),
+            )
         cur.execute(
             "UPDATE pipeline_runs SET finished_at = now(), status = %s, "
             "rows_loaded = %s, error = %s WHERE run_id = %s",

@@ -57,12 +57,34 @@ def _horizon(context: JobContext) -> int:
     )
 
 
+def _assert_provider_reached(name: str, result, games) -> None:
+    """Refuse to report `ok` when a provider produced nothing for every game.
+
+    Per-game and per-week skips are part of the provider contract -- in August
+    most games genuinely have no line yet, and that is a legitimate zero. What
+    is not legitimate is *every* game coming back empty during a live week,
+    which is what an ESPN shape change, an empty body or a sustained outage
+    looks like from here. Without this the job logs `ok -- 0 record(s)` hourly,
+    indefinitely, while the market columns the board reads go NULL.
+    """
+    if result.written or not games:
+        return
+    if len(result.skipped) < len(games):
+        return
+    raise RuntimeError(
+        f"{name}: nothing written and all {len(games)} game(s) skipped. "
+        "A provider that reaches no game at all is an outage, not an empty "
+        f"slate. Reasons: {sorted(set(result.skipped.values()))[:3]}"
+    )
+
+
 def refresh_odds(context: JobContext) -> JobOutcome:
     """Capture the current betting market for every upcoming game."""
     games = upcoming_games(context.session, horizon_days=_horizon(context))
     if not games:
         return JobOutcome(skipped=True, skip_reason="no upcoming games in range")
     result = ingest_odds(context.session, get_odds_provider(), games)
+    _assert_provider_reached("refresh_odds", result, games)
     return JobOutcome(records=result.written, detail=result.as_detail())
 
 
@@ -72,6 +94,7 @@ def refresh_weather(context: JobContext) -> JobOutcome:
     if not games:
         return JobOutcome(skipped=True, skip_reason="no upcoming games in range")
     result = ingest_weather(context.session, get_weather_provider(), games)
+    _assert_provider_reached("refresh_weather", result, games)
     return JobOutcome(records=result.written, detail=result.as_detail())
 
 
@@ -139,9 +162,16 @@ def refresh_injuries(context: JobContext) -> JobOutcome:
             "WHERE status = 'ok' ORDER BY run_id DESC LIMIT 1"
         )
     ).scalar()
-    return JobOutcome(
-        records=int(rows or 0), detail={"datasets": names, "season": season}
-    )
+    loaded = int(rows or 0)
+    if not loaded:
+        # The pipeline exited 0, so the datasets resolved -- and still nothing
+        # arrived. On a Saturday that means the designation a lineup turns on
+        # is whatever Tuesday said, with nothing anywhere reporting it stale.
+        raise RuntimeError(
+            f"refresh of {names} for {season} reported success but loaded 0 rows; "
+            "a reload that loads nothing is not an ok outcome"
+        )
+    return JobOutcome(records=loaded, detail={"datasets": names, "season": season})
 
 
 def evaluate_model(context: JobContext) -> JobOutcome:
@@ -399,10 +429,13 @@ def warm_cache(context: JobContext) -> JobOutcome:
     except RuntimeError:  # pragma: no cover - only inside a running loop
         return JobOutcome(skipped=True, skip_reason="already inside an event loop")
 
-    if not warmed and failed:
-        # Every path failing is a broken API, not a cold cache, and the batch
-        # should say so rather than reporting a quiet zero.
-        raise RuntimeError(f"cache warm failed for every path: {failed}")
+    if failed:
+        # Any path failing is worth raising on, not only every path. The
+        # warmable set is dominated by cheap /meta/* and per-position rankings,
+        # so the one expensive path -- the projections board itself -- is both
+        # the likeliest to fail and the easiest to outvote. Seven of eight
+        # succeeding used to report `ok` with the board missing.
+        raise RuntimeError(f"cache warm failed for {len(failed)} path(s): {failed}")
     return JobOutcome(records=len(warmed), detail={"warmed": warmed, "failed": failed})
 
 

@@ -363,11 +363,30 @@ class TestEspnOddsProvider:
         )
         assert result.count == 1
 
-    def test_games_without_a_posted_market_are_skipped(self):
-        client, _ = _http({"events": []})
+    def test_a_game_in_a_priced_week_with_no_line_is_skipped(self):
+        """The legitimate August case: the week is there, this game is not.
+
+        ESPN returns the scheduled event and simply carries no odds for it.
+        """
+        client, _ = _http(_espn_payload(home="KC", away="BUF"))
         result = EspnOddsProvider(client=client, clock=lambda: NOW).fetch([self._game()])
         assert result.count == 0
         assert "no market posted" in result.skipped["2026_01_NE_SEA"]
+
+    def test_a_week_with_no_readable_markets_says_so_distinctly(self):
+        """An empty event list is an outage, not an unpriced slate.
+
+        Both used to record "no market posted for this game yet", so a shape
+        change or an empty body was indistinguishable from August -- and the
+        job reported `ok -- 0 record(s)` hourly either way.
+        """
+        client, _ = _http({"events": []})
+        result = EspnOddsProvider(client=client, clock=lambda: NOW).fetch([self._game()])
+        assert result.count == 0
+        reason = result.skipped["2026_01_NE_SEA"]
+        assert "no readable markets" in reason
+        assert "no market posted" not in reason
+        assert result.warnings
 
     def test_completed_games_are_not_fetched(self):
         client, opener = _http({"events": []})
