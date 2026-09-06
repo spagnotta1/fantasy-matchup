@@ -13,11 +13,15 @@ import type { SimulationAssumptions, SimulationRun } from '@/api/schemas'
  * so the day a kicker model ships `kicker_projection_available` flips on its own
  * with no frontend release. Each flag is read, never inferred.
  *
- * `player_independence` is given its own banner because it is the single
- * largest known error in the result and it moves the headline number: drawing
- * teammates independently makes the intervals too narrow and pushes the win
- * probability further from 50% than the evidence supports. A win probability
- * shown without it is the dishonest version of this feature.
+ * `player_independence` is given its own banner because it is an assumption a
+ * user is entitled to know about before acting on a win probability, not
+ * because it is a large error. Phase 6D measured its cost at the shipped tail
+ * factors and found it small: 80% interval coverage 0.7943 against a nominal
+ * 0.800 over 2,878 held-out lineups, with the correlated mode moving that past
+ * nominal rather than onto it. The banner therefore discloses the assumption
+ * and states what it was measured to cost — overstating it would teach a user
+ * to discount a number the evidence supports, which is the same failure as
+ * overstating the number itself.
  */
 export function AssumptionsPanel({
   assumptions,
@@ -79,10 +83,10 @@ export function AssumptionsPanel({
             <p className="text-caution-text text-xs leading-relaxed">
               <span className="font-semibold">Players were drawn independently.</span> Teammates
               divide one offence&apos;s plays and opposing players share pace and game script, so
-              the true joint distribution is correlated. The error lands on the spread rather than
-              the centre: the expected scores are about right, the P10–P90 ranges are too narrow,
-              and the win probability sits further from 50% than the evidence supports. The
-              correlated mode is available above.
+              the true joint distribution is correlated. Measured over 2,878 held-out lineups, the
+              cost is small: the 80% range covered 79.4% of real outcomes against a target of 80%.
+              The correlated mode is available above, but it moves that past the target rather than
+              onto it, which is why it is not the default.
             </p>
           </div>
         )}

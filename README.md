@@ -1653,18 +1653,37 @@ stored score over the derived one.
   now exists (`POST /simulations` with `correlation_mode: game_environment`) and
   is **not** the default, because on 4,320 held-out matchups it did not beat the
   independent baseline. The same backtest disproved the reason this section used
-  to give for wanting it: the lineup-level interval is not too narrow, it is
+  to give for wanting it: the lineup-level interval was not too narrow, it was
   slightly too **wide** — 82.3% coverage on a nominal 80% — because the outcome
-  curve's tail extension over-disperses a seven-player sum by more than
-  independence under-disperses it. Phase 6C measured those tail factors at the
-  lineup level and **recommends `LOWER_TAIL_FACTOR = 1.0` / `UPPER_TAIL_FACTOR =
-  2.0`, awaiting approval — the shipped values are still 1.5 / 2.5.** It also
-  found that the two errors were cancelling: on stacked lineups under the
-  recalibrated tails, correlation moves 80% coverage from 0.783 onto 0.802,
-  where under the current tails it made an already-wide interval wider. So
-  correlation is worth re-testing for promotion once the tails land, on interval
-  calibration rather than on Brier. `rosters.correlation_groups()` still reports
-  the structure under the default mode. See `docs/simulation-readiness.md`.
+  curve's tail extension over-dispersed a seven-player sum by more than
+  independence under-dispersed it. Phase 6C measured those tail factors at the
+  lineup level, and **`LOWER_TAIL_FACTOR = 1.0` / `UPPER_TAIL_FACTOR = 2.0` were
+  approved and shipped in Phase 6D** — replacing `1.5 / 2.5`.
+
+  **Phase 6D then re-ran the promotion question at the shipped tails, and the
+  verdict is that independence stays.** On 2,878 held-out lineups the
+  independent sampler is already at nominal — 80% interval coverage **0.7943**
+  against 0.800 and 90% coverage 0.8919 — so the gap correlation was meant to
+  close is mostly closed without it. Correlation moves both *past* nominal
+  (0.8065 / 0.8961), worsens lineup PIT divergence 0.0257 → 0.0347, and moves
+  no proper score significantly (lineup CRPS t = −0.53, differential CRPS
+  t = −1.06, Brier t = −1.00) at twice the CPU.
+
+  So the honest statement is that **independence is an approximation with a
+  measured and currently small cost**, not a known understatement of the
+  interval. Any copy claiming the intervals are "too narrow" or that the win
+  probability sits "further from 50% than the evidence supports" is stale and
+  should be corrected against this section. The residual dependence that does
+  exist concentrates in a QB drawn with his own receivers.
+
+  Promotion is not blocked on more evaluation but on a better structure: the
+  factor model gives two same-position teammates identical loadings, so it
+  fits WR-WR same-team at **+0.057** where the observed value is **+0.004**,
+  and since the structure only ever adds variance that is the mechanism behind
+  the overshoot. A target-competition term that can produce zero or negative
+  same-team, same-position correlation is the next thing to try.
+  `rosters.correlation_groups()` still reports the structure under the default
+  mode. See `docs/simulation-readiness.md`.
 - **No authentication.** `dependencies.current_principal` returns an anonymous
   principal, so adding auth is one function plus a router dependency rather than
   a signature change across every endpoint. The cache is already excluded for

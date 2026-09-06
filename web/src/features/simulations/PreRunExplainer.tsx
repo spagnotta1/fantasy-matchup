@@ -13,8 +13,7 @@ import { Card, CardBody } from '@/components/ui/Card'
  *
  * It states the independence assumption here rather than only on the result,
  * because a user who is about to spend two minutes building a matchup is
- * entitled to know the largest known error in the answer before they start, not
- * after.
+ * entitled to know what the answer assumes before they start, not after.
  */
 export function PreRunExplainer() {
   const items = [

@@ -522,8 +522,11 @@ def probability_total_at_least(
     outcomes. A real fantasy lineup is not uncorrelated: teammates divide one
     offence's plays, and any two players in the same game share pace and script.
     The error is concentrated in the **spread**, not the centre — the total
-    stays about right while the interval comes out too narrow, which makes the
-    floor and the ceiling the least trustworthy numbers this function produces.
+    stays about right while the interval is the part the assumption distorts,
+    which makes the floor and the ceiling the least trustworthy numbers this
+    function produces. At the lineup level the sampler's own intervals were
+    measured close to nominal under independence (Phase 6D), so treat this as
+    an approximation of known small cost rather than a known understatement.
 
     Callers assembling a lineup should pair this with
     :func:`nflfp.services.rosters.lineup_caveats`, which reports exactly which
