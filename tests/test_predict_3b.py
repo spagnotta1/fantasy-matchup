@@ -94,6 +94,31 @@ class TestFeatureContract:
             required = getattr(model, "required_features", ())
             feature_contract.assert_available(required)
 
+    def test_no_feature_table_column_is_left_undeclared(self):
+        """The contract has two states, not three.
+
+        A column in neither list is rejected by `assert_available` with "not
+        declared in the feature contract" -- the same message a typo produces
+        -- so an unmade decision reads as a mistake. These four sat in that
+        state: the trend pair is knowable before kickoff, the injury pair is
+        not, and both facts are now written down.
+        """
+        for name in ("snap_pct_trend", "target_share_trend"):
+            assert feature_contract.is_available(name)
+            feature_contract.assert_available([name])
+
+        for name in ("injury_report_status", "injury_practice_status"):
+            assert not feature_contract.is_available(name)
+            reason = feature_contract.excluded_reason(name)
+            assert reason and "preseason" in reason
+            with pytest.raises(ValueError, match="unavailable at prediction time"):
+                feature_contract.assert_available([name])
+
+    def test_an_undeclared_column_still_reads_as_undeclared(self):
+        """Resolving the four does not weaken the guard for the next one."""
+        with pytest.raises(ValueError, match="not declared in the feature contract"):
+            feature_contract.assert_available(["some_column_nobody_declared"])
+
     def test_feature_version_is_recorded(self):
         assert isinstance(feature_contract.FEATURE_VERSION, int)
         assert ShrinkageModel().params()["feature_version"] == (
@@ -264,6 +289,34 @@ class TestDistributions:
         """The honest statement about a 60-point projection is 'never seen'."""
         assert self._fitted().apply("WR", 60.0).extrapolated is True
         assert self._fitted().apply("WR", 8.0).extrapolated is False
+
+    def test_the_top_bin_is_not_an_extrapolation(self):
+        """`extrapolated` means "beyond the fitted range", not "in the top bin".
+
+        Bins are equal-count, so the top bin holds 1/`max_bins` of the training
+        data by construction. Reading its lower edge as the extrapolation
+        threshold flagged roughly 8% of every position's board -- and the flag
+        reaches `confidence_label` and the advice caveats, so it was firing on
+        exactly the high projections a manager acts on.
+        """
+        samples = [
+            ("WR", tenths / 10.0, tenths / 10.0 + offset)
+            for tenths in range(250)
+            for offset in (-6.0, -2.0, 0.0, 3.0, 7.0)
+        ]
+        distribution = ResidualDistribution(min_bin_samples=100).fit(samples)
+        fitted_max = 24.9
+
+        bins = distribution.describe()["WR"]
+        assert len(bins) > 1
+        top_bin_lower = bins[-1]["lower"]
+        # The top bin spans real projections rather than sitting at the ceiling.
+        assert top_bin_lower < fitted_max
+
+        inside_top_bin = (top_bin_lower + fitted_max) / 2.0
+        assert distribution.apply("WR", inside_top_bin).extrapolated is False
+        assert distribution.apply("WR", fitted_max).extrapolated is False
+        assert distribution.apply("WR", fitted_max + 0.1).extrapolated is True
 
     def test_sample_size_is_reported(self):
         assert self._fitted().apply("WR", 12.0).sample_size > 0

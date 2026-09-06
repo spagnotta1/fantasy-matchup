@@ -131,6 +131,15 @@ class TestPreseasonSlate:
             "'REG', 'AAA', 'BBB', 0.8, 0.25, 9, 0, 6, 0, 0.3, 0.5, 15.0, "
             "80, 0, 0, 1, 0, 0, 0, 0, 0, 2.0, 0.0, 0)"
         )
+        # Still rostered in 2026, but last played in 2022. A full four-game
+        # window whose games are four years old.
+        for week in (14, 15, 16, 17):
+            con.execute(
+                "INSERT INTO player_week VALUES ('stale', 'Stale Back', 'RB', 2022, ?, "
+                "'REG', 'AAA', 'BBB', 0.6, 0.1, 3, 10, 2, 0, 0.1, 0.2, 9.0, "
+                "25, 50, 0, 0, 0.4, 0, 0, 0, 0, 1.0, 1.0, 0)",
+                [week],
+            )
 
         con.execute(
             """
@@ -156,6 +165,7 @@ class TestPreseasonSlate:
             "INSERT INTO raw_rosters VALUES "
             "(2026, 'vet', 'Vet Back', 'RB', 'AAA'),"
             "(2026, 'mover', 'Free Agent', 'WR', 'CCC'),"
+            "(2026, 'stale', 'Stale Back', 'RB', 'AAA'),"
             # A rookie: rostered, never played. Must not appear.
             "(2026, 'rook', 'Rookie Back', 'RB', 'AAA'),"
             # A kicker: rostered, but there is no model for the position.
@@ -220,6 +230,29 @@ class TestPreseasonSlate:
             "SELECT games_in_window_l4 FROM slate WHERE player_id = 'vet'"
         ).fetchone()
         assert games == 4
+
+    def test_a_stale_window_is_reported_rather_than_hidden(self, warehouse):
+        """`games_in_window_l4` counts games played, not weeks elapsed.
+
+        A player whose last four appearances were in 2022 arrives with a 4 --
+        indistinguishable, to the shrinkage, from a player who played in
+        January. `seasons_since_last_game` is the column that can tell them
+        apart. Nothing is dropped or decayed here: the discount a stale window
+        deserves has not been measured, so the row states its age instead.
+        """
+        rows = dict(
+            (row[0], (row[1], row[2]))
+            for row in warehouse.execute(
+                "SELECT player_id, games_in_window_l4, seasons_since_last_game "
+                "FROM slate"
+            ).fetchall()
+        )
+        # Both look equally well-evidenced by the count alone.
+        assert rows["vet"][0] == 4
+        assert rows["stale"][0] == 4
+        # Only the new column separates them.
+        assert rows["vet"][1] == 1
+        assert rows["stale"][1] == 4
 
     def test_a_player_who_moved_carries_their_old_usage_to_their_new_team(
         self, warehouse

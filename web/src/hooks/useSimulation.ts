@@ -27,7 +27,7 @@ export const CORRELATION_MODES = [
     value: 'independent',
     label: 'Independent',
     description:
-      "Every player drawn from their own distribution. The API's default. Teammates share an offence and opponents share game script, so the intervals come out too narrow and the win probability sits further from 50% than the evidence supports.",
+      "Every player drawn from their own distribution. The API's default. Teammates share an offence and opponents share game script, so the joint distribution is correlated — but measured over 2,878 held-out lineups the cost is small: the 80% range covered 79.4% of real outcomes against a target of 80%.",
   },
   {
     value: 'game_environment',

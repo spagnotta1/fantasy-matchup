@@ -60,6 +60,24 @@ test would be needed to justify it.
 This is a decision to revisit, not a permanent one. Now that snapshots are being
 captured, a season from now there will be genuine prediction-time lines and
 forecasts for historical weeks, and the question can be re-measured properly.
+
+Declared, or excluded with a reason. Never neither.
+---------------------------------------------------
+A column of ``feat_training_dataset`` that appears in neither list is in a third
+state this contract should not have: :func:`assert_available` rejects it as "not
+declared in the feature contract", which is the *same* message a typo produces.
+So an unmade decision is indistinguishable from a mistake, and the one thing
+this module exists to make legible -- whether a feature was considered and
+refused, or simply never considered -- is exactly what is lost.
+
+Four columns sat in that state and are now resolved. ``snap_pct_trend`` and
+``target_share_trend`` are declared available: both are differences of lagged
+quantities, so nothing about them is unknowable before kickoff. The two injury
+designations are declared excluded, on availability rather than on measured
+skill -- see ``_AVAILABILITY_REASON``. Neither resolution changes a model:
+``shrinkage_eb`` requires two features and reads component ``*_l4`` columns, so
+what the contract permits and what the frozen model uses remain different
+questions.
 """
 
 from __future__ import annotations
@@ -68,7 +86,7 @@ from dataclasses import dataclass
 
 #: Feature-set version. Bumped whenever the available set below changes, and
 #: recorded on every model run so a stored projection stays interpretable.
-FEATURE_VERSION = 2
+FEATURE_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -114,6 +132,14 @@ USAGE_FEATURES: tuple[str, ...] = (
     "receiving_epa_l8",
     "rushing_epa_l8",
     "passing_epa_l8",
+    # Lagged by construction and therefore available: `snap_pct_prev` and
+    # `target_share_prev` are LAG() over the player's previous row, and the l4
+    # window ends at the previous week, so the difference is knowable before
+    # kickoff. Both feature views emit them -- the preseason slate computes the
+    # same difference over the last four completed games -- so declaring them
+    # does not create a column that exists in training and not at serving.
+    "snap_pct_trend",
+    "target_share_trend",
 )
 
 #: Schedule facts, fixed once the season is scheduled.
@@ -139,6 +165,18 @@ _MARKET_REASON = (
     "live one. Measured to add nothing beyond lagged usage "
     "(residual corr -0.04..+0.02, n=39,261), so excluded rather than managed."
 )
+_AVAILABILITY_REASON = (
+    "train/serve shift, and an absent column at the one moment it would matter "
+    "most: `feat_training_dataset` carries the *current* week's designation "
+    "unlagged, which for a played game is the settled final report and for an "
+    "upcoming game is whatever the report says days out. `feat_preseason_slate` "
+    "emits NULL for both by construction -- no injury report exists for a game "
+    "months away -- so a model reading these could not produce a week 1 board "
+    "at all. Excluded on availability, not on measured skill: the question of "
+    "whether a designation predicts residual production has not been asked, "
+    "and asking it needs prediction-time snapshots that collection only "
+    "recently began. See README, 'Injury and weather are not quantified'."
+)
 _WEATHER_REASON = (
     "train/serve shift: historical rows carry nflverse's post-game *observation*, "
     "upcoming rows a forecast. No historical row has a forecast, so the "
@@ -163,6 +201,12 @@ EXCLUDED_FEATURES: tuple[FeatureSpec, ...] = tuple(
         "wind_mph",
         "precipitation_probability",
         "weather_source",
+    )
+) + tuple(
+    FeatureSpec(name, False, _AVAILABILITY_REASON)
+    for name in (
+        "injury_report_status",
+        "injury_practice_status",
     )
 )
 

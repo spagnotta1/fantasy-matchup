@@ -1268,6 +1268,51 @@ class TestPoolAssembly:
         assert "rookies" in joined
         assert "per-game rate" in joined
 
+    def test_notices_count_the_players_whose_evidence_is_years_old(self):
+        """A stale window is indistinguishable from a fresh one by count alone.
+
+        `games_in_window_l4` counts games *played*, so a player who last
+        appeared in 2022 reaches a 2026 board with a full four-game window and
+        the shrinkage trusts it exactly as much as last January's. The board
+        has to say so.
+        """
+        panel = [
+            {
+                "player_id": "p1", "position": "RB", "season": 2022,
+                "games_played": 17, "total_points": 200.0,
+                "points_per_game": 11.8, "weekly_stdev": 6.0,
+            }
+        ]
+        pool = assemble_pool(
+            board_rows=[self._board()],
+            panel_rows=panel,
+            game_counts={},
+            season=2026,
+            season_games=17,
+            scoring_profile="ppr",
+        )
+        joined = " ".join(pool.notices)
+        assert "last recorded a stat line before 2025" in joined
+        assert "4 seasons ago" in joined
+
+    def test_a_current_player_raises_no_staleness_notice(self):
+        panel = [
+            {
+                "player_id": "p1", "position": "RB", "season": 2025,
+                "games_played": 17, "total_points": 200.0,
+                "points_per_game": 11.8, "weekly_stdev": 6.0,
+            }
+        ]
+        pool = assemble_pool(
+            board_rows=[self._board()],
+            panel_rows=panel,
+            game_counts={},
+            season=2026,
+            season_games=17,
+            scoring_profile="ppr",
+        )
+        assert "last recorded a stat line" not in " ".join(pool.notices)
+
     def test_history_and_projection_stay_separable(self):
         """A monstrous historical season must not move the projected rate."""
         pool = assemble_pool(

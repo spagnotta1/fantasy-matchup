@@ -77,6 +77,18 @@ class TestValidationRecord:
 
 
 class TestAcceptance:
+    @staticmethod
+    def _beats_baseline() -> dict[str, float]:
+        """Per-position MAE that clears the bar at every position.
+
+        A stand-in, and deliberately marked as one: `VALIDATION` records the
+        incumbent's coverage, calibration, bias and CRPS but *not* its own
+        per-position MAE, so there is no measured number to assert here. What
+        these tests can check is that the criterion is enforced at all, which
+        until now it was not.
+        """
+        return {bar.position: bar.mae - 0.10 for bar in BASELINE_BAR}
+
     def test_the_frozen_model_passes_its_own_criteria(self):
         # If the incumbent could not clear the bar it sets, the bar is wrong.
         passed, reasons = meets_acceptance(
@@ -84,6 +96,8 @@ class TestAcceptance:
             max_calibration_error=VALIDATION.boom_calibration_max,
             max_conditional_bias=VALIDATION.max_conditional_bias,
             crps=VALIDATION.crps,
+            mae_by_position=self._beats_baseline(),
+            walk_forward=True,
         )
         assert passed, reasons
 
@@ -93,6 +107,8 @@ class TestAcceptance:
             max_calibration_error=0.40,
             max_conditional_bias=1.8,
             crps=4.5,
+            mae_by_position=self._beats_baseline(),
+            walk_forward=True,
         )
         assert not passed
         # Every failure is reported, not just the first — a model that misses
@@ -107,24 +123,80 @@ class TestAcceptance:
             max_calibration_error=VALIDATION.boom_calibration_max,
             max_conditional_bias=0.02,
             crps=VALIDATION.crps + 0.5,
+            mae_by_position=self._beats_baseline(),
+            walk_forward=True,
         )
         assert not passed
         assert any("CRPS" in reason for reason in reasons)
 
     def test_coverage_failure_is_symmetric(self):
-        too_narrow, _ = meets_acceptance(
-            coverage_p10_p90=0.70, max_calibration_error=0.1,
-            max_conditional_bias=0.1, crps=2.0,
+        common = dict(
+            max_calibration_error=0.1, max_conditional_bias=0.1, crps=2.0,
+            mae_by_position=self._beats_baseline(), walk_forward=True,
         )
-        too_wide, _ = meets_acceptance(
-            coverage_p10_p90=0.90, max_calibration_error=0.1,
-            max_conditional_bias=0.1, crps=2.0,
-        )
+        too_narrow, _ = meets_acceptance(coverage_p10_p90=0.70, **common)
+        too_wide, _ = meets_acceptance(coverage_p10_p90=0.90, **common)
         assert not too_narrow and not too_wide
 
     def test_walk_forward_is_non_negotiable(self):
         assert ACCEPTANCE.requires_walk_forward is True
         assert ACCEPTANCE.must_beat_baseline is True
+
+    # -- the two criteria the gate used to declare and never check ----------
+
+    def _distribution_passes(self, **overrides) -> dict:
+        base = dict(
+            coverage_p10_p90=VALIDATION.coverage_p10_p90,
+            max_calibration_error=VALIDATION.boom_calibration_max,
+            max_conditional_bias=VALIDATION.max_conditional_bias,
+            crps=VALIDATION.crps,
+            mae_by_position=self._beats_baseline(),
+            walk_forward=True,
+        )
+        base.update(overrides)
+        return base
+
+    def test_a_challenger_worse_than_the_baseline_is_rejected(self):
+        """The criterion existed, was reported by foundation_summary(), and was
+        read by nothing. A model with a perfect distribution and a per-position
+        MAE worse than 'last four games' used to pass."""
+        losing = self._beats_baseline()
+        losing["WR"] = next(b.mae for b in BASELINE_BAR if b.position == "WR") + 0.5
+        passed, reasons = meets_acceptance(**self._distribution_passes(
+            mae_by_position=losing
+        ))
+        assert not passed
+        assert any("WR MAE" in reason and "baseline_l4" in reason for reason in reasons)
+
+    def test_a_challenger_beating_the_bar_at_only_some_positions_is_rejected(self):
+        partial = {"QB": 1.0}
+        passed, reasons = meets_acceptance(**self._distribution_passes(
+            mae_by_position=partial
+        ))
+        assert not passed
+        assert sum("no MAE reported" in reason for reason in reasons) == 3
+
+    def test_unsupplied_mae_fails_closed(self):
+        """Absent evidence is a failure, not a pass."""
+        passed, reasons = meets_acceptance(**self._distribution_passes(
+            mae_by_position=None
+        ))
+        assert not passed
+        assert any("fails closed" in reason for reason in reasons)
+
+    def test_a_random_split_is_rejected(self):
+        passed, reasons = meets_acceptance(**self._distribution_passes(
+            walk_forward=False
+        ))
+        assert not passed
+        assert any("not walk-forward" in reason for reason in reasons)
+
+    def test_unattested_walk_forward_fails_closed(self):
+        passed, reasons = meets_acceptance(**self._distribution_passes(
+            walk_forward=None
+        ))
+        assert not passed
+        assert any("not attested" in reason for reason in reasons)
 
 
 class TestFoundationSummary:

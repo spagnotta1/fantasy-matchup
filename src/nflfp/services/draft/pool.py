@@ -421,6 +421,32 @@ def _notices(
             "history in the window, so their expected games is the position "
             "prior rather than their own record."
         )
+    # A rostered player who last recorded a stat line years ago still arrives
+    # with a full four-game usage window, because that window counts games
+    # played rather than weeks elapsed. The projection behind his value is
+    # therefore built on evidence much older than the board implies, and
+    # nothing else on the card says so.
+    stale = sorted(
+        (
+            (season - p.historical.prior_season.season, p.player.name)
+            for p in players
+            if p.historical.prior_season is not None
+            and p.historical.prior_season.season < season - 1
+        ),
+        reverse=True,
+    )
+    if stale:
+        oldest_gap, oldest_name = stale[0]
+        notices.append(
+            f"{len(stale)} of {len(players)} players last recorded a stat line "
+            f"before {season - 1}, the oldest {oldest_gap} seasons ago "
+            f"({oldest_name}). Their usage window is still four games, because "
+            "it counts games played rather than weeks elapsed, so the model "
+            "weights that stale evidence exactly as it weights a player who "
+            "finished last season healthy. The gap is reported rather than "
+            "discounted: how much a window that old should be trusted has not "
+            "been measured, and a factor invented here would not be one."
+        )
     return tuple(notices)
 
 

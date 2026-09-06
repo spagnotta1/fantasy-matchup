@@ -68,11 +68,14 @@ What it assumes, and does not hide
 **Independence.** Every player is drawn from their own uniform. Teammates divide
 one offence's plays, opposing players share pace and game script, and two
 lineups holding players from the same game are correlated with each other. The
-error is concentrated in the *spread*: the totals stay about right while the
-intervals come out too narrow, so P10 and P90 are the least trustworthy numbers
-here and a win probability is pushed further from 50% than the evidence
-supports. Correcting it needs a fitted correlation structure; inventing one
-would be worse than declaring this. :attr:`MatchupSimulation.caveats` names
+error is concentrated in the *spread* rather than the centre. Phase 6D
+measured how much that costs at the shipped tail factors: on 2,878 held-out
+lineups the 80% interval covers 0.7943 against a nominal 0.800 and the 90%
+interval 0.8919, and applying a fitted correlation structure moves both *past*
+nominal while moving no proper score significantly. So independence is an
+approximation with a measured and currently small cost, not a known defect;
+what residual dependence there is concentrates in a QB drawn alongside his own
+receivers. :attr:`MatchupSimulation.caveats` names
 every group that breaks the assumption.
 
 **No kickers, no defences.** Not simulable, for the reasons in
@@ -269,10 +272,11 @@ class SimulationAssumptions:
                 "Player outcomes were drawn independently. Teammates share one "
                 "offence's plays and opposing players share pace and game "
                 "script, so the true joint distribution is correlated. The "
-                "error falls on the spread rather than the centre: the "
-                "expected scores are about right, the P10/P90 intervals are "
-                "too narrow, and the win probability is further from 50% than "
-                "the evidence supports."
+                "error falls on the spread rather than the centre, and it is "
+                "small where it has been measured: 80% interval coverage of "
+                "0.7943 against a nominal 0.800 over 2,878 held-out lineups. "
+                "The correlated mode moves that past nominal rather than onto "
+                "it, which is why it is not the default."
             )
         else:
             lines.append(

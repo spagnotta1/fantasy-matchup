@@ -41,6 +41,16 @@ Three things, and none of them are patched with an invented number:
 * **Opponent-strength features are null**, exactly as they are for a real week 1:
   the defensive views reset each season, so nobody has a trailing defensive
   average in week 1 of anything.
+* **The window has no recency floor, so it can be years old.** A rostered player
+  whose last four appearances were in 2022 gets those four games, and
+  ``games_in_window_l4`` reads 4 — it counts games played, not weeks elapsed, so
+  it cannot distinguish him from a player who played in January.
+  ``seasons_since_last_game`` is emitted beside it to close that gap. It is
+  *reported*, not applied: no row is dropped and no average is decayed, because
+  the size of the discount a stale window deserves has not been measured on the
+  walk-forward harness, and a factor invented here would be exactly the kind of
+  number the rest of this system refuses to invent. A consumer that ranks these
+  rows is obliged to surface it.
 
 This view is additive. Nothing that existed before reads it, ``completed_only``
 training loads cannot see it, and building it changes no number anywhere else.
@@ -181,6 +191,7 @@ PRESEASON_SLATE = REGISTRY.register(
             pw.receiving_epa,
             pw.rushing_epa,
             pw.passing_epa,
+            pw.season AS source_season,
             ROW_NUMBER() OVER (
                 PARTITION BY r.season, r.player_id
                 ORDER BY pw.season DESC, pw.week DESC
@@ -202,6 +213,21 @@ PRESEASON_SLATE = REGISTRY.register(
             -- most of last season arrives with a 1 here, and the model is
             -- entitled to distrust the average accordingly.
             COUNT(*) FILTER (WHERE t.recency <= {WINDOW_L4}) AS games_in_window_l4,
+            -- How old that evidence is, in seasons. 1 is the ordinary case: the
+            -- window ends with last season, which is what every week-1 row in
+            -- the training set looks like. Higher means the four games behind
+            -- this row are older than that, and `games_in_window_l4` cannot say
+            -- so -- it counts games *played*, not weeks elapsed, so a player
+            -- whose last four appearances were in 2022 arrives with a 4 and the
+            -- shrinkage weights him exactly like a player who played in
+            -- January. Reported rather than decayed: how much a stale window
+            -- should be discounted is a modelling question that has not been
+            -- measured on the walk-forward harness, and inventing a factor here
+            -- would be the kind of number this system exists not to invent.
+            CAST(
+                t.target_season - MAX(t.source_season) FILTER (WHERE t.recency = 1)
+                AS INTEGER
+            ) AS seasons_since_last_game,
             -- The single most recent game, which is what the in-season view's
             -- LAG produces and what the trend columns are measured against.
             MAX(t.offense_pct) FILTER (WHERE t.recency = 1) AS snap_pct_prev,
@@ -234,6 +260,7 @@ PRESEASON_SLATE = REGISTRY.register(
         CAST(NULL AS DOUBLE PRECISION) AS snap_pct_season,
         CAST(NULL AS BIGINT)           AS games_played_season,
         w.games_in_window_l4,
+        w.seasons_since_last_game,
         w.snap_pct_l4 - w.snap_pct_prev         AS snap_pct_trend,
         w.target_share_l4 - w.target_share_prev AS target_share_trend,
 

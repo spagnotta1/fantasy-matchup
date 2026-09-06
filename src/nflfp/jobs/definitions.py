@@ -206,6 +206,10 @@ def evaluate_model(context: JobContext) -> JobOutcome:
         max_calibration_error=max(result.calibration_max.values(), default=1.0),
         max_conditional_bias=max((abs(entry.bias) for entry in reliable), default=0.0),
         crps=result.mean_crps if result.mean_crps is not None else float("inf"),
+        mae_by_position={
+            position: metrics.mae for position, metrics in result.by_position.items()
+        },
+        walk_forward=result.walk_forward,
     )
 
     detail = {
