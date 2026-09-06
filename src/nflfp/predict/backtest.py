@@ -140,6 +140,13 @@ class BacktestResult:
     mean_crps: float | None = None
     mean_pinball: float | None = None
     duration_seconds: float = 0.0
+    #: How the folds were built. ``run_backtest`` has no other mode -- every
+    #: fold trains strictly before the week it scores, asserted per fold by
+    #: ``assert_no_leakage`` -- so this is True for anything it produces. It is
+    #: carried on the result rather than assumed at the call site so that
+    #: ``meets_acceptance`` can refuse an evaluation that was not walk-forward
+    #: instead of taking it on trust.
+    walk_forward: bool = True
 
     @property
     def scored(self) -> list[Prediction]:

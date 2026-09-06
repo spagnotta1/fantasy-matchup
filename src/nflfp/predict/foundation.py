@@ -33,6 +33,7 @@ is entitled to know what produced them and how well it was shown to work.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 #: The model the application is built on.
@@ -254,14 +255,31 @@ def meets_acceptance(
     max_calibration_error: float,
     max_conditional_bias: float,
     crps: float,
+    mae_by_position: Mapping[str, float] | None = None,
+    walk_forward: bool | None = None,
 ) -> tuple[bool, tuple[str, ...]]:
     """Check a challenger's measurements against :data:`ACCEPTANCE`.
+
+    All six criteria are enforced here. Two of them used to be declared on
+    :class:`AcceptanceCriteria` and read by nothing: ``must_beat_baseline`` and
+    ``requires_walk_forward`` were documented as required, reported in
+    :func:`foundation_summary`, and never checked — so a challenger with a
+    per-position MAE worse than ``baseline_l4``, or one evaluated on a random
+    split, passed. Both now **fail closed**: absent evidence is a failure, not
+    a pass, because the whole point of the freeze is that a successor is
+    compared to this model rather than to nothing.
 
     Args:
         coverage_p10_p90: Observed P10-P90 interval coverage.
         max_calibration_error: Worst well-sampled calibration bin.
         max_conditional_bias: Largest absolute bias across projection bands.
         crps: Continuous ranked probability score, lower better.
+        mae_by_position: Per-position MAE, which must beat :data:`BASELINE_BAR`
+            at every position. Required while ``ACCEPTANCE.must_beat_baseline``
+            is set; omitting it is a failure.
+        walk_forward: Whether the measurements came from a walk-forward
+            harness. Required while ``ACCEPTANCE.requires_walk_forward`` is set;
+            neither ``False`` nor ``None`` passes.
 
     Returns:
         ``(passed, reasons)``. ``reasons`` lists every failure, not just the
@@ -290,6 +308,35 @@ def meets_acceptance(
         failures.append(
             f"CRPS {crps:.3f} is worse than the frozen foundation's "
             f"{ACCEPTANCE.max_crps:.3f}"
+        )
+
+    if ACCEPTANCE.must_beat_baseline:
+        if mae_by_position is None:
+            failures.append(
+                "per-position MAE was not supplied, so 'beats baseline_l4' "
+                "could not be checked; the criterion fails closed"
+            )
+        else:
+            for bar in BASELINE_BAR:
+                observed = mae_by_position.get(bar.position)
+                if observed is None:
+                    failures.append(
+                        f"no MAE reported for {bar.position}; the bar covers "
+                        "every position and a challenger clears all of them or "
+                        "none"
+                    )
+                elif observed >= bar.mae:
+                    failures.append(
+                        f"{bar.position} MAE {observed:.3f} does not beat "
+                        f"baseline_l4's {bar.mae:.2f}"
+                    )
+
+    if ACCEPTANCE.requires_walk_forward and walk_forward is not True:
+        failures.append(
+            "evaluation was not walk-forward"
+            if walk_forward is False
+            else "walk-forward evaluation was not attested; the criterion "
+            "fails closed"
         )
 
     return (not failures, tuple(failures))
