@@ -94,6 +94,31 @@ class TestFeatureContract:
             required = getattr(model, "required_features", ())
             feature_contract.assert_available(required)
 
+    def test_no_feature_table_column_is_left_undeclared(self):
+        """The contract has two states, not three.
+
+        A column in neither list is rejected by `assert_available` with "not
+        declared in the feature contract" -- the same message a typo produces
+        -- so an unmade decision reads as a mistake. These four sat in that
+        state: the trend pair is knowable before kickoff, the injury pair is
+        not, and both facts are now written down.
+        """
+        for name in ("snap_pct_trend", "target_share_trend"):
+            assert feature_contract.is_available(name)
+            feature_contract.assert_available([name])
+
+        for name in ("injury_report_status", "injury_practice_status"):
+            assert not feature_contract.is_available(name)
+            reason = feature_contract.excluded_reason(name)
+            assert reason and "preseason" in reason
+            with pytest.raises(ValueError, match="unavailable at prediction time"):
+                feature_contract.assert_available([name])
+
+    def test_an_undeclared_column_still_reads_as_undeclared(self):
+        """Resolving the four does not weaken the guard for the next one."""
+        with pytest.raises(ValueError, match="not declared in the feature contract"):
+            feature_contract.assert_available(["some_column_nobody_declared"])
+
     def test_feature_version_is_recorded(self):
         assert isinstance(feature_contract.FEATURE_VERSION, int)
         assert ShrinkageModel().params()["feature_version"] == (
