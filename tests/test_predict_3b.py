@@ -265,6 +265,34 @@ class TestDistributions:
         assert self._fitted().apply("WR", 60.0).extrapolated is True
         assert self._fitted().apply("WR", 8.0).extrapolated is False
 
+    def test_the_top_bin_is_not_an_extrapolation(self):
+        """`extrapolated` means "beyond the fitted range", not "in the top bin".
+
+        Bins are equal-count, so the top bin holds 1/`max_bins` of the training
+        data by construction. Reading its lower edge as the extrapolation
+        threshold flagged roughly 8% of every position's board -- and the flag
+        reaches `confidence_label` and the advice caveats, so it was firing on
+        exactly the high projections a manager acts on.
+        """
+        samples = [
+            ("WR", tenths / 10.0, tenths / 10.0 + offset)
+            for tenths in range(250)
+            for offset in (-6.0, -2.0, 0.0, 3.0, 7.0)
+        ]
+        distribution = ResidualDistribution(min_bin_samples=100).fit(samples)
+        fitted_max = 24.9
+
+        bins = distribution.describe()["WR"]
+        assert len(bins) > 1
+        top_bin_lower = bins[-1]["lower"]
+        # The top bin spans real projections rather than sitting at the ceiling.
+        assert top_bin_lower < fitted_max
+
+        inside_top_bin = (top_bin_lower + fitted_max) / 2.0
+        assert distribution.apply("WR", inside_top_bin).extrapolated is False
+        assert distribution.apply("WR", fitted_max).extrapolated is False
+        assert distribution.apply("WR", fitted_max + 0.1).extrapolated is True
+
     def test_sample_size_is_reported(self):
         assert self._fitted().apply("WR", 12.0).sample_size > 0
 

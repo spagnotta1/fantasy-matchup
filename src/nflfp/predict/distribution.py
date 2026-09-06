@@ -176,6 +176,12 @@ class ResidualDistribution:
     max_bins: int = 12
     _bins: dict[str, list[_Bin]] = field(default_factory=dict)
     _pooled: dict[str, list[float]] = field(default_factory=dict)
+    #: Largest projection actually seen while fitting, per position. This is
+    #: what ``extrapolated`` is measured against -- not a bin edge. The top bin
+    #: is open-ended by construction (``upper`` is ``+inf``), so comparing
+    #: against the *second* bin's upper edge flags every projection in the top
+    #: bin, which for equal-count bins is 1/``max_bins`` of the board.
+    _max_predicted: dict[str, float] = field(default_factory=dict)
 
     def fit(self, samples: Sequence[tuple[str, float, float]]) -> "ResidualDistribution":
         """Fit from ``(position, predicted_points, actual_points)`` triples."""
@@ -183,11 +189,13 @@ class ResidualDistribution:
         for position, predicted, actual in samples:
             by_position.setdefault(position, []).append((predicted, actual))
 
-        self._bins, self._pooled = {}, {}
+        self._bins, self._pooled, self._max_predicted = {}, {}, {}
         for position, pairs in by_position.items():
             pairs.sort(key=lambda pair: pair[0])
             self._pooled[position] = sorted(actual - predicted for predicted, actual in pairs)
             self._bins[position] = self._make_bins(pairs)
+            # pairs is sorted by predicted, so the last one is the fitted ceiling.
+            self._max_predicted[position] = float(pairs[-1][0])
 
         logger.info(
             "fitted residual distribution: %s",
@@ -230,18 +238,26 @@ class ResidualDistribution:
         return bins
 
     def _select(self, position: str, predicted: float) -> tuple[list[float], bool]:
-        """Residuals for this projection, plus whether we extrapolated."""
+        """Residuals for this projection, plus whether we extrapolated.
+
+        ``extrapolated`` means what the module docstring says it means: this
+        projection is larger than anything seen while fitting, so the topmost
+        bin's residuals are being reused outside the range that produced them.
+        It is deliberately *not* "landed in the top bin" -- the top bin holds
+        1/``max_bins`` of the training data by construction, so that reading
+        flagged roughly 8% of every position's board as an extrapolation and
+        drained the meaning out of a flag that reaches the user.
+        """
+        ceiling = self._max_predicted.get(position)
+        extrapolated = ceiling is not None and predicted > ceiling
+
         bins = self._bins.get(position)
         if not bins:
-            pooled = self._pooled.get(position, [])
-            return pooled, False
+            return self._pooled.get(position, []), extrapolated
 
         uppers = [b.upper for b in bins[:-1]]
         index = bisect_right(uppers, predicted)
         chosen = bins[min(index, len(bins) - 1)]
-        extrapolated = index >= len(bins) - 1 and predicted > max(
-            (b.upper for b in bins[:-1]), default=float("-inf")
-        )
         return chosen.residuals, extrapolated
 
     def apply(self, position: str, predicted_points: float) -> PointDistribution:
