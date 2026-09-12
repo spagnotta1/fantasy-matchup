@@ -325,6 +325,8 @@ export const projectionSchema = z.object({
   usage: usageSchema,
   matchup: matchupSchema.nullish(),
   context: contextSchema,
+  /** Provenance `actual`: what the player scored, for a week already played. */
+  actual_points: maybeNumber,
 })
 export type Projection = z.infer<typeof projectionSchema>
 

@@ -371,6 +371,9 @@ class PlayerProjection:
     weather: WeatherContext | None = None
     injury: InjuryContext | None = None
     model: ModelRef | None = None
+    #: Provenance ``actual``: what the player scored, for a week already
+    #: played. ``None`` for a week with no result yet — never a stand-in zero.
+    actual_points: float | None = None
 
     # -- correlation ---------------------------------------------------------
     # Every probabilistic combination in this codebase assumes independence, and

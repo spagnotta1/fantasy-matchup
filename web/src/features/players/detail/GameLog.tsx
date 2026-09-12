@@ -67,8 +67,14 @@ export function GameLog({
 }) {
   const [view, setView] = useState<'chart' | 'table'>('chart')
 
-  // The API returns newest first; a time axis reads oldest to newest.
-  const chronological = useMemo(() => [...history].reverse(), [history])
+  // A time axis reads oldest to newest. Sorted explicitly rather than trusting
+  // the API's newest-first order and reversing it — a season boundary or a
+  // duplicate (season, week) row from an upstream join would otherwise land
+  // out of sequence with no defense on this side.
+  const chronological = useMemo(
+    () => [...history].sort((a, b) => a.season - b.season || a.week - b.week),
+    [history],
+  )
 
   const data = useMemo<Datum[]>(
     () =>

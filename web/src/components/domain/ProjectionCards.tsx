@@ -111,7 +111,11 @@ function CardGrid({
                   </p>
                 </div>
                 <div className="text-right">
-                  <ProjectionValue points={points} size="lg" />
+                  <ProjectionValue
+                    points={points}
+                    size="lg"
+                    actualPoints={projection.actual_points}
+                  />
                   <p className="text-ink-muted text-[0.625rem] tracking-wide uppercase">
                     Projected
                   </p>

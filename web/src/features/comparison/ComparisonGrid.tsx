@@ -38,6 +38,13 @@ const METRICS: Metric[] = [
     value: (entry) => entry.expected ?? null,
   },
   {
+    label: 'Actual',
+    hint: 'if played',
+    better: 'higher',
+    group: 'projection',
+    value: (entry) => entry.projection.actual_points ?? null,
+  },
+  {
     label: 'Floor',
     hint: 'P10',
     better: 'higher',

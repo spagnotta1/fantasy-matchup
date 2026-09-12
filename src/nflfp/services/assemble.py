@@ -386,6 +386,7 @@ def player_projection(row: Row) -> PlayerProjection:
         weather=weather_context(row) if has_weather else None,
         injury=injury_context(row) if has_injury else None,
         model=model_ref(row),
+        actual_points=as_float(row, "actual_points"),
     )
 
 

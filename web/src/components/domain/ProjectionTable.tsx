@@ -218,7 +218,7 @@ export function ProjectionTable({
                     <ConfidenceChip label={points.confidence_label} value={points.confidence} />
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <ProjectionValue points={points} />
+                    <ProjectionValue points={points} actualPoints={projection.actual_points} />
                   </td>
                 </tr>
               )
