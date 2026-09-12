@@ -162,6 +162,7 @@ def projection(source: dto.PlayerProjection) -> schemas.ProjectionOut:
             weather=weather(source.weather) if source.weather else None,
             injury=injury(source.injury) if source.injury else None,
         ),
+        actual_points=source.actual_points,
     )
 
 

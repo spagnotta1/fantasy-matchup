@@ -97,7 +97,7 @@ function TopRow({ entry }: { entry: RankedProjection }) {
       </span>
 
       <span className="w-14 shrink-0 text-right">
-        <ProjectionValue points={points} />
+        <ProjectionValue points={points} actualPoints={projection.actual_points} />
       </span>
     </li>
   )

@@ -477,6 +477,13 @@ class ProjectionOut(Schema):
     usage: UsageOut
     matchup: MatchupOut | None = None
     context: ContextOut
+    actual_points: float | None = Field(
+        default=None,
+        description=(
+            "Provenance actual: what the player scored, for a week already "
+            "played. Null when the week has no recorded result yet."
+        ),
+    )
 
 
 class RankedProjectionOut(Schema):

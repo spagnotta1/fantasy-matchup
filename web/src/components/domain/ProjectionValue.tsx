@@ -29,11 +29,20 @@ export function ProjectionValue({
    * subject: the player-detail headline.
    */
   markUncalibrated = false,
+  /**
+   * What the player actually scored, provenance `actual`.
+   *
+   * Present only for a week that has already been played. Rendered beside the
+   * projection rather than in place of it — the projection is still what the
+   * model said beforehand, and the two numbers answer different questions.
+   */
+  actualPoints,
   className,
 }: {
   points: Points | null | undefined
   size?: 'sm' | 'md' | 'lg' | 'xl'
   markUncalibrated?: boolean
+  actualPoints?: number | null
   className?: string
 }) {
   const { value, calibrated } = headlinePoints(points)
@@ -56,6 +65,13 @@ export function ProjectionValue({
             aria-label="Uncalibrated projection"
             className="text-caution size-3.5"
           />
+        </Tooltip>
+      )}
+      {actualPoints !== null && actualPoints !== undefined && (
+        <Tooltip content="Actual: a recorded outcome from a completed game, not a prediction.">
+          <span className="text-ink-muted tnum text-xs font-medium">
+            actual {formatPoints(actualPoints)}
+          </span>
         </Tooltip>
       )}
     </span>

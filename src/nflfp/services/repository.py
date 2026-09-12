@@ -384,7 +384,9 @@ _PROJECTION_COLUMNS = """
         c.weather_captured_at,
 
         g.gameday,
-        g.gametime
+        g.gametime,
+
+        pw.{points_column} AS actual_points
 """
 
 #: The joins those columns come from. ``do_`` is spelled with a trailing
@@ -408,6 +410,8 @@ _PROJECTION_JOINS = """
       ON c.game_id = p.game_id AND c.team = p.team
     LEFT JOIN game_team AS g
       ON g.game_id = p.game_id AND g.team = p.team
+    LEFT JOIN player_week AS pw
+      ON pw.player_id = p.player_id AND pw.season = p.season AND pw.week = p.week
 """
 
 
@@ -525,7 +529,7 @@ async def fetch_projections(
     Returns:
         Row mappings ordered best-first.
     """
-    _profile_column(scoring_profile)  # validation only; the value is bound
+    points_column = _profile_column(scoring_profile)
     await require_relations(
         session,
         "projections",
@@ -535,6 +539,7 @@ async def fetch_projections(
         "feat_defense_position",
         "feat_defense_game",
         "feat_game_context",
+        "player_week",
     )
 
     clauses = ["p.season = :season", "p.week = :week"]
@@ -567,7 +572,7 @@ async def fetch_projections(
     WITH {_PUBLISHED_RUN_CTE},
     {_DEFENSE_FORM_CTE}
     SELECT
-{_PROJECTION_COLUMNS}
+{_PROJECTION_COLUMNS.format(points_column=points_column)}
 {_PROJECTION_JOINS}
     WHERE {' AND '.join(clauses)}
     ORDER BY COALESCE(pp.expected_points, pp.predicted_points) DESC,
@@ -927,13 +932,20 @@ async def fetch_player_history(
             pw.injury_report_status,
             COALESCE(pp.expected_points, pp.predicted_points) AS projected_points
         FROM player_week AS pw
-        LEFT JOIN projections AS p
+        LEFT JOIN (
+            SELECT DISTINCT ON (p.player_id, p.season, p.week)
+                p.id, p.player_id, p.season, p.week
+            FROM projections AS p
+            JOIN model_runs AS mr
+              ON mr.id = p.model_run_id
+             AND mr.status IN ('published', 'superseded')
+            ORDER BY p.player_id, p.season, p.week,
+                     mr.status = 'published' DESC,
+                     mr.published_at DESC NULLS LAST
+        ) AS p
                ON p.player_id = pw.player_id
               AND p.season = pw.season
               AND p.week = pw.week
-        LEFT JOIN model_runs AS mr
-               ON mr.id = p.model_run_id
-              AND mr.status IN ('published', 'superseded')
         LEFT JOIN projection_points AS pp
                ON pp.projection_id = p.id
               AND pp.scoring_profile = :scoring_profile
