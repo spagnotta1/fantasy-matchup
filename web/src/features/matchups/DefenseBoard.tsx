@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { ArrowDown, ArrowUp, ShieldQuestion } from 'lucide-react'
 
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
@@ -9,6 +9,7 @@ import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { usePositions } from '@/hooks/useCatalog'
 import { useDefenseRankings } from '@/hooks/useMatchups'
+import { useUrlState } from '@/hooks/useUrlState'
 import { cn } from '@/utils/cn'
 import { formatPoints } from '@/utils/format'
 import type { PositionMatchup } from '@/api/schemas'
@@ -19,6 +20,15 @@ interface DefenseRow {
 }
 
 type DefenseSort = 'rank' | 'fp' | 'targets' | 'carries' | 'yards' | 'team'
+type DefenseDirection = 'asc' | 'desc'
+
+interface DefenseBoardState {
+  position: string
+  sort: DefenseSort
+  direction: DefenseDirection
+}
+
+const DEFAULT_STATE: DefenseBoardState = { position: '', sort: 'rank', direction: 'asc' }
 
 const COLUMNS: { key: DefenseSort; label: string; numeric: boolean; className?: string }[] = [
   { key: 'rank', label: 'Rank', numeric: false, className: 'w-16' },
@@ -47,13 +57,19 @@ export function DefenseBoard() {
     () => (positions.data ?? []).filter((entry) => entry.projected),
     [positions.data],
   )
-  const [position, setPosition] = useState<string | null>(null)
-  const active = position ?? projected[0]?.position ?? null
+  // URL-backed rather than `useState`: `MatchupsPage` unmounts this component
+  // whenever the Games/Defence tab is toggled, which used to reset the
+  // position/sort/direction picks back to their defaults on every switch.
+  const [state, setState] = useUrlState(DEFAULT_STATE)
+  const active = state.position || projected[0]?.position || null
+  const { sort, direction } = state
+  const setPosition = useCallback(
+    (value: string) => setState({ position: value }),
+    [setState],
+  )
 
   const { data, isPending, isError, error, refetch, isPlaceholderData } =
     useDefenseRankings(active)
-  const [sort, setSort] = useState<DefenseSort>('rank')
-  const [direction, setDirection] = useState<'asc' | 'desc'>('asc')
 
   const rows = useMemo<DefenseRow[]>(() => {
     if (!data) return []
@@ -69,13 +85,12 @@ export function DefenseBoard() {
 
   const onSort = (key: DefenseSort) => {
     if (key === sort) {
-      setDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+      setState({ direction: direction === 'asc' ? 'desc' : 'asc' })
       return
     }
-    setSort(key)
     // Rank and team read low-to-high; the volume columns are "who gives up the
     // most", which is descending.
-    setDirection(key === 'rank' || key === 'team' ? 'asc' : 'desc')
+    setState({ sort: key, direction: key === 'rank' || key === 'team' ? 'asc' : 'desc' })
   }
 
   return (

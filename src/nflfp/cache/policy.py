@@ -60,6 +60,13 @@ RULES: tuple[CacheRule, ...] = (
         900,
         "published availability, which gains a week when the weekly job publishes",
     ),
+    # Must precede the bare "/api/v1/teams" rule below: a team's outlook is
+    # not the branding lookup — it carries this week's projected points, odds
+    # and weather, the same live-market category the matchups rules bound to
+    # five minutes. Left to fall through to the branding rule, it would serve
+    # up to an hour of stale odds/projections after a correction or a week
+    # rollover.
+    CacheRule("/api/v1/teams/", 300, "reads the slate plus live market/weather context"),
     CacheRule("/api/v1/teams", 3600, "branding dimension, effectively static"),
     CacheRule("/api/v1/games", 600, "the schedule moves only for flexed kickoffs"),
     CacheRule(

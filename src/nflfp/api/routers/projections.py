@@ -127,6 +127,7 @@ async def position_rankings(
         week=slate_query.week,
         scoring_profile=slate_query.scoring_profile,
         limit=page.limit,
+        offset=page.offset,
     )
     return Board(
         data=[mappers.ranked(entry) for entry in slate.entries],

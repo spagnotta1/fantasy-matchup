@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { SearchX } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
@@ -12,9 +12,21 @@ import { ProjectionTable } from '@/components/domain/ProjectionTable'
 import { PlayerFilters, type ExplorerFilters, type ViewMode } from '@/features/players/PlayerFilters'
 import { useBoard } from '@/hooks/useProjections'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { useUrlState } from '@/hooks/useUrlState'
 import { matchesQuery, sortBoard, type SortDirection, type SortKey } from '@/utils/board'
 
+interface PlayersPageState extends ExplorerFilters {
+  direction: SortDirection
+  view: ViewMode
+}
+
 const DEFAULT_FILTERS: ExplorerFilters = { query: '', position: '', team: '', sort: 'rank' }
+
+const DEFAULT_STATE: PlayersPageState = {
+  ...DEFAULT_FILTERS,
+  direction: 'asc',
+  view: 'table',
+}
 
 /**
  * Browse every projected player for the week.
@@ -24,11 +36,37 @@ const DEFAULT_FILTERS: ExplorerFilters = { query: '', position: '', team: '', so
  * lazy: the API can filter but not name-search a board, and it returns the
  * whole slate in one page — so client-side work here operates on the complete
  * set, never on a page of it.
+ *
+ * Filters live in the URL (`useUrlState`), not local `useState`: this route
+ * unmounts on navigation (e.g. opening a player), so anything held in plain
+ * component state is gone the moment the user comes back.
  */
 export default function PlayersPage() {
-  const [filters, setFilters] = useState<ExplorerFilters>(DEFAULT_FILTERS)
-  const [direction, setDirection] = useState<SortDirection>('asc')
-  const [view, setView] = useState<ViewMode>('table')
+  const [state, setState] = useUrlState(DEFAULT_STATE)
+  const filters: ExplorerFilters = {
+    query: state.query,
+    position: state.position,
+    team: state.team,
+    sort: state.sort as SortKey,
+  }
+  const direction = state.direction as SortDirection
+  const view = state.view as ViewMode
+
+  // A sort change from the dropdown carries no direction of its own, so it is
+  // folded in here (one URL write) rather than a follow-up effect: two
+  // `setState` calls in the same tick would each start from the same stale
+  // search params and the second would clobber the first.
+  const setFilters = useCallback(
+    (next: ExplorerFilters) => {
+      const patch: Partial<PlayersPageState> = { ...next }
+      if (next.sort !== filters.sort) {
+        patch.direction = next.sort === 'rank' || next.sort === 'name' ? 'asc' : 'desc'
+      }
+      setState(patch)
+    },
+    [setState, filters.sort],
+  )
+  const setView = useCallback((next: ViewMode) => setState({ view: next }), [setState])
 
   // Below `sm` the table is not offered at all, so the toggle cannot strand
   // someone on a layout their screen cannot show.
@@ -49,21 +87,15 @@ export default function PlayersPage() {
   const onSort = useCallback(
     (key: SortKey) => {
       if (key === filters.sort) {
-        setDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+        setState({ direction: direction === 'asc' ? 'desc' : 'asc' })
         return
       }
-      setFilters((current) => ({ ...current, sort: key }))
       // Rank and name read naturally low-to-high; every other column is a
       // "who is best" question, which is descending.
-      setDirection(key === 'rank' || key === 'name' ? 'asc' : 'desc')
+      setState({ sort: key, direction: key === 'rank' || key === 'name' ? 'asc' : 'desc' })
     },
-    [filters.sort],
+    [filters.sort, direction, setState],
   )
-
-  // Changing the sort from the dropdown should behave like clicking its header.
-  useEffect(() => {
-    setDirection(filters.sort === 'rank' || filters.sort === 'name' ? 'asc' : 'desc')
-  }, [filters.sort])
 
   const total = data?.data.length ?? 0
   const filtered = filters.query.trim().length > 0 || filters.position !== '' || filters.team !== ''

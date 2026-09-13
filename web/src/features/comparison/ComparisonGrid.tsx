@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ConfidenceChip } from '@/components/domain/ConfidenceChip'
+import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { OutcomeRange } from '@/components/domain/ProjectionValue'
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
@@ -343,12 +344,15 @@ function PlayerColumnHeader({ entry }: { entry: ComparisonEntry }) {
     <span className="flex items-center gap-2">
       <PlayerAvatar player={player} size="sm" />
       <span className="min-w-0">
-        <Link
-          to={`/players/${encodeURIComponent(player.player_id)}`}
-          className="text-ink hover:text-accent-text block truncate text-sm font-medium transition-colors"
-        >
-          {player.name}
-        </Link>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Link
+            to={`/players/${encodeURIComponent(player.player_id)}`}
+            className="text-ink hover:text-accent-text block truncate text-sm font-medium transition-colors"
+          >
+            {player.name}
+          </Link>
+          <InjuryBadge injury={entry.projection.context.injury} />
+        </span>
         <span className="text-ink-muted block truncate text-xs font-normal">
           {[player.position, entry.projection.team].filter(Boolean).join(' · ')}
         </span>
