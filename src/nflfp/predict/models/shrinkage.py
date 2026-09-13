@@ -129,9 +129,15 @@ class ShrinkageModel:
     _params: dict[tuple[str, str], ShrinkageParams] = field(default_factory=dict)
 
     #: Declared so the feature contract can be enforced. See predict/features.py.
+    #: Must list every column `_predict_one` reads, not just the two used for
+    #: the shrink weight — otherwise a future feature exclusion (the same class
+    #: of train/serve-skew bug the market/weather exclusions guard against)
+    #: could land on one of the per-component `_l4` columns below without
+    #: `assert_available` ever seeing it.
     required_features: tuple[str, ...] = (
         "games_in_window_l4",
         "fp_half_ppr_l4",
+        *(f"{COMPONENT_TO_COLUMN[component]}_l4" for component in MODELLED_COMPONENTS),
     )
 
     def __post_init__(self) -> None:

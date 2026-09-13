@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom'
-import { CloudRain, HeartPulse } from 'lucide-react'
+import { CloudRain } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
 import { ConfidenceChip } from '@/components/domain/ConfidenceChip'
+import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
@@ -141,11 +142,7 @@ function CardGrid({
                   fpAllowed={projection.matchup?.fp_allowed_vs_position_l4}
                 />
                 <ConfidenceChip label={points.confidence_label} value={points.confidence} />
-                {injury?.is_questionable_or_worse && (
-                  <Badge tone="caution" icon={<HeartPulse className="size-3" />}>
-                    {injury.report_status ?? 'Questionable'}
-                  </Badge>
-                )}
+                <InjuryBadge injury={injury} />
                 {weather?.is_adverse && (
                   <Badge tone="info" icon={<CloudRain className="size-3" />}>
                     Weather

@@ -333,6 +333,20 @@ class TestProjectionEndpoints:
         )
         assert [e["positional_rank"] for e in entries] == [1]
 
+    async def test_position_rankings_honours_offset(self, client):
+        """Regression test: the route used to declare `offset` and then drop
+        it before calling the service, so every page silently returned page
+        one's rows while `meta.page.offset` claimed the requested offset."""
+        first = await client.get(
+            url("/rankings/WR"), params={"season": SEASON, "limit": 1, "offset": 0}
+        )
+        second = await client.get(
+            url("/rankings/WR"), params={"season": SEASON, "limit": 1, "offset": 1}
+        )
+        assert len(first.json()["data"]) == 1
+        assert second.json()["data"] == []
+        assert second.json()["meta"]["page"]["offset"] == 1
+
 
 class TestPlayerEndpoints:
     async def test_search(self, client):

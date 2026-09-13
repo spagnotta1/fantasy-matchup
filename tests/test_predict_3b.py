@@ -94,6 +94,23 @@ class TestFeatureContract:
             required = getattr(model, "required_features", ())
             feature_contract.assert_available(required)
 
+    def test_shrinkage_declares_every_column_it_reads(self):
+        """`required_features` used to list only the two columns behind the
+        shrink weight, not the nine per-component `_l4` columns `_predict_one`
+        actually reads — so a future exclusion of any of those nine would slip
+        past `assert_available` unnoticed. This pins the full read set."""
+        from nflfp.predict.models.shrinkage import (
+            MODELLED_COMPONENTS,
+            ShrinkageModel,
+        )
+        from nflfp.predict.scoring_bridge import COMPONENT_TO_COLUMN
+
+        model = ShrinkageModel()
+        expected = {"games_in_window_l4", "fp_half_ppr_l4"} | {
+            f"{COMPONENT_TO_COLUMN[component]}_l4" for component in MODELLED_COMPONENTS
+        }
+        assert set(model.required_features) == expected
+
     def test_no_feature_table_column_is_left_undeclared(self):
         """The contract has two states, not three.
 

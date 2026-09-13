@@ -178,6 +178,7 @@ async def get_position_rankings(
     week: int | None = None,
     scoring_profile: str | None = None,
     limit: int = DEFAULT_PAGE_SIZE,
+    offset: int = 0,
 ) -> tuple[Slate, SlateWindow]:
     """A single-position board — the QB/RB/WR/TE rankings screen.
 
@@ -192,6 +193,7 @@ async def get_position_rankings(
         scoring_profile=scoring_profile,
         positions=[position],
         limit=limit,
+        offset=offset,
     )
 
 

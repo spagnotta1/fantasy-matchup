@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
 import { PlayerSearchField } from '@/components/domain/PlayerSearchField'
 import { ProjectionValue } from '@/components/domain/ProjectionValue'
@@ -186,7 +187,10 @@ function SlotRow({
         >
           <PlayerAvatar player={row.player} size="sm" />
           <span className="min-w-0 flex-1">
-            <span className="text-ink block truncate text-sm font-medium">{row.player.name}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="text-ink truncate text-sm font-medium">{row.player.name}</span>
+              {!blocked && <InjuryBadge injury={projection?.context.injury} />}
+            </span>
             <span
               className={cn(
                 'block truncate text-xs',

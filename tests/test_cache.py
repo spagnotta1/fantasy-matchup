@@ -246,7 +246,13 @@ class TestPolicy:
 
     @pytest.mark.parametrize(
         "path",
-        ["/api/v1/projections", "/api/v1/rankings/WR", "/api/v1/start-sit", "/api/v1/compare"],
+        [
+            "/api/v1/projections",
+            "/api/v1/rankings/WR",
+            "/api/v1/start-sit",
+            "/api/v1/compare",
+            "/api/v1/teams/KC/outlook",
+        ],
     )
     def test_slate_endpoints_are_bounded_by_forward_week_resolution(self, path):
         """The default week rolls over at kickoff with no publish to signal it,
@@ -257,6 +263,13 @@ class TestPolicy:
     def test_more_specific_prefixes_win(self):
         # /api/v1/health must not be shadowed by a broader rule added later.
         assert policy.RULES[0].prefix == "/api/v1/health"
+
+    def test_team_outlook_does_not_inherit_the_branding_ttl(self):
+        """/teams/{team}/outlook carries this week's live projections, odds
+        and weather — it must not fall through to the effectively-static
+        /teams (branding) rule just because it shares the path prefix."""
+        assert policy.ttl_for("/api/v1/teams") == 3600
+        assert policy.ttl_for("/api/v1/teams/KC/outlook") == 300
 
     def test_every_rule_states_a_reason(self):
         """A TTL with no reasoning attached is a number nobody can safely

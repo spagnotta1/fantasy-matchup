@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { Layers, SearchX } from 'lucide-react'
 
@@ -18,9 +18,24 @@ import type { ViewMode } from '@/features/players/PlayerFilters'
 import { usePositions } from '@/hooks/useCatalog'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useBoard, usePositionRankings } from '@/hooks/useProjections'
+import { useUrlState } from '@/hooks/useUrlState'
 import { useSlate } from '@/app/slate-context'
 import { matchesQuery, sortBoard, type SortDirection, type SortKey } from '@/utils/board'
 import { formatScoringProfile } from '@/utils/format'
+
+interface RankingsPageState {
+  query: string
+  sort: SortKey
+  direction: SortDirection
+  view: ViewMode
+}
+
+const DEFAULT_STATE: RankingsPageState = {
+  query: '',
+  sort: 'rank',
+  direction: 'asc',
+  view: 'table',
+}
 
 /**
  * The weekly board.
@@ -51,10 +66,10 @@ export default function RankingsPage() {
   // look identical.
   const unknownPosition = position !== null && positions.isSuccess && support === null
 
-  const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<SortKey>('rank')
-  const [direction, setDirection] = useState<SortDirection>('asc')
-  const [view, setView] = useState<ViewMode>('table')
+  const [state, setState] = useUrlState(DEFAULT_STATE)
+  const { query, sort, direction, view } = state
+  const setQuery = useCallback((value: string) => setState({ query: value }), [setState])
+  const setView = useCallback((value: ViewMode) => setState({ view: value }), [setState])
 
   const isCompact = useMediaQuery('(max-width: 639px)')
   const effectiveView: ViewMode = isCompact ? 'cards' : view
@@ -70,28 +85,40 @@ export default function RankingsPage() {
     return sortBoard(matched, sort, direction)
   }, [active.data, query, sort, direction])
 
+  // Both keys land in one `setState` call: two calls in the same tick would
+  // each read the same stale search params and the second would clobber the
+  // first (see `hooks/useUrlState.ts`).
   const onSort = useCallback(
     (key: SortKey) => {
       if (key === sort) {
-        setDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+        setState({ direction: direction === 'asc' ? 'desc' : 'asc' })
         return
       }
-      setSort(key)
-      setDirection(key === 'rank' || key === 'name' ? 'asc' : 'desc')
+      setState({ sort: key, direction: key === 'rank' || key === 'name' ? 'asc' : 'desc' })
     },
-    [sort],
+    [sort, direction, setState],
   )
 
-  useEffect(() => {
-    setDirection(sort === 'rank' || sort === 'name' ? 'asc' : 'desc')
-  }, [sort])
+  // Sorting from the dropdown should behave like clicking its header.
+  const onSortChange = useCallback(
+    (key: SortKey) =>
+      setState({ sort: key, direction: key === 'rank' || key === 'name' ? 'asc' : 'desc' }),
+    [setState],
+  )
 
   // Reset the search when the board changes underneath it: a term that matched
   // four running backs matches nothing on the tight end board, and an empty
-  // screen the user did not ask for reads as a broken page.
+  // screen the user did not ask for reads as a broken page. Skipped on the
+  // first render so a deep link with `?query=` intact — e.g. from Back/Forward
+  // or a shared URL — isn't wiped the instant the page mounts.
+  const isFirstRender = useRef(true)
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
     setQuery('')
-  }, [position])
+  }, [position, setQuery])
 
   const showTiers = sort === 'rank' && direction === 'asc' && position !== null
   const total = active.data?.data.length ?? 0
@@ -126,7 +153,7 @@ export default function RankingsPage() {
             query={query}
             onQueryChange={setQuery}
             sort={sort}
-            onSortChange={setSort}
+            onSortChange={onSortChange}
             view={effectiveView}
             onViewChange={setView}
             resultCount={entries.length}
