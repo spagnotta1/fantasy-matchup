@@ -82,11 +82,28 @@ class Job:
     def is_scheduled(self) -> bool:
         """Whether this job fires on a timer.
 
-        ``run-all`` and the Railway config generator both consult this, so a
+        ``run-all`` and the Railway reconciler both consult this, so a
         manual-only job cannot be swept into a batch by accident — which for
         ``invalidate_cache`` would mean discarding the cache on every run.
         """
         return self.schedule != MANUAL
+
+    @property
+    def service_name(self) -> str:
+        """The Railway service this job runs as.
+
+        Job names are ``snake_case`` because they are Python identifiers;
+        Railway services are ``kebab-case`` by its own convention. The mapping
+        used to be an inline ``replace`` inside the config generator, which
+        meant two places would have had to agree about it the moment anything
+        else needed to resolve a service. One function owns it instead.
+        """
+        return self.name.replace("_", "-")
+
+    @property
+    def start_command(self) -> str:
+        """The container command this job's service runs."""
+        return f"python -m nflfp.jobs run {self.name}"
 
     def __call__(self, context: JobContext) -> JobOutcome:
         return self.func(context)

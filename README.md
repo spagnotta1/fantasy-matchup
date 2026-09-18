@@ -949,15 +949,18 @@ symptom is a response shape that no single commit explains. The default command
 is the API, because that is the service that must come up by itself after a
 platform restart.
 
-Service configs live in [`deploy/`](deploy/), and all but one are **generated**:
+Cadence is declared once, in the job registry, and reconciled against Railway
+rather than written to a file — see [`deploy/`](deploy/):
 
 ```powershell
-python -m nflfp.jobs schedule --emit deploy/
+python -m nflfp.jobs schedule --check    # registry vs what Railway runs
+python -m nflfp.jobs schedule --apply    # push the registry to Railway
 ```
 
-Cadence is declared once, in the job registry. A generator rather than hand-
-written files is what makes "the deployed cron" and "the documented cron"
-provably the same numbers — and `tests/test_jobs.py` asserts it.
+Checking the deployed state rather than a generated file is what makes "the
+deployed cron" and "the documented cron" provably the same numbers. The
+generator this replaced asserted only that its own output matched the registry,
+which stayed true after Railway stopped reading the files at all.
 
 ### Liveness and readiness are different questions
 
@@ -1375,8 +1378,9 @@ Nothing here is asserted without a check that fails loudly:
 | Warmed paths are actually cached | every `warmable_path` | TTL > 0 |
 | Production path rejects leakage | train rows at/after target week | `ValueError`, per-row count |
 | No distribution means not stored | position with no residuals | dropped and counted |
-| Emitted cron ≡ registry | `schedule --emit` vs `REGISTRY` | schedules and commands match |
-| A manual job gets no cron service | `invalidate_cache`, `backfill_projections` | no file emitted, absent from `run-all` |
+| Deployed cron ≡ registry | `schedule --check` vs live Railway | zero drift across 9 services |
+| Drift is detected | edited cadence, stubbed + live | named, exit 1 |
+| A manual job gets no cron service | `invalidate_cache`, `backfill_projections` | never in `desired_services`, absent from `run-all` |
 | Backfill ≡ the weekly job | `FitCache` vs `cache=None` | identical residual samples |
 | A backfilled week sees no future | cached range sliced per week | strictly increasing, prefix only |
 | Too little history is refused | 2016-17, no residual fold | 34 weeks skipped with a reason, 141 published |
@@ -1481,13 +1485,13 @@ railway up
 
 `railway.json` at the root is the **API** service — always on, health-checked at
 `/api/v1/health/live`. Every other service is a cron that runs and exits, so it
-costs nothing between runs, and each points at a config file in `deploy/`.
+costs nothing between runs, and each carries its own start command and cron.
 
 > **Upgrading an existing deployment:** the root `railway.json` used to be the
-> pipeline cron and is now the API. If you already have a cron service deployed
-> from the repository root, point its config path at
-> `deploy/railway.pipeline.json` before the next deploy — otherwise it will come
-> back as a web service.
+> pipeline cron and is now the API. Railway auto-detects that one path, so a
+> cron service deployed from the repository root will come back as a web
+> service; give it an explicit start command and schedule with
+> `python -m nflfp.jobs schedule --apply` instead.
 
 Then, once, by hand — the crons only ever do incremental work:
 

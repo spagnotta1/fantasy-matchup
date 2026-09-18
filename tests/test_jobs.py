@@ -119,31 +119,23 @@ class TestJobRegistry:
         with pytest.raises(ValueError, match="duplicate"):
             registry.register(Job("x", lambda c: JobOutcome(), "* * * * *", "d"))
 
-    def test_emitted_railway_config_matches_the_registry(self, tmp_path):
-        """The registry is the single source of truth for cadence. If the
-        generated config could disagree with it, the deployed cron and the
-        documented one are two different numbers."""
-        from nflfp.jobs.__main__ import main
+    def test_the_deployed_schedule_is_checked_against_railway_not_a_file(self):
+        """Cadence reaches Railway through `schedule --check` / `--apply`, not
+        through a generated config file.
 
-        assert main(["schedule", "--emit", str(tmp_path)]) == 0
+        There used to be a `schedule --emit` that wrote one
+        `deploy/railway.<job>.json` per job, and a test here asserting those
+        files matched the registry. The assertion was true and worthless:
+        Railway deprecated pointing a service at a config path outside the
+        repository root, so nothing read them, and the schedules could drift
+        freely while this file stayed green. The real assertions now live in
+        `tests/test_jobs_railway.py`, against what Railway reports.
+        """
+        from nflfp.jobs import railway
 
-        import json
-
-        emitted = {path.name: json.loads(path.read_text()) for path in tmp_path.glob("*.json")}
-        assert len(emitted) == len(REGISTRY.scheduled())
-
+        names = {service.name for service in railway.desired_services()}
         for job in REGISTRY.scheduled():
-            config = emitted[f"railway.{job.name.replace('_', '-')}.json"]
-            assert config["deploy"]["cronSchedule"] == job.schedule
-            assert config["deploy"]["startCommand"] == f"python -m nflfp.jobs run {job.name}"
-            # A cron job that exits 0 is finished, not crashed.
-            assert config["deploy"]["restartPolicyType"] == "NEVER"
-
-    def test_a_manual_job_gets_no_cron_service(self, tmp_path):
-        from nflfp.jobs.__main__ import main
-
-        main(["schedule", "--emit", str(tmp_path)])
-        assert not list(tmp_path.glob("*invalidate*"))
+            assert job.service_name in names
 
     def test_no_provider_module_hard_codes_a_schedule(self):
         """The whole point of declaring cadence in the registry."""
