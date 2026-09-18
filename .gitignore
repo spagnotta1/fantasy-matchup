@@ -42,3 +42,6 @@ artifacts/panel_*.jsonl
 .idea/
 .DS_Store
 Thumbs.db
+
+# Claude Code local permissions (personal, not shared)
+.claude/settings.local.json

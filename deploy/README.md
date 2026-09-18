@@ -41,7 +41,7 @@ the benefit it exists to provide. Run it by hand after a data correction that
 changes what an already-published run joins against.
 
 ```powershell
-railway run python -m nflfp.jobs run invalidate_cache
+railway ssh --service api "python -m nflfp.jobs run invalidate_cache"
 ```
 
 ## Variables
@@ -84,11 +84,17 @@ railway up
 Then, once, by hand — the crons only ever do incremental work:
 
 ```powershell
-railway run python -m nflfp.pipeline full          # ~1.8M rows
-railway run alembic upgrade head                   # application tables
-railway run python -m nflfp.jobs run build_features
-railway run python -m nflfp.jobs run generate_projections --publish
+railway ssh --service api "python -m nflfp.pipeline full"          # ~1.8M rows
+railway ssh --service api "alembic upgrade head"                   # application tables
+railway ssh --service api "python -m nflfp.jobs run build_features"
+railway ssh --service api "python -m nflfp.jobs run generate_projections --publish"
 ```
+
+`railway ssh`, not `railway run`. `railway run` injects the service's variables
+into a process on **your** machine, and `DATABASE_URL` resolves to
+`postgres.railway.internal` — a host that exists only inside Railway's network.
+Locally it fails with `getaddrinfo failed` before it opens a connection. The
+commands have to execute inside the network, which is what `ssh` does.
 
 Until that sequence completes, every endpoint returns `503` naming the command
 it is waiting on. That is by design — a fresh deployment where the default week

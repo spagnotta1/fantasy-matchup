@@ -36,6 +36,16 @@ SOURCE_TABLE = "feat_training_dataset"
 #: column in it is null, so ``completed_only`` returns nothing.
 PRESEASON_TABLE = "feat_preseason_slate"
 
+#: The next unplayed week of a season in progress, in the same columns.
+#: :data:`SOURCE_TABLE` is built from recorded production and therefore has no
+#: row for a game nobody has played — which is every game the weekly job exists
+#: to project. This carries those rows. It cannot collide with
+#: :data:`SOURCE_TABLE`: a team's game is either played (there) or not (here),
+#: never both, so a partially-played week resolves to the union of the two.
+#: Training must never load from here, and cannot, for the same reason the
+#: preseason slate cannot — every target column is null.
+UPCOMING_TABLE = "feat_upcoming_slate"
+
 
 def load_rows(
     session: Session,
@@ -54,9 +64,10 @@ def load_rows(
         positions: Restrict to these positions.
         completed_only: Only rows with a realised outcome — the training set.
         upcoming_only: Only rows without one — what there is to project.
-        source: Which feature table to read. Defaults to :data:`SOURCE_TABLE`
-            and is only ever moved to :data:`PRESEASON_TABLE`, by
-            :mod:`nflfp.predict.generate`, for a season with no rows at all.
+        source: Which feature table to read. Defaults to :data:`SOURCE_TABLE`;
+            :mod:`nflfp.predict.generate` moves it to :data:`UPCOMING_TABLE`
+            for a week that has not been played, and to
+            :data:`PRESEASON_TABLE` for a season with no rows at all.
 
     Returns:
         Rows as plain dicts, ordered chronologically then by player, which makes
@@ -69,10 +80,10 @@ def load_rows(
     """
     if completed_only and upcoming_only:
         raise ValueError("completed_only and upcoming_only are mutually exclusive")
-    if source not in (SOURCE_TABLE, PRESEASON_TABLE):
+    if source not in (SOURCE_TABLE, PRESEASON_TABLE, UPCOMING_TABLE):
         raise ValueError(
-            f"unknown feature source {source!r}; expected "
-            f"{SOURCE_TABLE!r} or {PRESEASON_TABLE!r}"
+            f"unknown feature source {source!r}; expected one of "
+            f"{SOURCE_TABLE!r}, {UPCOMING_TABLE!r} or {PRESEASON_TABLE!r}"
         )
 
     clauses = ["position = ANY(:positions)"]
