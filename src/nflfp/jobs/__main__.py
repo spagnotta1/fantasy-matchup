@@ -9,8 +9,9 @@
     python -m nflfp.jobs run invalidate_cache
     python -m nflfp.jobs run-all              # every scheduled job, in order
     python -m nflfp.jobs status               # recent run history
-    python -m nflfp.jobs schedule             # Railway cron config
-    python -m nflfp.jobs schedule --emit deploy/   # ...written as config files
+    python -m nflfp.jobs schedule             # cadences, as declared
+    python -m nflfp.jobs schedule --check     # ...vs what Railway is running
+    python -m nflfp.jobs schedule --apply     # ...push the registry to Railway
 
 Manual execution is a first-class path, not a debugging afterthought: the first
 thing anyone does after a failed scheduled run is rerun it by hand, and that
@@ -20,8 +21,6 @@ needs to be one command that logs identically to the scheduled version.
 from __future__ import annotations
 
 import argparse
-import json
-import pathlib
 import sys
 
 from ..logging import configure_logging
@@ -94,23 +93,35 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_schedule(args: argparse.Namespace) -> int:
-    """Show — or generate — the Railway config for the scheduled services.
+    """Show the declared cadences, or reconcile them with Railway.
 
-    The registry stays the single source of truth for cadence. Without
-    ``--emit`` this is a printed view of it; with ``--emit`` it writes one
-    ``railway.<job>.json`` per job, which is what Railway's config-as-code
-    expects and what stops a schedule living in two places that can disagree.
-    Regenerating after a cadence change is the whole point: the deployed cron
-    and the registry are then provably the same numbers.
+    The registry is the single source of truth. This used to *generate* config
+    files for Railway to read, which stopped working when Railway deprecated
+    pointing a service at a config path outside the repository root — leaving
+    nine files that looked authoritative and were consumed by nobody, while the
+    test asserting they matched the registry went on passing.
+
+    So the last link checks reality instead. ``--check`` asks Railway what it is
+    actually running and exits non-zero on any disagreement; ``--apply`` pushes
+    the registry's answer to the services that disagree. See
+    :mod:`nflfp.jobs.railway`.
     """
-    scheduled = REGISTRY.scheduled()
+    from .railway import (
+        CliTransport,
+        RailwayUnavailable,
+        apply as apply_schedules,
+        deployed_services,
+        desired_services,
+        diff,
+        manual_service_names,
+    )
 
-    if not args.emit:
-        print("Railway scheduled services (one service per job, same image):\n")
-        for job in scheduled:
-            print(f"  {job.name}")
+    if not (args.check or args.apply):
+        print("Scheduled services (one service per job, same image):\n")
+        for job in REGISTRY.scheduled():
+            print(f"  {job.service_name}")
             print(f"    Cron Schedule : {job.schedule}")
-            print(f"    Start Command : python -m nflfp.jobs run {job.name}")
+            print(f"    Start Command : {job.start_command}")
             print("    Restart Policy: NEVER")
             print(f"    # {job.description}\n")
         manual = [job for job in REGISTRY.all() if not job.is_scheduled]
@@ -121,24 +132,38 @@ def cmd_schedule(args: argparse.Namespace) -> int:
                 print(f"    # {job.description}\n")
         return 0
 
-    target = pathlib.Path(args.emit)
-    target.mkdir(parents=True, exist_ok=True)
-    for job in scheduled:
-        config = {
-            "$schema": "https://railway.app/railway.schema.json",
-            "build": {"builder": "DOCKERFILE", "dockerfilePath": "Dockerfile"},
-            "deploy": {
-                "startCommand": f"python -m nflfp.jobs run {job.name}",
-                "cronSchedule": job.schedule,
-                # A cron job that exits 0 is finished, not crashed. Any other
-                # policy restarts it in a loop.
-                "restartPolicyType": "NEVER",
-            },
-        }
-        path = target / f"railway.{job.name.replace('_', '-')}.json"
-        path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-        print(f"wrote {path}  ({job.schedule})")
-    return 0
+    transport = args.transport or CliTransport()
+    try:
+        if args.apply:
+            drifts = apply_schedules(transport, dry_run=args.dry_run)
+            verb = "would update" if args.dry_run else "updated"
+        else:
+            drifts = diff(
+                desired_services(), deployed_services(transport), manual_service_names()
+            )
+            verb = "drift"
+    except RailwayUnavailable as exc:
+        print(f"cannot reach Railway: {exc}", file=sys.stderr)
+        return 2
+
+    if not drifts:
+        print("registry and Railway agree — every service matches its declared cadence")
+        return 0
+
+    missing = [d for d in drifts if d.field == "service"]
+    changed = [d for d in drifts if d.field != "service"]
+
+    for drift in changed:
+        print(f"  {verb}: {drift}")
+    for drift in missing:
+        # Not created automatically: provisioning a billable service is a
+        # decision somebody should make, not a side effect of a cadence change.
+        print(f"  missing: {drift.service} has no Railway service — create it first")
+
+    if args.apply and not args.dry_run and not missing:
+        print(f"\napplied {len(changed)} change(s)")
+        return 0
+    return 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -178,14 +203,27 @@ def main(argv: list[str] | None = None) -> int:
     status_parser.add_argument("--name", default=None, help="filter to one job")
     status_parser.set_defaults(func=cmd_status)
 
-    schedule_parser = sub.add_parser("schedule", help="print or emit Railway cron config")
-    schedule_parser.add_argument(
-        "--emit",
-        metavar="DIR",
-        default=None,
-        help="write one railway.<job>.json per scheduled job into DIR",
+    schedule_parser = sub.add_parser(
+        "schedule", help="show cadences, or reconcile them with Railway"
     )
-    schedule_parser.set_defaults(func=cmd_schedule)
+    schedule_parser.add_argument(
+        "--check",
+        action="store_true",
+        help="compare Railway against the registry; exit 1 on any drift",
+    )
+    schedule_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="push the registry's cadence to the services that disagree",
+    )
+    schedule_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="with --apply, report what would change without changing it",
+    )
+    # Not a CLI flag: the seam the tests drive this through, so no test needs a
+    # network, a token, or an installed CLI.
+    schedule_parser.set_defaults(func=cmd_schedule, transport=None)
 
     args = parser.parse_args(argv)
     configure_logging()
