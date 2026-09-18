@@ -36,7 +36,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..cache import invalidate_all_sync
-from .dataset import PRESEASON_TABLE, SOURCE_TABLE, load_rows
+from .dataset import PRESEASON_TABLE, SOURCE_TABLE, UPCOMING_TABLE, load_rows
 from .distribution import ResidualDistribution
 from .persist import (
     ProjectionBundle,
@@ -215,11 +215,13 @@ def generate_week(
             week=week,
             skipped=True,
             skip_reason=(
-                f"no rows in {SOURCE_TABLE} or {PRESEASON_TABLE} for {season} "
-                f"week {week}; the warehouse or the feature views may not be "
-                "built yet. A season that has not started can only be "
-                f"projected for week 1, and only from {PRESEASON_TABLE}, which "
-                "needs that season's schedule and rosters ingested."
+                f"no rows in {SOURCE_TABLE}, {UPCOMING_TABLE} or "
+                f"{PRESEASON_TABLE} for {season} week {week}; the warehouse or "
+                "the feature views may not be built yet. An unplayed week is "
+                f"projected from {UPCOMING_TABLE}, which needs that season's "
+                "schedule and rosters ingested; a season that has not started "
+                f"at all can only be projected for week 1, from "
+                f"{PRESEASON_TABLE}."
             ),
         )
 
@@ -588,28 +590,65 @@ def _history(session: Session, cache: FitCache | None) -> list[dict]:
 
 
 def _season_rows(session: Session, season: int, cache: FitCache | None) -> list[dict]:
-    """Every feature row for a season, loaded once per backfill.
+    """Every feature row for a season — played and scheduled alike.
 
-    A season nobody has played yet has no rows in ``feat_training_dataset`` —
-    that table is built from recorded production, and there is none. Such a
-    season falls back to :data:`~nflfp.predict.dataset.PRESEASON_TABLE`, which
-    carries the same columns for week 1 built from the previous season's usage
-    window and the coming season's schedule.
+    ``feat_training_dataset`` is built from recorded production, so it holds a
+    row for every game that **has been played** and none for any game that has
+    not. The weekly job projects the latter, which is why this function reads
+    two tables and not one:
 
-    The fallback is only ever reached when the primary table is empty for the
-    season, so a season in progress is never served preseason rows, and a
-    preseason row can never displace a real one.
+    * :data:`~nflfp.predict.dataset.SOURCE_TABLE` — played games, and the only
+      thing training ever sees.
+    * :data:`~nflfp.predict.dataset.UPCOMING_TABLE` — scheduled, unplayed games
+      in the same columns, built from the schedule and each player's completed
+      history. See :mod:`nflfp.features.upcoming`.
+
+    The two are disjoint by construction: a team's game is either played or it
+    is not. A partially-played week is therefore the union of both — in 2026
+    week 2, the Thursday game came from the first and the other fifteen from
+    the second. The dedupe below is a belt-and-braces assertion of that
+    disjointness rather than an expected code path; a collision would mean the
+    warehouse holds a score for a game ``upcoming_games`` still lists, and a
+    played row must win because it describes what happened.
+
+    A season nobody has played at all has nothing in either, and falls back to
+    :data:`~nflfp.predict.dataset.PRESEASON_TABLE` — week 1 built from the
+    previous season's usage window and the coming season's schedule. That
+    fallback is reached only when both primaries are empty, so a season in
+    progress is never served preseason rows.
     """
     if cache is not None and season in cache.season_rows:
         return cache.season_rows[season]
 
     rows = load_rows(session, seasons=[season])
+    upcoming = load_rows(session, seasons=[season], source=UPCOMING_TABLE)
+    if upcoming:
+        seen = {(row["player_id"], row["season"], row["week"]) for row in rows}
+        fresh = [
+            row
+            for row in upcoming
+            if (row["player_id"], row["season"], row["week"]) not in seen
+        ]
+        if len(fresh) != len(upcoming):
+            logger.warning(
+                "%d %s row(s) for %s collided with a played row and were "
+                "dropped; a played row always wins",
+                len(upcoming) - len(fresh), UPCOMING_TABLE, season,
+            )
+        if fresh:
+            logger.info(
+                "%s: %d played row(s) from %s + %d scheduled row(s) from %s",
+                season, len(rows), SOURCE_TABLE, len(fresh), UPCOMING_TABLE,
+            )
+        rows = rows + fresh
+
     if not rows:
         rows = load_rows(session, seasons=[season], source=PRESEASON_TABLE)
         if rows:
             logger.info(
-                "%s has no rows in %s; projecting its week 1 from %s (%d row(s))",
-                season, SOURCE_TABLE, PRESEASON_TABLE, len(rows),
+                "%s has no rows in %s or %s; projecting its week 1 from %s "
+                "(%d row(s))",
+                season, SOURCE_TABLE, UPCOMING_TABLE, PRESEASON_TABLE, len(rows),
             )
     if cache is not None:
         cache.season_rows[season] = rows

@@ -100,7 +100,8 @@ Seven materialized views. Build order is dependency order:
 | `feat_defense_position_rolling` | + position | `feat_defense_position` | yes — lagged, ranked 1–32 |
 | `feat_game_context` | game, team | `game_team` + both snapshot tables | yes |
 | `feat_player_usage` | player, season, week | `player_week` | yes — all windows lagged |
-| `feat_training_dataset` | player, season, week | the four above | yes — **the model's only input** |
+| `feat_training_dataset` | player, season, week | the four above | yes — **the model's only input for played games** |
+| `feat_upcoming_slate` | player, season, week | `upcoming_games` + `raw_rosters` + `player_week` | yes — the same columns for games **not yet played** |
 
 The two `_game`/`_position` views are deliberately *not* model-ready: they
 aggregate the week they describe. Only their rolling descendants, whose windows
