@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from nflfp import pipeline
+from nflfp.etl import IngestResult
 from nflfp.jobs.definitions import _assert_provider_reached
 
 
@@ -103,32 +104,68 @@ class TestPublishBySeason:
         pipeline.publish_by_season(cur, self._dataset(), [2026])
 
 
-class _Result:
-    def __init__(self, written: int, skipped: dict[str, str]):
-        self.written, self.skipped = written, skipped
-
-
 class TestProviderReached:
-    """Per-game skips are the contract. Every game skipped is an outage."""
+    """Per-game skips are the contract. Every game skipped is an outage.
+
+    These build a real :class:`~nflfp.etl.IngestResult` rather than a stub. The
+    previous local fake gave ``skipped`` a dict, copying ``ProviderFetch`` and
+    not the type the jobs actually pass, so every case here exercised a branch
+    that could not run in production -- and the guard raised `TypeError` on the
+    live path for an hourly cron while these stayed green.
+    """
 
     def _games(self, n: int) -> list[object]:
         return [object() for _ in range(n)]
 
-    def test_every_game_skipped_and_nothing_written_raises(self):
+    def _result(self, *, fetched: int, written: int, skipped: int) -> IngestResult:
+        return IngestResult(
+            provider="espn",
+            fetched=fetched,
+            written=written,
+            skipped=skipped,
+            warnings=["2026 week 3: no markets parsed from the response"],
+        )
+
+    def test_every_game_skipped_and_nothing_fetched_raises(self):
         games = self._games(16)
-        result = _Result(0, {i: "provider returned no readable markets" for i in range(16)})
+        result = self._result(fetched=0, written=0, skipped=16)
         with pytest.raises(RuntimeError, match="outage, not an empty slate"):
             _assert_provider_reached("refresh_odds", result, games)
 
+    def test_the_outage_message_names_the_provider_warning(self):
+        games = self._games(16)
+        result = self._result(fetched=0, written=0, skipped=16)
+        with pytest.raises(RuntimeError, match="no markets parsed"):
+            _assert_provider_reached("refresh_odds", result, games)
+
+    def test_an_unchanged_market_is_not_an_outage(self):
+        """The regression. A quiet hour fetches every game and writes none.
+
+        Change detection drops snapshots identical to the last capture, so
+        ``written == 0`` is the ordinary outcome on a slate whose line has not
+        moved -- the exact shape that crashed `refresh-odds` hourly: 31 games
+        up, 30 fetched, 1 already played, nothing new to store.
+        """
+        games = self._games(31)
+        result = self._result(fetched=30, written=0, skipped=1)
+        _assert_provider_reached("refresh_odds", result, games)
+
     def test_an_unpriced_august_slate_is_not_an_outage_if_anything_landed(self):
         games = self._games(16)
-        result = _Result(3, {i: "no market posted for this game yet" for i in range(13)})
+        result = self._result(fetched=3, written=3, skipped=13)
         _assert_provider_reached("refresh_odds", result, games)
 
     def test_a_partially_skipped_week_is_allowed(self):
         games = self._games(16)
-        result = _Result(0, {i: "no market posted for this game yet" for i in range(9)})
+        result = self._result(fetched=7, written=0, skipped=9)
         _assert_provider_reached("refresh_odds", result, games)
 
     def test_no_games_is_not_an_outage(self):
-        _assert_provider_reached("refresh_odds", _Result(0, {}), [])
+        result = self._result(fetched=0, written=0, skipped=0)
+        _assert_provider_reached("refresh_odds", result, [])
+
+    def test_an_outage_with_no_warnings_still_raises(self):
+        games = self._games(16)
+        result = IngestResult(provider="espn", fetched=0, written=0, skipped=16)
+        with pytest.raises(RuntimeError, match="outage, not an empty slate"):
+            _assert_provider_reached("refresh_odds", result, games)
