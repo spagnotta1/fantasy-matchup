@@ -86,6 +86,33 @@ Run them by hand:
 railway ssh --service api "python -m nflfp.jobs run invalidate_cache"
 ```
 
+### Deploying a new commit
+
+Merging to `main` deploys every service — usually. A service that has a run in
+flight when the push lands can miss it, and the miss is silent: it stays on its
+previous image, reports nothing, and `schedule --check` will not catch it
+because the cadence and start command are still correct. Only the commit is
+stale.
+
+```powershell
+railway deployment list --service <name> --json    # which commit is it on?
+railway redeploy --service <name> --from-source    # pull the latest commit
+```
+
+`--from-source` is the part that matters. Plain `railway redeploy`, and the
+dashboard's **Redeploy** button, replay the image the service already has. For
+a cron that is exactly right — every scheduled run is a redeploy of the current
+build, which is why the deployment list is a run log. For picking up new code
+it is a no-op that looks like a deploy. Use **Deploy latest commit** in the
+dashboard, or `--from-source` here.
+
+Worth stating plainly because it has already cost an afternoon. On 2026-09-19 a
+fix for `refresh_odds` merged to `main` and reached eight of ten services.
+`refresh-odds` — the only one that needed it — had a run in flight and never
+built the commit, so it went on crashing hourly on a bug that was fixed in
+`main`. `api` did build it, then a manual **Redeploy** ten seconds later put the
+old image back. Both looked deployed from the dashboard.
+
 ## Variables
 
 Set these on every service, as **references** rather than literals so they keep
