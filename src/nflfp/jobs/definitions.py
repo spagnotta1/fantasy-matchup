@@ -43,9 +43,9 @@ from sqlalchemy import text
 
 from ..cache import invalidate_all_sync
 from ..config import get_settings
-from ..etl import ingest_odds, ingest_weather, upcoming_games
+from ..etl import IngestResult, ingest_odds, ingest_weather, upcoming_games
 from ..features import build_features, refresh_features
-from ..providers import get_odds_provider, get_weather_provider
+from ..providers import GameRef, get_odds_provider, get_weather_provider
 from .registry import MANUAL, REGISTRY, Job, JobContext, JobOutcome
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,9 @@ def _horizon(context: JobContext) -> int:
     )
 
 
-def _assert_provider_reached(name: str, result, games) -> None:
+def _assert_provider_reached(
+    name: str, result: IngestResult, games: list[GameRef]
+) -> None:
     """Refuse to report `ok` when a provider produced nothing for every game.
 
     Per-game and per-week skips are part of the provider contract -- in August
@@ -66,15 +68,29 @@ def _assert_provider_reached(name: str, result, games) -> None:
     which is what an ESPN shape change, an empty body or a sustained outage
     looks like from here. Without this the job logs `ok -- 0 record(s)` hourly,
     indefinitely, while the market columns the board reads go NULL.
+
+    The signal is ``fetched``, not ``written``. Change detection drops
+    snapshots identical to the last capture, so an hour in which the market
+    simply did not move writes nothing and is entirely healthy -- gating on
+    ``written`` fires this guard on the quiet path it exists to wave through,
+    which is how it came to crash hourly on a live slate it had read fine.
+    ``fetched`` counts what the provider actually returned, and that is what
+    an outage takes to zero.
+
+    Args:
+        result: An :class:`~nflfp.etl.IngestResult`, whose ``skipped`` is a
+            count. The per-game reasons belong to the ``ProviderFetch`` one
+            layer down and are collapsed before they reach here; ``warnings``
+            carries the per-week explanation instead.
     """
-    if result.written or not games:
+    if result.fetched or not games:
         return
-    if len(result.skipped) < len(games):
+    if result.skipped < len(games):
         return
     raise RuntimeError(
-        f"{name}: nothing written and all {len(games)} game(s) skipped. "
+        f"{name}: nothing fetched and all {len(games)} game(s) skipped. "
         "A provider that reaches no game at all is an outage, not an empty "
-        f"slate. Reasons: {sorted(set(result.skipped.values()))[:3]}"
+        f"slate. Reasons: {sorted(set(result.warnings or []))[:3]}"
     )
 
 
