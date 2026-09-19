@@ -1198,8 +1198,8 @@ class DraftSettingsIn(Schema):
         description=(
             "How much the simulated opposing managers weight last completed "
             "season's actual points against value over replacement. **An "
-            "assumption, not a measurement**: this repository holds no "
-            "average-draft-position data to fit it against. Overrides the "
+            "assumption, not a measurement**: it has not been fitted to "
+            "average-draft-position data. Overrides the "
             "`opponent_skill` level's value; exposed so a conclusion's "
             "sensitivity to it can be checked."
         ),

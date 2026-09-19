@@ -403,8 +403,8 @@ function Methodology({
               : value over replacement at{' '}
               {Math.round((1 - methodology.history_weight) * 100)}% and last completed
               season&rsquo;s actual points at {Math.round(methodology.history_weight * 100)}%,
-              with randomness added — an assumption, not a measurement, because this
-              system holds no average-draft-position data to fit it against.
+              with randomness added — an assumption, not a measurement: it has not been
+              fitted to or validated against average-draft-position data.
             </p>
             <p>
               That randomness was {formatNumber(methodology.board_scatter_ratio, 1)}× the

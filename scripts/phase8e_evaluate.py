@@ -216,8 +216,8 @@ async def run(seasons, teams, rounds, profile, simulations, seats, seed) -> str:
         emit(f"Availability ECE {ece:.3f}, worst band {worst:.3f}")
 
     emit()
-    emit("LIMITATION: there is no real draft or ADP data in this repository, so the")
-    emit("opponent model is unvalidated. These results say the strategy beats its")
+    emit("LIMITATION: the opponent model is not fitted to or validated against real")
+    emit("drafts or ADP, so it is unvalidated. These results say the strategy beats its")
     emit("baselines against these simulated opponents, not against real drafters.")
     emit()
 

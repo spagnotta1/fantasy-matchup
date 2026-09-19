@@ -615,6 +615,7 @@ every column actually exists, because nflverse changes schemas between seasons.
 | `raw_rosters` | Season rosters |
 | `raw_teams` | Team dimension |
 | `raw_depth_charts` | Depth chart positions |
+| `raw_adp` | 12-team PPR ADP from Fantasy Football Calculator, one row per (season, drafting window, entry). The exception to the swap: **appended**, because the source serves only its latest window |
 
 ## Derived views — owned by `nflfp.transform`
 
@@ -627,6 +628,7 @@ costs nothing and can't drift out of sync with an ingest.
 | `game_team` | One row per (game, team) — the team-perspective schedule. Normalises nflverse's home-signed `spread_line` into `team_spread` ("points THIS team is favoured by") and derives `implied_team_total` / `implied_opp_total` |
 | `upcoming_games` | `game_team` rows with no result yet — what you actually need to project |
 | `player_week` | Player-week fact joined to game context, snaps and injury designation, with `fp_*` columns per scoring profile |
+| `player_adp` | Each season's draft-day ADP window from `raw_adp`, entries matched to `gsis_id` (`match_status`), with `adp_round`, `total_drafts` and `is_preseason`. Context only — no model input |
 
 ## Feature materialized views — owned by `nflfp.features`
 

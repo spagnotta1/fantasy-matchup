@@ -54,8 +54,8 @@ the same split :mod:`nflfp.services.simulation` uses and for the same reason.
 Nothing here is optimal in an absolute sense
 --------------------------------------------
 The engine finds the highest-value roster **under its own assumptions and the
-data available to it**. Those assumptions — an opponent model that no ADP data
-exists to validate, an availability model fitted on games played, a one-step
+data available to it**. Those assumptions — an opponent model not yet fitted to
+or validated against ADP, an availability model fitted on games played, a one-step
 lookahead — are stated wherever a number is produced, and every simulated output
 carries ``provenance: derived``.
 """

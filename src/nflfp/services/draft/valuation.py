@@ -37,10 +37,11 @@ picks, is not a compromise — it is a higher expected roster.
 The opponent model, and what it is not
 --------------------------------------
 :func:`consensus_scores` produces the board the eleven other managers draft
-from. It is **not ADP**. This repository holds no average-draft-position data of
-any kind, and inventing a number and calling it ADP would be the single most
-misleading thing this feature could do, because ADP is the one input a user
-would assume was observed.
+from. It is **not ADP**. The warehouse does hold observed average draft position
+(the ``player_adp`` view), but this board is neither read from it nor fitted to
+it, and presenting a model's board as ADP would be the single most misleading
+thing this feature could do, because ADP is the one input a user would assume
+was observed.
 
 What it is instead: a stated behavioural model, that real managers rank roughly
 by value over replacement but overweight what a player did last season relative

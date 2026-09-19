@@ -35,9 +35,11 @@ and compare them with how often the player was actually still there.
 
 What cannot be measured, and is not
 -----------------------------------
-There is **no real draft data in this repository** — no ADP, no draft results,
-no league histories. So the opponent model cannot be validated against how
-people really draft, and no number in this module should be read as saying that
+There are **no real draft results in this repository** — no drafts, no league
+histories. Observed ADP is in the warehouse (``player_adp``), but nothing here
+compares the opponent model against it yet. So the opponent model has not been
+validated against how people really draft, and no number in this module should
+be read as saying that
 it is realistic. It says the strategy beats its baselines *against these
 opponents*. Against different opponents the margin would differ, and the
 direction of that difference is not knowable from anything on disk.
