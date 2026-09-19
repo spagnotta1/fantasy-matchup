@@ -560,8 +560,8 @@ def _notices(
             if opponents.overridden
             else ""
         )
-        + ". This repository contains no average-draft-position data, so that "
-        "model is a stated assumption and has not been validated against how "
+        + ". That model has not been fitted to average-draft-position data, so "
+        "it is a stated assumption and has not been validated against how "
         "people really draft. It is a request field precisely so a conclusion "
         "that depends on it can be found out.",
         "Kickers and team defences are not draftable here: no validated "

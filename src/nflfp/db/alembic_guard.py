@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 WAREHOUSE_TABLE_PREFIXES = ("raw_", "stg_")
 
 #: Views rebuilt on every publish by :mod:`nflfp.transform`.
-WAREHOUSE_VIEWS = frozenset({"player_week", "game_team", "upcoming_games"})
+WAREHOUSE_VIEWS = frozenset({"player_week", "game_team", "upcoming_games", "player_adp"})
 
 
 def is_warehouse_object(name: str) -> bool:

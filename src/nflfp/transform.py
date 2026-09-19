@@ -216,6 +216,186 @@ def _player_week_select(has_snaps: bool, has_injuries: bool) -> str:
     """
 
 
+def _norm_name(col: str) -> str:
+    """A player name reduced to what two sources agree on.
+
+    Lower-case letters and single spaces only, generational suffix dropped, so
+    "D.J. Moore" / "DJ Moore" and "Kenneth Walker III" / "Kenneth Walker" meet.
+    Portable: DuckDB and Postgres both take the 'g' flag.
+    """
+    x = f"lower({col})"
+    x = f"regexp_replace({x}, '[^a-z ]', '', 'g')"
+    x = f"regexp_replace({x}, ' +', ' ', 'g')"
+    x = f"regexp_replace(trim({x}), ' (jr|sr|ii|iii|iv|v)$', '', 'g')"
+    return x
+
+
+def _player_adp_select(has_schedules: bool, has_players: bool) -> str:
+    """One row per (season, ADP entry): the season's draft-day snapshot, with
+    each entry matched to a `gsis_id` where the match is unambiguous.
+
+    **Which snapshot.** The source serves a rolling window, and the pipeline
+    appends each one it sees. A season's ADP is its last window that closed
+    before that season's first regular-season game -- the market on draft day,
+    not the thin in-season trickle after it. Until a pre-kickoff window has been
+    captured (the season in which this dataset was first loaded, say), the
+    latest window stands in, and `is_preseason` says so.
+
+    **Matching.** ADP carries names, not ids. Three tiers, most trustworthy
+    first, and the first tier to find anyone decides: (1) the season's roster,
+    same position, by normalised full name or football name + last name; (2)
+    the season's roster, same position and team, by surname -- nicknames; (3)
+    the player dimension by name -- players on no roster that season. Within a
+    tier a team match breaks a tie; if exactly one candidate is left it wins,
+    otherwise the entry is `ambiguous` with no id rather than given a guess. A
+    renamed player (Robby Anderson -> Robbie Chosen) stays `unmatched`. K and
+    DST entries are `not_applicable`: K has no roster match worth making and
+    DST is a team, not a player.
+    """
+    kickoff = (
+        """
+        LEFT JOIN (
+            SELECT season, MIN(CAST(gameday AS DATE)) AS kickoff
+            FROM raw_schedules
+            WHERE game_type = 'REG'
+            GROUP BY season
+        ) AS k ON k.season = a.season
+        """
+        if has_schedules
+        else "LEFT JOIN (SELECT NULL AS season, CAST(NULL AS DATE) AS kickoff) AS k ON FALSE"
+    )
+    # Tier 3: not on that season's roster at all -- a free agent in the
+    # current season's ADP -- so fall back to the player dimension by name.
+    players_tier = (
+        f"""
+        UNION
+        SELECT a.season, a.ffc_player_id, p.gsis_id, 3 AS tier, 0 AS team_match
+        FROM adp AS a
+        JOIN raw_players AS p
+          ON p.position = a.position
+         AND p.gsis_id IS NOT NULL
+         AND {_norm_name("p.display_name")} = a.norm_name
+        WHERE a.position IN ('QB', 'RB', 'WR', 'TE')
+        """
+        if has_players
+        else ""
+    )
+    return f"""
+    WITH windows AS (
+        SELECT
+            w.*,
+            ROW_NUMBER() OVER (
+                PARTITION BY w.season
+                ORDER BY w.is_preseason DESC, w.window_end DESC, w.window_start DESC
+            ) AS pick
+        FROM (
+            SELECT DISTINCT
+                a.season, a.window_start, a.window_end,
+                COALESCE(a.window_end < k.kickoff, TRUE) AS is_preseason
+            FROM raw_adp AS a
+            {kickoff}
+        ) AS w
+    ),
+    adp AS (
+        SELECT a.*, w.is_preseason,
+               {_norm_name("a.name")} AS norm_name,
+               CASE a.team WHEN 'LAR' THEN 'LA' ELSE a.team END AS roster_team
+        FROM raw_adp AS a
+        JOIN windows AS w
+          ON w.season = a.season
+         AND w.window_start = a.window_start
+         AND w.window_end = a.window_end
+         AND w.pick = 1
+    ),
+    candidates AS (
+        -- Tier 1: the season's roster, by full name or football name.
+        SELECT
+            a.season, a.ffc_player_id, r.gsis_id, 1 AS tier,
+            CASE WHEN r.team = a.roster_team THEN 1 ELSE 0 END AS team_match
+        FROM adp AS a
+        JOIN raw_rosters AS r
+          ON r.season = a.season
+         AND r.position = a.position
+         AND r.gsis_id IS NOT NULL
+         AND (
+              {_norm_name("r.full_name")} = a.norm_name
+           OR {_norm_name("r.football_name || ' ' || r.last_name")} = a.norm_name
+         )
+        WHERE a.position IN ('QB', 'RB', 'WR', 'TE')
+
+        UNION
+        -- Tier 2: a nickname ("Hollywood" Brown, Gabe Davis). Same season,
+        -- team, position and surname.
+        SELECT a.season, a.ffc_player_id, r.gsis_id, 2 AS tier, 1 AS team_match
+        FROM adp AS a
+        JOIN raw_rosters AS r
+          ON r.season = a.season
+         AND r.position = a.position
+         AND r.team = a.roster_team
+         AND r.gsis_id IS NOT NULL
+         AND {_norm_name("r.last_name")} = regexp_replace(a.norm_name, '^.* ', '')
+        WHERE a.position IN ('QB', 'RB', 'WR', 'TE')
+        {players_tier}
+    ),
+    best AS (
+        -- The most trustworthy tier that found anyone, then the best team
+        -- agreement within it.
+        SELECT season, ffc_player_id, tier, MAX(team_match) AS team_match
+        FROM candidates AS c
+        WHERE tier = (
+            SELECT MIN(c2.tier) FROM candidates AS c2
+            WHERE c2.season = c.season AND c2.ffc_player_id = c.ffc_player_id
+        )
+        GROUP BY season, ffc_player_id, tier
+    ),
+    matched AS (
+        -- Exactly one candidate at the best level wins; two is ambiguous and
+        -- gets no id rather than a coin flip.
+        SELECT c.season, c.ffc_player_id, MIN(c.gsis_id) AS gsis_id
+        FROM candidates AS c
+        JOIN best AS b
+          ON b.season = c.season
+         AND b.ffc_player_id = c.ffc_player_id
+         AND b.tier = c.tier
+         AND b.team_match = c.team_match
+        GROUP BY c.season, c.ffc_player_id
+        HAVING COUNT(DISTINCT c.gsis_id) = 1
+    )
+    SELECT
+        a.season,
+        m.gsis_id                                   AS player_id,
+        a.ffc_player_id,
+        a.name                                      AS adp_name,
+        a.position,
+        a.team,
+        a.adp,
+        CAST(CEIL(a.adp / a.teams) AS INTEGER)      AS adp_round,
+        a.adp_formatted,
+        a.times_drafted,
+        a.high,
+        a.low,
+        a.stdev,
+        a.teams,
+        a.total_drafts,
+        a.window_start,
+        a.window_end,
+        a.is_preseason,
+        CASE
+            WHEN a.position NOT IN ('QB', 'RB', 'WR', 'TE') THEN 'not_applicable'
+            WHEN m.gsis_id IS NOT NULL THEN 'matched'
+            WHEN EXISTS (
+                SELECT 1 FROM candidates AS c
+                WHERE c.season = a.season AND c.ffc_player_id = a.ffc_player_id
+            ) THEN 'ambiguous'
+            ELSE 'unmatched'
+        END                                         AS match_status
+    FROM adp AS a
+    LEFT JOIN matched AS m
+           ON m.season = a.season
+          AND m.ffc_player_id = a.ffc_player_id
+    """
+
+
 def view_definitions(tables: set[str]) -> list[tuple[str, str]]:
     """(name, SELECT body) for every view buildable from `tables`, in dependency order."""
     defs: list[tuple[str, str]] = []
@@ -233,10 +413,20 @@ def view_definitions(tables: set[str]) -> list[tuple[str, str]]:
             ),
         ))
 
+    if "raw_adp" in tables and "raw_rosters" in tables:
+        defs.append((
+            "player_adp",
+            _player_adp_select(
+                has_schedules="raw_schedules" in tables,
+                has_players="raw_players" in tables,
+            ),
+        ))
+
     return defs
 
 
-VIEW_NAMES = ("player_week", "upcoming_games", "game_team")  # reverse dependency order
+# reverse dependency order
+VIEW_NAMES = ("player_adp", "player_week", "upcoming_games", "game_team")
 
 
 def build_views(con) -> list[str]:

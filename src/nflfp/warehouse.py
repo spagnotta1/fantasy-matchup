@@ -35,6 +35,9 @@ INDEXES: dict[str, list[tuple[str, tuple[str, ...]]]] = {
     ],
     "raw_teams": [],
     "raw_depth_charts": [],
+    "raw_adp": [
+        ("snapshot", ("season", "window_start", "window_end")),
+    ],
 }
 
 RUN_LOG_DDL = """

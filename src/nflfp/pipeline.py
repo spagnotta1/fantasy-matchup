@@ -39,6 +39,7 @@ from .sources import (
     Dataset,
     current_season,
     resolve_urls,
+    select_sql,
 )
 
 STAGING_PREFIX = "stg_"
@@ -72,15 +73,9 @@ def load_staging(
         return 0, [], missing
 
     stg = f"{STAGING_PREFIX}raw_{ds.name}"
-    url_list = ", ".join(f"'{u}'" for u in urls)
 
     con.execute(f"DROP TABLE IF EXISTS pgdb.{stg}")
-    # union_by_name absorbs nflverse's schema drift across seasons; without it a
-    # multi-year read fails whenever any season has a different column set.
-    con.execute(
-        f"CREATE TABLE pgdb.{stg} AS "
-        f"SELECT * FROM read_parquet([{url_list}], union_by_name = true)"
-    )
+    con.execute(f"CREATE TABLE pgdb.{stg} AS {select_sql(ds, urls)}")
     rows = con.execute(f"SELECT count(*) FROM pgdb.{stg}").fetchone()[0]
     return rows, urls, missing
 
@@ -191,6 +186,63 @@ def publish_by_season(cur, ds: Dataset, seasons: list[int]) -> str:
     return note
 
 
+#: What identifies one snapshot of an append dataset. Re-fetching the same
+#: window replaces it; a new window is added alongside.
+SNAPSHOT_KEY = ("season", "window_start", "window_end")
+
+
+def publish_append(cur, ds: Dataset) -> str:
+    """Add staged snapshots to the live table without deleting any history.
+
+    The ADP source serves only its latest window, so last month's snapshot
+    cannot be fetched again: a swap -- even in `full` mode -- would destroy it.
+    The only rows removed are an earlier copy of a window being re-staged,
+    which is the same observation fetched twice.
+    """
+    live, stg = f"raw_{ds.name}", f"{STAGING_PREFIX}raw_{ds.name}"
+
+    if not pg.table_exists(cur, live):
+        cur.execute(f"ALTER TABLE {stg} RENAME TO {live}")
+        return "created"
+
+    live_cols = pg.columns(cur, live)
+    stg_types = _staging_column_types(cur, stg)
+
+    added = [c for c in stg_types if c not in live_cols]
+    for col in added:
+        cur.execute(f'ALTER TABLE {live} ADD COLUMN "{col}" {stg_types[col]}')
+        live_cols.append(col)
+
+    shared = [c for c in live_cols if c in stg_types]
+    col_sql = ", ".join(f'"{c}"' for c in shared)
+    key_sql = ", ".join(SNAPSHOT_KEY)
+
+    cur.execute(
+        f"DELETE FROM {live} WHERE ({key_sql}) IN "
+        f"(SELECT DISTINCT {key_sql} FROM {stg})"
+    )
+    replaced = cur.rowcount
+    cur.execute(f"INSERT INTO {live} ({col_sql}) SELECT {col_sql} FROM {stg}")
+    inserted = cur.rowcount
+    if replaced and inserted < replaced * MIN_PUBLISH_RETENTION:
+        raise RuntimeError(
+            f"{ds.name}: re-staging a window replaced {replaced:,} rows with "
+            f"{inserted:,} ({inserted / replaced:.1%}); refusing to publish below "
+            f"{MIN_PUBLISH_RETENTION:.0%}. The same window fetched twice should "
+            "not shrink."
+        )
+    cur.execute(f"DROP TABLE {stg}")
+
+    note = (
+        f"re-fetched known window(s), replaced {replaced:,} rows with {inserted:,}"
+        if replaced
+        else f"appended {inserted:,} rows"
+    )
+    if added:
+        note += f", added cols: {','.join(added)}"
+    return note
+
+
 # --------------------------------------------------------------------------
 # orchestration
 # --------------------------------------------------------------------------
@@ -216,7 +268,7 @@ def run(mode: str, start: int, end: int, seasons: list[int], selected: list[Data
     # ---- phase 1: load ----------------------------------------------------
     con = duck()
     for ds in selected:
-        incremental = mode == "refresh" and ds.refresh == "by_season"
+        incremental = mode == "refresh" and ds.refresh in ("by_season", "append")
         lo, hi = (min(seasons), max(seasons)) if incremental else (start, end)
         t0 = time.time()
         label = f"  {ds.name:<16}"
@@ -292,7 +344,11 @@ def run(mode: str, start: int, end: int, seasons: list[int], selected: list[Data
             with pg.connect() as conn, conn.cursor() as cur:
                 warehouse.drop_views(cur)
                 for ds, rows, _dt, _ in staged:
-                    if mode == "full" or ds.refresh == "full":
+                    # Append datasets append in both modes: `full` rebuilding
+                    # them would drop snapshots the source no longer serves.
+                    if ds.refresh == "append":
+                        action = publish_append(cur, ds)
+                    elif mode == "full" or ds.refresh == "full":
                         action = publish_full(cur, ds)
                     else:
                         action = publish_by_season(cur, ds, seasons)

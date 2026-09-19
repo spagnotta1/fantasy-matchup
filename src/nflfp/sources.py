@@ -1,4 +1,4 @@
-﻿"""Declarative manifest of nflverse datasets, plus release-asset resolution.
+﻿"""Declarative manifest of warehouse datasets, plus source resolution.
 
 nflverse publishes each dataset as parquet assets attached to a GitHub release,
 one release *tag* per dataset family. Rather than hard-coding which years exist
@@ -6,6 +6,12 @@ one release *tag* per dataset family. Rather than hard-coding which years exist
 we ask the GitHub API which assets a tag actually has and intersect that with
 what the manifest wants. A season that hasn't been published yet is skipped
 with a warning instead of failing the build.
+
+One dataset is not nflverse: ``adp`` comes from Fantasy Football Calculator's
+public ADP API as JSON, one request per season. It has no asset listing, so
+:func:`ffc_seasons_available` asks each season directly; the API answers a
+season it has not opened with HTTP 400 "Invalid year", which is the same
+"not published yet" an absent nflverse asset means.
 """
 
 from __future__ import annotations
@@ -20,6 +26,15 @@ from functools import lru_cache
 
 RELEASE_BASE = "https://github.com/nflverse/nflverse-data/releases/download"
 API_BASE = "https://api.github.com/repos/nflverse/nflverse-data/releases/tags"
+
+#: Fantasy Football Calculator ADP: 12-team PPR, every position, one season.
+#: The response is the most recent drafting window for that season -- for a
+#: past season, the final week of its preseason; for the current one, the last
+#: week or so, which thins out once the season starts.
+FFC_ADP_URL = (
+    "https://fantasyfootballcalculator.com/api/v1/adp/ppr"
+    "?teams=12&year={year}&position=all"
+)
 
 # Default modelling window. 2016+ gives ~10 seasons, which is deep enough for
 # stable per-player priors without dragging in a materially different league
@@ -41,11 +56,11 @@ def current_season(today: date | None = None) -> int:
 
 @dataclass(frozen=True)
 class Dataset:
-    """One nflverse dataset to land as a raw table."""
+    """One dataset to land as a raw table."""
 
     name: str  # destination table name (prefixed raw_ on load)
     tag: str  # nflverse-data release tag
-    pattern: str | None = None  # per-season asset pattern, "{year}" placeholder
+    pattern: str | None = None  # per-season asset pattern (or URL), "{year}" placeholder
     files: tuple[str, ...] = ()  # explicit assets (for un-partitioned datasets)
     min_season: int | None = None  # earliest season this dataset exists for
     description: str = ""
@@ -56,7 +71,15 @@ class Dataset:
     #   "full"      — always reload everything. Correct for single-file datasets
     #                 (schedules, players) and for depth_charts, whose 2025+
     #                 files dropped the season column entirely.
+    #   "append"    — add each newly fetched snapshot, replacing only a snapshot
+    #                 fetched before with the same window; never delete by
+    #                 season, in either mode. For sources that serve only their
+    #                 latest window, where a swap would destroy history that
+    #                 cannot be fetched again (adp).
     refresh: str = "by_season"
+    # "nflverse" (parquet release assets) or "ffc" (Fantasy Football
+    # Calculator JSON). Decides how URLs resolve and how staging reads them.
+    source: str = "nflverse"
 
 
 DATASETS: tuple[Dataset, ...] = (
@@ -117,6 +140,18 @@ DATASETS: tuple[Dataset, ...] = (
         files=("teams_colors_logos.parquet",),
         refresh="full",
         description="Team dimension: abbreviations, names, colors, logos (for the UI later)",
+    ),
+    Dataset(
+        name="adp",
+        tag="ffc",
+        pattern=FFC_ADP_URL,
+        min_season=2015,
+        refresh="append",
+        source="ffc",
+        description=(
+            "Average draft position, 12-team PPR (Fantasy Football Calculator). "
+            "Observed market context, not a model input"
+        ),
     ),
     # ---- extras: heavier, opt in with --all -------------------------------
     Dataset(
@@ -209,10 +244,48 @@ def release_assets(tag: str) -> frozenset[str]:
     return frozenset(a["name"] for a in payload.get("assets", []))
 
 
+def _ffc_season_open(year: int) -> bool:
+    """True if Fantasy Football Calculator serves ADP for `year`.
+
+    A 400 is the API's "Invalid year" -- a season it has not opened -- and
+    counts as unpublished. Anything else that fails is an outage and raises,
+    so a dead API cannot pass for a quiet offseason.
+    """
+    req = urllib.request.Request(
+        FFC_ADP_URL.format(year=year), headers={"User-Agent": "nfl-fantasy-ingest"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            payload = json.load(resp)
+    except urllib.error.HTTPError as exc:  # pragma: no cover - network dependent
+        if exc.code == 400:
+            return False
+        raise RuntimeError(
+            f"Fantasy Football Calculator ADP for {year} failed ({exc.code})"
+        ) from exc
+    if payload.get("status") != "Success":  # pragma: no cover - network dependent
+        raise RuntimeError(
+            f"Fantasy Football Calculator ADP for {year}: {payload.get('errors')}"
+        )
+    return True
+
+
+def ffc_seasons_available(start_season: int, end_season: int) -> list[int]:
+    """Seasons in the window the FFC ADP API will answer."""
+    return [y for y in range(start_season, end_season + 1) if _ffc_season_open(y)]
+
+
 def resolve_urls(
     ds: Dataset, start_season: int, end_season: int
 ) -> tuple[list[str], list[int]]:
     """Return (urls, missing_seasons) for a dataset over a season window."""
+    if ds.source == "ffc":
+        lo = max(start_season, ds.min_season or start_season)
+        open_ = set(ffc_seasons_available(lo, end_season))
+        urls = [ds.pattern.format(year=y) for y in sorted(open_)]
+        missing = [y for y in range(lo, end_season + 1) if y not in open_]
+        return urls, missing
+
     available = release_assets(ds.tag)
 
     if ds.pattern is None:
@@ -229,3 +302,45 @@ def resolve_urls(
         else:
             missing.append(year)
     return urls, missing
+
+
+def select_sql(ds: Dataset, urls: list[str]) -> str:
+    """The SELECT that stages `urls` for `ds`, in DuckDB SQL.
+
+    Shared by the Postgres pipeline and the local DuckDB build so both land the
+    same columns.
+    """
+    url_list = ", ".join(f"'{u}'" for u in urls)
+    if ds.source != "ffc":
+        # union_by_name absorbs nflverse's schema drift across seasons; without
+        # it a multi-year read fails whenever any season has a different column
+        # set.
+        return f"SELECT * FROM read_parquet([{url_list}], union_by_name = true)"
+
+    # One row per (season, drafting window, player). The season comes from the
+    # request URL: the response does not repeat it. The window and draft count
+    # travel with every row, because an ADP from 137 drafts and one from 8,470
+    # are not the same kind of number and must not be read as one.
+    return f"""
+    SELECT
+        CAST(regexp_extract(j.filename, 'year=([0-9]+)', 1) AS INTEGER) AS season,
+        CAST(j.meta.teams AS INTEGER)        AS teams,
+        CAST(j.meta.rounds AS INTEGER)       AS rounds,
+        CAST(j.meta.total_drafts AS INTEGER) AS total_drafts,
+        CAST(j.meta.start_date AS DATE)      AS window_start,
+        CAST(j.meta.end_date AS DATE)        AS window_end,
+        CAST(p.player_id AS INTEGER)         AS ffc_player_id,
+        p.name                               AS name,
+        p.position                           AS position,
+        p.team                               AS team,
+        CAST(p.adp AS DOUBLE)                AS adp,
+        p.adp_formatted                      AS adp_formatted,
+        CAST(p.times_drafted AS INTEGER)     AS times_drafted,
+        CAST(p.high AS INTEGER)              AS high,
+        CAST(p.low AS INTEGER)               AS low,
+        CAST(p.stdev AS DOUBLE)              AS stdev,
+        CAST(p.bye AS INTEGER)               AS bye,
+        CAST(current_timestamp AS TIMESTAMP) AS fetched_at
+    FROM read_json([{url_list}], filename = true) AS j,
+         unnest(j.players) AS t(p)
+    """

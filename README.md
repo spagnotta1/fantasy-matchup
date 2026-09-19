@@ -52,11 +52,42 @@ Each dataset declares how it updates (`refresh` in `sources.py`):
 |---|---|---|
 | `by_season` | player_week, snap_counts, injuries, rosters, pbp, pfr_* | reload only the current season's file, `DELETE` those rows, reinsert |
 | `full` | schedules, players, teams, depth_charts, ngs_* | reload whole (single-file sources, or no usable season column) |
+| `append` | adp | add the newly fetched window; replace only a re-fetched copy of the same window; never delete by season, in `full` mode either |
 
 `by_season` **never** falls back to a table swap. In refresh mode staging holds
 only the current season, so a swap would silently delete every prior year. If
 nflverse adds columns, the live table is widened and the insert uses the shared
 column list instead.
+
+### ADP (average draft position)
+
+`adp` is the one dataset that is not nflverse: 12-team PPR ADP from Fantasy
+Football Calculator's public API (`FFC_ADP_URL` in `sources.py`), one JSON
+request per season, 2015 onward, read by DuckDB like the parquet is. It is core,
+so the weekly cron carries it. It is **observed market context**: no model or
+feature view reads it.
+
+- **The source serves only its latest drafting window**, so each window is kept
+  as it is seen (`append`, keyed on `season, window_start, window_end`). A past
+  season returns its final preseason week; the current one returns roughly the
+  last week, which thins sharply after kickoff (2026-09-19: 137 drafts, 63
+  players, against 8,470 drafts for 2025's final window). History the warehouse
+  drops cannot be fetched again, which is why `full` appends too.
+- **A season not opened yet** answers HTTP 400 "Invalid year" and is treated
+  exactly like an unpublished nflverse season: a gap in `full`, a failure in a
+  `refresh` that asked for it.
+- **`player_adp`** (view) gives one row per season and entry from the season's
+  *draft-day* window — the last one that closed before its first regular-season
+  game. Until a pre-kickoff window has been captured the latest stands in, and
+  `is_preseason = false` says so; `total_drafts` and the window dates travel on
+  every row.
+- **ADP carries names, not ids.** Entries match to `gsis_id` in three tiers,
+  and the first tier to find anyone decides: that season's roster by name, then
+  by surname + team (nicknames), then the player dimension (unrostered players).
+  A name that still has two candidates is `ambiguous` with no id, never a guess.
+  Measured on 2016-2026: 1,785 of 1,786 QB/RB/WR/TE entries matched (the miss is
+  2025 "Hollywood Brown", a free agent listed under a nickname), 0 ambiguous, no
+  player with two entries in a season. K and DST are `not_applicable`.
 
 ## Quick start
 
@@ -110,6 +141,7 @@ raw_*                 materialised nflverse tables (the only real state)
 game_team             one row per (game, team) — schedule flipped to team perspective
 player_week           the modelling fact table: box score + game context + snaps + injury
 upcoming_games        games with no result yet — what you actually project
+player_adp            each season's draft-day ADP, matched to gsis_id (context, not a model input)
 pipeline_runs         one row per pipeline execution: mode, status, rows, duration
 pipeline_run_datasets per-dataset detail for each run
 ```
@@ -124,8 +156,8 @@ enforced in code rather than by convention:
 
 | zone | owner | lifecycle |
 |---|---|---|
-| `raw_*`, `stg_*` | `nflfp.pipeline` | `DROP`/`RENAME`-swapped from parquet each run; columns follow nflverse |
-| `player_week`, `game_team`, `upcoming_games` | `nflfp.transform` | dropped and recreated on every publish |
+| `raw_*`, `stg_*` | `nflfp.pipeline` | `DROP`/`RENAME`-swapped from parquet each run; columns follow nflverse (`raw_adp` is appended, never swapped) |
+| `player_week`, `game_team`, `upcoming_games`, `player_adp` | `nflfp.transform` | dropped and recreated on every publish |
 | `model_runs`, `projections`, `projection_points`, `pipeline_runs` | **Alembic** | versioned migrations |
 
 `nflfp/db/alembic_guard.py` is what keeps those apart. Without it,
@@ -1098,9 +1130,11 @@ E[best left] = sum_i  value_i * P(i survives) * prod_{j<i} (1 - P(j survives))
 
 ### Opposing managers are simulated, and that model is an assumption
 
-**There is no ADP data in this repository**, and inventing a number and calling
-it ADP would be the most misleading thing this feature could do — ADP is the one
-input a user would assume was observed. So the other eleven seats draft from a
+**The opponent model is not fitted to ADP.** The warehouse holds observed ADP
+(`player_adp`, see [ADP](#adp-average-draft-position)), but nothing in the draft
+engine reads it, and presenting a model's board as ADP would be the most
+misleading thing this feature could do — ADP is the one input a user would
+assume was observed. So the other eleven seats draft from a
 stated behavioural model: a standardised blend of value over replacement and last
 completed season's actual points, plus a positional-need bonus, sampled by
 Gumbel-max (which makes the selection exactly a softmax draw, with a stated
@@ -1551,30 +1585,32 @@ All eight layers are done. What remains is modelling and scale, not structure.
    number from a week-by-week model, and it gets one by multiplying the
    published week 1 rate by an availability estimate rather than by fitting a
    second model. Backtested against 2020-2025 actuals, where it beats every
-   baseline in every season. Two things would move it furthest: **real ADP
-   data**, which would turn the opponent model from an assumption into a fitted
-   one, and **rookies**, who have no projection and are therefore absent from a
-   board real drafters spend early picks on.
+   baseline in every season. Two things would move it furthest: **fitting the
+   opponent model to the ADP now in the warehouse** (`player_adp`), which would
+   turn it from an assumption into a fitted one, and **rookies**, who have no
+   projection and are therefore absent from a board real drafters spend early
+   picks on.
 
 ## Documented gaps
 
 These are known and deliberate. Each is stated here, surfaced through the API,
 and has a defined path forward — none is a surprise waiting for a user to find.
 
-### There is no ADP data, so the draft's opponent model is unvalidated
+### The draft's opponent model is not fitted to ADP, so it is unvalidated
 
 The Mock Draft simulates eleven opposing managers, and nothing in this
-repository can say whether it simulates them *well*. There is no
-average-draft-position feed, no draft results, no league histories. The
-consensus board is therefore a **stated behavioural assumption** with two
-parameters exposed as request fields, and every response says so. Its measured
-result — that the strategy beats its baselines — is a statement about these
-opponents and not about real ones.
+repository yet says whether it simulates them *well*. There are no draft
+results and no league histories. Observed ADP *is* in the warehouse
+(`player_adp`, 2016 onward), but the opponent model has not been fitted to it or
+checked against it. The consensus board is therefore still a **stated
+behavioural assumption** with two parameters exposed as request fields, and
+every response says so. Its measured result — that the strategy beats its
+baselines — is a statement about these opponents and not about real ones.
 
-Acquiring an ADP feed would turn the assumption into a fitted model and make
-`evaluate.py`'s availability calibration a claim about reality rather than about
-internal consistency. Until then, no number in that area is presented as
-validated.
+Fitting the two parameters to `player_adp` on the same walk-forward seasons
+would turn the assumption into a fitted model and make `evaluate.py`'s
+availability calibration a claim about reality rather than about internal
+consistency. Until then, no number in that area is presented as validated.
 
 ### Rookies have no projection and are absent from the draft pool
 

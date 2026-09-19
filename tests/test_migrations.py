@@ -40,10 +40,12 @@ VERSIONS_DIR = MIGRATIONS_DIR / "versions"
         "raw_rosters",
         "raw_teams",
         "raw_depth_charts",
+        "raw_adp",
         "stg_raw_player_week",
         "player_week",
         "game_team",
         "upcoming_games",
+        "player_adp",
     ],
 )
 def test_warehouse_objects_are_excluded(name):

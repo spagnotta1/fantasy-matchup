@@ -24,6 +24,7 @@ from .sources import (
     DEFAULT_START_SEASON,
     Dataset,
     resolve_urls,
+    select_sql,
 )
 from .transform import build_views
 
@@ -35,14 +36,10 @@ def load_dataset(con, ds: Dataset, start: int, end: int) -> tuple[int, str]:
         return 0, "no assets in range"
 
     table = f"raw_{ds.name}"
-    url_list = ", ".join(f"'{u}'" for u in urls)
-    # union_by_name absorbs nflverse's schema drift across seasons (columns get
-    # added and occasionally renamed between years); without it a multi-year
-    # read fails whenever any season has a different column set.
-    con.execute(
-        f"CREATE OR REPLACE TABLE {table} AS "
-        f"SELECT * FROM read_parquet([{url_list}], union_by_name = true)"
-    )
+    # The local build rebuilds every table, `adp` included: it keeps only the
+    # windows the source serves today. Snapshot history accumulates in the
+    # Postgres warehouse, where the pipeline appends (`publish_append`).
+    con.execute(f"CREATE OR REPLACE TABLE {table} AS {select_sql(ds, urls)}")
     rows = con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
 
     note = f"{len(urls)} file(s)"
