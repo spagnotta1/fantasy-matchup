@@ -80,6 +80,57 @@ test('the slate selection is in the URL and survives a reload', async ({ page })
   await expect(slateSelect(page, /^week$/i)).toHaveValue(target)
 })
 
+test('a chosen week and scoring format survive in-app navigation', async ({ page }) => {
+  await page.goto('/rankings')
+  await settle(page)
+
+  await openSlateControls(page)
+  const optionValues = (select: ReturnType<typeof slateSelect>) =>
+    select.locator('option').evaluateAll((options) =>
+      options.map((o) => (o as HTMLOptionElement).value),
+    )
+
+  // Leave the default on purpose. The default is the newest season's newest
+  // week, and the bug was a snap back to exactly that — so choosing it again
+  // would pass against the broken code. An older season also has a full run of
+  // published weeks, which the current one does not early in the year.
+  const season = slateSelect(page, /^season$/i)
+  await expect
+    .poll(async () => (await optionValues(season)).length, { timeout: 20_000 })
+    .toBeGreaterThan(1)
+  const defaultSeason = await season.inputValue()
+  const targetSeason = (await optionValues(season)).find((value) => value !== defaultSeason)!
+  await season.selectOption(targetSeason)
+  await expect(page).toHaveURL(new RegExp(`season=${targetSeason}(&|$)`))
+
+  // By value, and only once that season's weeks have arrived.
+  const week = slateSelect(page, /^week$/i)
+  await expect
+    .poll(async () => (await optionValues(week)).length, { timeout: 20_000 })
+    .toBeGreaterThan(3)
+  const newestWeek = await week.inputValue()
+  const weeks = await optionValues(week)
+  const targetWeek = weeks[Math.floor(weeks.length / 2)]
+  expect(targetWeek, 'the chosen week must not be the default').not.toBe(newestWeek)
+
+  await week.selectOption(targetWeek)
+  await expect(page).toHaveURL(new RegExp(`week=${targetWeek}(&|$)`))
+  await slateSelect(page, /^scoring$/i).selectOption('ppr')
+  await expect(page).toHaveURL(/scoring=ppr/)
+  await settle(page)
+
+  // In-app links carry no ?season=&week=&scoring=, so the selection has to come
+  // from the provider, not from the URL. Go through several views.
+  for (const name of ['Matchups', 'Rankings', 'Dashboard']) {
+    await page.getByRole('link', { name, exact: true }).first().click()
+    await settle(page)
+    await openSlateControls(page)
+    await expect(slateSelect(page, /^season$/i), `season after opening ${name}`).toHaveValue(targetSeason)
+    await expect(slateSelect(page, /^week$/i), `week after opening ${name}`).toHaveValue(targetWeek)
+    await expect(slateSelect(page, /^scoring$/i), `scoring after opening ${name}`).toHaveValue('ppr')
+  }
+})
+
 test('a scoring profile change is reflected in the URL and the request', async ({ page }) => {
   const requests: string[] = []
   page.on('request', (r) => {
