@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { useScoringProfiles, useSeasons } from '@/hooks/useCatalog'
@@ -62,7 +62,17 @@ export function SlateProvider({ children }: { children: ReactNode }) {
   const seasonsQuery = useSeasons()
   const profilesQuery = useScoringProfiles()
 
-  const stored = useMemo(readStored, [])
+  // A ref, not `useMemo(readStored, [])`: this provider survives every internal
+  // navigation (it wraps `<Outlet>` in AppShell), but most in-app links — the
+  // sidebar, position tabs, a player row — point at a bare path with no
+  // `?season=&week=&scoring=`. When that happens this is the only thing telling
+  // the app what was selected, so it has to track the live selection, not a
+  // snapshot from the moment the tab was opened. A `useMemo` with an empty
+  // dependency array never re-runs, so it would keep answering with whatever was
+  // in `localStorage` before the user touched anything this session — which is
+  // exactly the bug where a filter or a settings change reverts the instant you
+  // navigate away.
+  const storedRef = useRef<StoredSlate>(readStored())
 
   const urlSeason = parseIntParam(searchParams.get(SEASON_PARAM))
   const urlWeek = parseIntParam(searchParams.get(WEEK_PARAM))
@@ -77,8 +87,8 @@ export function SlateProvider({ children }: { children: ReactNode }) {
   // restoring it would open the product on an empty screen the user did not ask
   // for — the one failure the stored selection exists to avoid.
   const storedSeason =
-    stored.season !== undefined && availableSeasons.includes(stored.season)
-      ? stored.season
+    storedRef.current.season !== undefined && availableSeasons.includes(storedRef.current.season)
+      ? storedRef.current.season
       : null
 
   // The URL, then the last season used, then the newest with a published board.
@@ -93,21 +103,23 @@ export function SlateProvider({ children }: { children: ReactNode }) {
 
   const week = useMemo(() => {
     if (urlWeek !== null) return urlWeek
-    if (!seasonsQuery.isSuccess) return stored.week ?? null
+    if (!seasonsQuery.isSuccess) return storedRef.current.week ?? null
     // Newest published week for this season. Falls back to the stored choice so
     // a season with nothing published does not silently reset the selector.
-    return selected?.latest_published_week ?? stored.week ?? null
-  }, [urlWeek, seasonsQuery.isSuccess, selected, stored.week])
+    return selected?.latest_published_week ?? storedRef.current.week ?? null
+  }, [urlWeek, seasonsQuery.isSuccess, selected])
 
   const scoringProfile =
-    urlProfile ?? stored.scoringProfile ?? profilesQuery.data?.defaultProfile ?? null
+    urlProfile ?? storedRef.current.scoringProfile ?? profilesQuery.data?.defaultProfile ?? null
 
   // Persist so the next visit opens where the last one left off. Only ever
   // writes a fully resolved selection: storing a half-resolved one would make
   // the next cold start default to something the user never picked.
   useEffect(() => {
     if (!catalogReady || season === null || week === null || !scoringProfile) return
-    writeStored({ season, week, scoringProfile })
+    const next = { season, week, scoringProfile }
+    storedRef.current = next
+    writeStored(next)
   }, [catalogReady, season, week, scoringProfile])
 
   const update = useCallback(
