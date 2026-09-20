@@ -131,6 +131,49 @@ test('a chosen week and scoring format survive in-app navigation', async ({ page
   }
 })
 
+test('the game log charts the most recent 17 games, oldest to newest', async ({ page }) => {
+  await page.goto('/rankings')
+  await settle(page)
+  await page.locator('a[href^="/players/"]').first().click()
+  await settle(page)
+
+  // The player page has one chart and one table, both in the game log card.
+  const log = page.locator('main')
+  const bars = log.locator('.recharts-bar-rectangle')
+  await expect(bars.first()).toBeVisible()
+
+  // The table lists every loaded game, newest first, so it is the reference for
+  // how many games exist and which one is newest.
+  await log.getByRole('radiogroup', { name: 'Game log view' }).getByText('Table', { exact: true }).click()
+  const rows = log.locator('tbody tr')
+  const games = await rows.count()
+  const newest = (await rows.first().locator('td').first().innerText()).match(/(\d{4}) W(\d+)/)!
+  await log.getByRole('radiogroup', { name: 'Game log view' }).getByText('Chart', { exact: true }).click()
+
+  // Exactly 17 when the player has that many; never padded when they do not.
+  await expect(bars).toHaveCount(Math.min(17, games))
+
+  const hoverLabel = async (index: number) => {
+    // Forced: the boom-line label sits over the right-hand columns, and the
+    // tooltip follows the pointer over the chart rather than the element hit.
+    await bars.nth(index).hover({ force: true })
+    const text = await page.locator('.recharts-tooltip-wrapper').innerText()
+    const found = text.match(/(\d{4}) Week (\d+)/)!
+    return { season: Number(found[1]), week: Number(found[2]) }
+  }
+
+  const first = await hoverLabel(0)
+  const last = await hoverLabel((await bars.count()) - 1)
+  expect(
+    first.season * 100 + first.week,
+    'the chart runs oldest to newest, so the first column is older than the last',
+  ).toBeLessThan(last.season * 100 + last.week)
+  expect(last, 'the last column is the newest game on record').toEqual({
+    season: Number(newest[1]),
+    week: Number(newest[2]),
+  })
+})
+
 test('a scoring profile change is reflected in the URL and the request', async ({ page }) => {
   const requests: string[] = []
   page.on('request', (r) => {

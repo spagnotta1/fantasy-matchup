@@ -19,8 +19,16 @@ import { EmptyState } from '@/components/feedback/States'
 import { formatPoints, formatSigned } from '@/utils/format'
 import type { HistoricalWeek, Trend } from '@/api/schemas'
 
-/** Games in the chart. Beyond this the columns are too thin to read on a laptop. */
-const CHART_GAMES = 16
+/**
+ * Games in the chart: a player's most recent 17 scored games, counted back from
+ * the newest one the warehouse holds and running across season boundaries. 17 is
+ * a full regular season of games. It is games played, not calendar weeks — a
+ * bye or a missed game leaves no row, so counting weeks would give a different
+ * number of columns for every player and would depend on how long each
+ * season's playoffs ran. A player with fewer than 17 scored games shows what
+ * they have; nothing is padded.
+ */
+const CHART_GAMES = 17
 
 interface Datum {
   key: string
@@ -81,9 +89,14 @@ export function GameLog({
       chronological
         .filter((week) => week.actual_points !== null && week.actual_points !== undefined)
         .slice(-CHART_GAMES)
-        .map((week) => ({
+        .map((week, index, recent) => ({
           key: `${week.season}-${week.week}`,
-          label: `W${week.week}`,
+          // "W1" alone is ambiguous once the window crosses a season, so the
+          // first column of each season carries its year.
+          label:
+            recent[index - 1]?.season !== week.season
+              ? `'${String(week.season).slice(-2)} W${week.week}`
+              : `W${week.week}`,
           season: week.season,
           week: week.week,
           points: week.actual_points as number,
@@ -94,7 +107,7 @@ export function GameLog({
     [chronological],
   )
 
-  const seasons = useMemo(() => [...new Set(data.map((d) => d.season))].sort(), [data])
+  const seasons = useMemo(() => [...new Set(data.map((d) => d.season))], [data])
 
   if (history.length === 0) {
     return (
@@ -115,7 +128,7 @@ export function GameLog({
         title="Game log"
         description={
           seasons.length > 1
-            ? `Fantasy points scored, last ${data.length} games across ${seasons.join(' and ')}.`
+            ? `Fantasy points scored, last ${data.length} games across ${new Intl.ListFormat('en').format(seasons.map(String))}.`
             : `Fantasy points scored, last ${data.length} games of ${seasons[0] ?? ''}.`
         }
         action={
@@ -165,6 +178,8 @@ function GameLogChart({
     return <p className="text-ink-muted text-sm">No scored games to chart.</p>
   }
 
+  const labelByKey = new Map(data.map((datum) => [datum.key, datum.label]))
+
   return (
     <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -174,8 +189,12 @@ function GameLogChart({
             stroke="var(--color-chart-grid)"
             strokeWidth={1}
           />
+          {/* Keyed on season-week, which is unique; the label is not (2025 W1
+              and 2026 W1 can share a window) and a category axis misplaces
+              duplicate values. */}
           <XAxis
-            dataKey="label"
+            dataKey="key"
+            tickFormatter={(key: string) => labelByKey.get(key) ?? key}
             tickLine={false}
             axisLine={{ stroke: 'var(--color-chart-axis)' }}
             tick={{ fill: 'var(--color-ink-muted)', fontSize: 11 }}
