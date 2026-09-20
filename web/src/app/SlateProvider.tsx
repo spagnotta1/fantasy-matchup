@@ -101,13 +101,36 @@ export function SlateProvider({ children }: { children: ReactNode }) {
 
   const catalogReady = seasonsQuery.isSuccess && profilesQuery.isSuccess
 
-  const week = useMemo(() => {
-    if (urlWeek !== null) return urlWeek
-    if (!seasonsQuery.isSuccess) return storedRef.current.week ?? null
-    // Newest published week for this season. Falls back to the stored choice so
-    // a season with nothing published does not silently reset the selector.
-    return selected?.latest_published_week ?? storedRef.current.week ?? null
-  }, [urlWeek, seasonsQuery.isSuccess, selected])
+  // The URL, then the last week used, then the newest published week. The
+  // remembered week is only meaningful for the season it was chosen in — week 10
+  // of 2025 says nothing about 2026 — so it applies only when the resolved
+  // season is that one, and (once the catalog is in) only while it is still
+  // published. Otherwise a season change, which clears `?week=` on purpose, would
+  // inherit a week from the previous season.
+  //
+  // Order matters: the stored week has to outrank `latest_published_week`. It
+  // used to be the other way round, which meant every bare-path navigation
+  // (sidebar, position tabs) snapped the week back to the newest one and then
+  // persisted that, overwriting the user's choice.
+  //
+  // Computed inline, not memoised: it reads `storedRef`, which is not a
+  // dependency React can see, and the arithmetic is trivial.
+  const storedWeek =
+    storedRef.current.week !== undefined &&
+    storedRef.current.season === season &&
+    (!seasonsQuery.isSuccess || availableWeeks.includes(storedRef.current.week))
+      ? storedRef.current.week
+      : null
+
+  let week: number | null = urlWeek ?? storedWeek
+  if (week === null && seasonsQuery.isSuccess) {
+    week = selected?.latest_published_week ?? null
+    // A season with nothing published falls back to the stored week rather than
+    // silently resetting the selector.
+    if (week === null && storedRef.current.season === season) {
+      week = storedRef.current.week ?? null
+    }
+  }
 
   const scoringProfile =
     urlProfile ?? storedRef.current.scoringProfile ?? profilesQuery.data?.defaultProfile ?? null
