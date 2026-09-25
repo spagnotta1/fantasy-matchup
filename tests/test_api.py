@@ -696,12 +696,35 @@ class TestOperational:
         assert body["database"] is True
         assert body["checks"]["database"] == "ok"
 
-    async def test_readiness_never_fails_on_the_cache(self, client):
+    @pytest.mark.parametrize(
+        ("backend", "state"),
+        [
+            # Declining a cache is a decision: `disabled`.
+            ("null", "disabled"),
+            # Asking for Redis without a URL is a mistake: `misconfigured`. This
+            # test used to read whatever the ambient default was, which became
+            # `redis` when the two states were split — so it asserted
+            # `disabled` against a process that was, correctly, misconfigured.
+            ("redis", "misconfigured"),
+        ],
+    )
+    async def test_readiness_never_fails_on_the_cache(self, client, monkeypatch, backend, state):
         """Taking a working API offline to protect an optimisation is
-        backwards. With no cache configured the state is `disabled`, which is
-        a supported deployment rather than a degraded one."""
-        body = (await client.get(url("/health/ready"))).json()
-        assert body["cache"] == "disabled"
+        backwards. Neither a declined cache nor a missing one fails readiness;
+        the report says which it is."""
+        from nflfp.cache import reset_cache
+        from nflfp.config import get_settings
+
+        monkeypatch.setenv("CACHE_BACKEND", backend)
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        get_settings.cache_clear()
+        reset_cache()
+        try:
+            body = (await client.get(url("/health/ready"))).json()
+        finally:
+            get_settings.cache_clear()
+            reset_cache()
+        assert body["cache"] == state
         assert body["status"] == "ok"
 
     async def test_every_response_is_correlated_and_timed(self, client):

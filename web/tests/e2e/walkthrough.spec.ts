@@ -49,9 +49,13 @@ test('the slate selection is in the URL and survives a reload', async ({ page })
   // one.
   await openSlateControls(page)
   const week = slateSelect(page, /^week$/i)
+  // More than one option means the catalog replaced the placeholder, and one
+  // other week is all this test needs. It asked for more than three, which
+  // failed on any warehouse with two or three published weeks — a new season
+  // on a fresh deploy — for a reason that had nothing to do with the URL.
   await expect
     .poll(async () => week.locator('option').count(), { timeout: 20_000 })
-    .toBeGreaterThan(3)
+    .toBeGreaterThan(1)
 
   const current = await week.inputValue()
   const target = (await week.locator('option').evaluateAll((options) =>

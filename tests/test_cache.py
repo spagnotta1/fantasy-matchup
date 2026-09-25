@@ -288,3 +288,32 @@ class TestPolicy:
         """Warming a path the policy does not cache is pure wasted work."""
         for path in policy.warmable_paths():
             assert policy.ttl_for(path) > 0, path
+
+    def test_slate_paths_are_the_requests_a_browser_makes(self):
+        """A warm is only useful if it lands on the key a browser reads.
+
+        The web client builds its board URL as season, week, scoring_profile,
+        limit (``web/src/api/projections.ts``). Keys normalise parameter order,
+        so the warmer must match the parameters, not their order.
+        """
+        from urllib.parse import parse_qsl, urlsplit
+
+        from nflfp.cache.keys import normalise_query
+
+        paths = policy.slate_paths(
+            season=2026, week=2, scoring_profiles=("half_ppr",), positions=("RB",)
+        )
+        browser = normalise_query(
+            [("season", "2026"), ("week", "2"), ("scoring_profile", "half_ppr"),
+             ("limit", str(policy.CLIENT_BOARD_LIMIT))]
+        )
+        boards = [p for p in paths if urlsplit(p).path == "/api/v1/projections"]
+        assert [normalise_query(parse_qsl(urlsplit(p).query)) for p in boards] == [browser]
+
+    def test_every_slate_path_is_actually_cached(self):
+        paths = policy.slate_paths(
+            season=2026, week=2, scoring_profiles=("half_ppr", "ppr"), positions=("QB", "WR")
+        )
+        assert len(paths) == len(set(paths))
+        for path in paths:
+            assert policy.ttl_for(path.split("?")[0]) > 0, path

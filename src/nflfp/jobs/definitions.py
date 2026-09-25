@@ -438,10 +438,21 @@ def warm_cache(context: JobContext) -> JobOutcome:
     """
     import asyncio
 
+    import sys
+
+    # psycopg's async driver refuses Windows' default ProactorEventLoop — the
+    # gotcha `python -m nflfp.api` already works around. Without this the warm
+    # failed every path on a Windows dev machine; Linux (Railway) is unaffected.
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     settings = get_settings()
-    paths = context.options.get("paths") or list(_warmable_paths())
+    requested = context.options.get("paths")
+    paths = requested or list(_warmable_paths())
     try:
-        warmed, failed = asyncio.run(_warm(paths, settings))
+        # An explicit path list is warmed as given; the default warm also covers
+        # the requests the web client makes for its opening slate.
+        warmed, failed = asyncio.run(_warm(paths, settings, discover=not requested))
     except RuntimeError:  # pragma: no cover - only inside a running loop
         return JobOutcome(skipped=True, skip_reason="already inside an event loop")
 
@@ -461,7 +472,37 @@ def _warmable_paths() -> tuple[str, ...]:
     return warmable_paths()
 
 
-async def _warm(paths: list[str], settings) -> tuple[list[str], dict[str, str]]:
+async def _client_slate_paths(client) -> tuple[str, ...]:
+    """The web client's own requests for the slate it opens on.
+
+    Discovered through the application, not the database, for the reason the
+    warmer drives the app at all: the client picks its opening slate from
+    ``/seasons`` (newest season, its latest published week) and its formats
+    from ``/meta/scoring-profiles``, so asking the same endpoints is the only
+    way to warm the entries a browser will actually read.
+    """
+    from ..cache import slate_paths
+
+    seasons = (await client.get("/api/v1/seasons")).json()["data"]
+    if not seasons or seasons[0].get("latest_published_week") is None:
+        return ()
+    profiles = (await client.get("/api/v1/meta/scoring-profiles")).json()["data"]
+    positions = [
+        entry["position"]
+        for entry in (await client.get("/api/v1/meta/positions")).json()["data"]
+        if entry.get("projected")
+    ]
+    return slate_paths(
+        season=int(seasons[0]["season"]),
+        week=int(seasons[0]["latest_published_week"]),
+        scoring_profiles=tuple(profiles),
+        positions=tuple(positions),
+    )
+
+
+async def _warm(
+    paths: list[str], settings, *, discover: bool = False
+) -> tuple[list[str], dict[str, str]]:
     """Request each path through the ASGI app, populating the cache."""
     from httpx import ASGITransport, AsyncClient
 
@@ -474,6 +515,12 @@ async def _warm(paths: list[str], settings) -> tuple[list[str], dict[str, str]]:
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(transport=transport, base_url="http://warm") as client:
+            if discover:
+                try:
+                    extra = await _client_slate_paths(client)
+                    paths = paths + [p for p in extra if p not in paths]
+                except Exception as exc:  # discovery failing must not stop the bare warm
+                    failed["<slate discovery>"] = repr(exc)
             for path in paths:
                 try:
                     response = await client.get(path, timeout=60.0)
