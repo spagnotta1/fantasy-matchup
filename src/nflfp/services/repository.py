@@ -335,24 +335,7 @@ _PROJECTION_COLUMNS = """
         pl.years_of_experience,
         pl.college_name,
 
-        u.snap_pct_l4,
-        u.target_share_l4,
-        u.targets_l4,
-        u.carries_l4,
-        u.receptions_l4,
-        u.opportunities_l4,
-        u.air_yards_share_l4,
-        u.wopr_l4,
-        u.snap_pct_season,
-        u.games_played_season,
-        u.games_in_window_l4,
-        u.fp_half_ppr_l4,
-        u.fp_half_ppr_season,
-        u.fp_volatility_l4,
-        u.snap_pct_l4 - u.snap_pct_prev           AS snap_pct_trend,
-        u.target_share_l4 - u.target_share_prev   AS target_share_trend,
-        u.injury_report_status,
-        u.injury_practice_status,
+{usage_columns}
 
         d.fp_allowed_rank        AS opp_defense_rank_vs_position,
         d.fp_allowed_l4          AS opp_fp_allowed_vs_position_l4,
@@ -389,6 +372,89 @@ _PROJECTION_COLUMNS = """
         pw.{points_column} AS actual_points
 """
 
+#: Usage columns every projection row carries, read from the in-season usage
+#: view. See :func:`_usage_columns` for where an upcoming week reads them from.
+_USAGE_FIELDS = (
+    "snap_pct_l4",
+    "target_share_l4",
+    "targets_l4",
+    "carries_l4",
+    "receptions_l4",
+    "opportunities_l4",
+    "air_yards_share_l4",
+    "wopr_l4",
+    "snap_pct_season",
+    "games_played_season",
+    "games_in_window_l4",
+    "fp_half_ppr_l4",
+    "fp_half_ppr_season",
+    "fp_volatility_l4",
+)
+
+
+def _usage_columns(*, has_upcoming: bool, has_injuries: bool) -> str:
+    """Usage and injury columns, with the upcoming week's sources as fallbacks.
+
+    ``feat_player_usage`` is built from completed games, so — exactly as the
+    module docstring says of defensive form — it has **no row for the week
+    being projected**. Joined alone, an upcoming week's board came back with
+    its usage block empty for all but the handful of players whose game had
+    already been played, and its injury block empty for everyone: the week a
+    manager is actually deciding had neither.
+
+    ``feat_upcoming_slate`` is the relation the model scores an upcoming week
+    from, so its usage window is not a substitute but the very one the
+    projection used. The week's injury report comes from ``raw_injuries``
+    directly — the official designation for that game — which is also the only
+    source of the injury itself (``injury_detail``).
+
+    ``*_trend`` keeps the feature layer's construction in both branches: the
+    4-game average minus the most recent game (see ``features/usage.py``).
+    """
+    def usage(column: str) -> str:
+        return f"COALESCE(u.{column}, us.{column})" if has_upcoming else f"u.{column}"
+
+    lines = [f"        {usage(column)} AS {column}," for column in _USAGE_FIELDS]
+    for trend, (l4, prev) in {
+        "snap_pct_trend": ("snap_pct_l4", "snap_pct_prev"),
+        "target_share_trend": ("target_share_l4", "target_share_prev"),
+    }.items():
+        in_season = f"u.{l4} - u.{prev}"
+        expression = f"COALESCE({in_season}, us.{trend})" if has_upcoming else in_season
+        lines.append(f"        {expression} AS {trend},")
+
+    for column, report in (
+        ("injury_report_status", "report_status"),
+        ("injury_practice_status", "practice_status"),
+    ):
+        sources = [f"u.{column}"]
+        if has_upcoming:
+            sources.append(f"us.{column}")
+        if has_injuries:
+            sources.append(f"inj.{report}")
+        lines.append(f"        COALESCE({', '.join(sources)}) AS {column},")
+    lines.append(
+        "        inj.report_primary_injury AS injury_detail,"
+        if has_injuries
+        else "        CAST(NULL AS text) AS injury_detail,"
+    )
+    return "\n".join(lines)
+
+
+#: The week's official injury report, one row per player: the latest revision
+#: when a report was amended, which is the designation that stood at kickoff.
+_INJURY_REPORT_CTE = """
+    injury_report AS (
+        SELECT gsis_id, report_status, practice_status, report_primary_injury,
+               ROW_NUMBER() OVER (
+                   PARTITION BY gsis_id ORDER BY date_modified DESC NULLS LAST
+               ) AS revision
+        FROM raw_injuries
+        WHERE season = :season AND week = :week
+    )
+"""
+
+
 #: The joins those columns come from. ``do_`` is spelled with a trailing
 #: underscore because ``do`` is a reserved word in SQL.
 _PROJECTION_JOINS = """
@@ -402,7 +468,7 @@ _PROJECTION_JOINS = """
       ON pl.gsis_id = p.player_id
     LEFT JOIN feat_player_usage AS u
       ON u.player_id = p.player_id AND u.season = p.season AND u.week = p.week
-    LEFT JOIN defense_ranked AS d
+{extra_joins}    LEFT JOIN defense_ranked AS d
       ON d.defteam = p.opponent AND d.position = p.position
     LEFT JOIN defense_overall AS do_
       ON do_.defteam = p.opponent
@@ -568,12 +634,29 @@ async def fetch_projections(
         params["limit"] = limit
         params["offset"] = offset
 
+    has_upcoming = await relation_exists(session, "feat_upcoming_slate")
+    has_injuries = await relation_exists(session, "raw_injuries")
+    extra_joins = ""
+    if has_upcoming:
+        extra_joins += """
+    LEFT JOIN feat_upcoming_slate AS us
+      ON us.player_id = p.player_id AND us.season = p.season AND us.week = p.week
+"""
+    if has_injuries:
+        extra_joins += """
+    LEFT JOIN injury_report AS inj
+      ON inj.gsis_id = p.player_id AND inj.revision = 1
+"""
+
     sql = f"""
     WITH {_PUBLISHED_RUN_CTE},
-    {_DEFENSE_FORM_CTE}
+    {_DEFENSE_FORM_CTE}{',' + _INJURY_REPORT_CTE if has_injuries else ''}
     SELECT
-{_PROJECTION_COLUMNS.format(points_column=points_column)}
-{_PROJECTION_JOINS}
+{_PROJECTION_COLUMNS.format(
+    points_column=points_column,
+    usage_columns=_usage_columns(has_upcoming=has_upcoming, has_injuries=has_injuries),
+)}
+{_PROJECTION_JOINS.format(extra_joins=extra_joins)}
     WHERE {' AND '.join(clauses)}
     ORDER BY COALESCE(pp.expected_points, pp.predicted_points) DESC,
              pp.ceiling_points DESC NULLS LAST,

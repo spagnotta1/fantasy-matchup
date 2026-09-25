@@ -338,8 +338,16 @@ class UsageOut(Schema):
     opportunities_l4: float | None = None
     air_yards_share_l4: float | None = None
     wopr_l4: float | None = None
-    snap_pct_trend: float | None = None
-    target_share_trend: float | None = None
+    snap_pct_trend: float | None = Field(
+        default=None,
+        description=(
+            "4-game average minus the most recent game. Positive means the last "
+            "game ran BELOW the average; negate it for 'last game vs average'."
+        ),
+    )
+    target_share_trend: float | None = Field(
+        default=None, description="Same construction as `snap_pct_trend`."
+    )
     snap_pct_season: float | None = None
     games_played_season: int | None = None
     games_in_window: int | None = None

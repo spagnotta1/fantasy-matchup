@@ -962,3 +962,96 @@ class TestScheduleStrength:
             url("/schedule-strength"), params={"season": SEASON, "position": "K"}
         )
         assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# The upcoming week's usage and injury report
+# ---------------------------------------------------------------------------
+
+
+class TestUpcomingWeekContext:
+    """An upcoming week reads usage and injuries from where they actually live.
+
+    ``feat_player_usage`` has no row for a week not yet played, so a board read
+    only from it came back with empty usage and — because a player ruled out
+    never plays — with no "Out" designation ever. These stage the two sources an
+    upcoming week really has and check the board carries them.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _fresh_relation_cache(self):
+        # Existence checks are cached process-wide for a minute. These tests
+        # create relations mid-test, so the cache must not carry "exists" into
+        # a later test whose throwaway schema never had them.
+        from nflfp.services.repository import clear_relation_cache
+
+        clear_relation_cache()
+        yield
+        clear_relation_cache()
+
+    async def test_the_weeks_injury_report_reaches_the_board(self, client, async_db_session):
+        from nflfp.services.repository import clear_relation_cache
+
+        await async_db_session.execute(
+            text(
+                "CREATE TABLE raw_injuries (season int, week int, gsis_id text,"
+                " report_status text, practice_status text, report_primary_injury text,"
+                " date_modified timestamptz)"
+            )
+        )
+        # Two revisions: the later one is the designation that stood.
+        for status, modified in (("Questionable", "2025-11-05"), ("Out", "2025-11-07")):
+            await async_db_session.execute(
+                text(
+                    "INSERT INTO raw_injuries VALUES (:s, :w, :i, :st,"
+                    " 'Did Not Participate In Practice', 'Hamstring', :m)"
+                ),
+                {"s": SEASON, "w": UPCOMING_WEEK, "i": PLAYERS[3][0], "st": status, "m": modified},
+            )
+        await async_db_session.commit()
+        clear_relation_cache()
+
+        data = (await client.get(url("/projections"), params={"season": SEASON})).json()["data"]
+        by_id = {e["projection"]["player"]["player_id"]: e["projection"] for e in data}
+        injury = by_id[PLAYERS[3][0]]["context"]["injury"]
+        assert injury["report_status"] == "Out"
+        assert injury["detail"] == "Hamstring"
+        assert injury["will_not_play"] is True
+        # A hard caveat, never a zeroed number: the projection is untouched.
+        assert by_id[PLAYERS[3][0]]["prediction"]["points"]["expected"] > 0
+        assert injury["applied_to_projection"] is False
+        assert len(data) == len(PLAYERS)
+
+    async def test_usage_falls_back_to_the_upcoming_slate(self, client, async_db_session):
+        from nflfp.services.repository import clear_relation_cache
+
+        await async_db_session.execute(text("DELETE FROM feat_player_usage"))
+        await async_db_session.execute(
+            text(
+                "CREATE TABLE feat_upcoming_slate (player_id text, season int, week int,"
+                " snap_pct_l4 double precision, target_share_l4 double precision,"
+                " targets_l4 double precision, carries_l4 double precision,"
+                " receptions_l4 double precision, opportunities_l4 double precision,"
+                " air_yards_share_l4 double precision, wopr_l4 double precision,"
+                " snap_pct_season double precision, games_played_season int,"
+                " games_in_window_l4 int, fp_half_ppr_l4 double precision,"
+                " fp_half_ppr_season double precision, fp_volatility_l4 double precision,"
+                " snap_pct_trend double precision, target_share_trend double precision,"
+                " injury_report_status text, injury_practice_status text)"
+            )
+        )
+        await async_db_session.execute(
+            text(
+                "INSERT INTO feat_upcoming_slate (player_id, season, week, snap_pct_l4,"
+                " snap_pct_trend) VALUES (:i, :s, :w, 0.91, -0.05)"
+            ),
+            {"i": PLAYERS[0][0], "s": SEASON, "w": UPCOMING_WEEK},
+        )
+        await async_db_session.commit()
+        clear_relation_cache()
+
+        data = (await client.get(url("/projections"), params={"season": SEASON})).json()["data"]
+        usage = {e["projection"]["player"]["player_id"]: e["projection"]["usage"] for e in data}
+        assert usage[PLAYERS[0][0]]["snap_pct_l4"] == pytest.approx(0.91)
+        assert usage[PLAYERS[0][0]]["snap_pct_trend"] == pytest.approx(-0.05)
+        assert usage[PLAYERS[1][0]]["snap_pct_l4"] is None

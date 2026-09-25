@@ -124,8 +124,12 @@ PLAYER_USAGE = REGISTRY.register(
         COUNT(*)             {_SEASON} AS games_played_season,
 
         -- ---- trend: is usage rising or falling? ----------------------------
-        -- Most recent game minus the 4-game average. Positive means a player
-        -- whose role is expanding, which a flat average hides.
+        -- `*_trend` below is the 4-game average MINUS the most recent game, so
+        -- a POSITIVE value means the last game ran BELOW the average -- a role
+        -- that is shrinking, not expanding. (An earlier comment here said the
+        -- opposite.) The frozen model was fitted on exactly this definition, so
+        -- the sign is kept; a reader-facing view negates it rather than
+        -- changing a model input.
         LAG(pw.offense_pct)  OVER (PARTITION BY pw.player_id ORDER BY pw.season, pw.week)
             AS snap_pct_prev,
         LAG(pw.target_share) OVER (PARTITION BY pw.player_id ORDER BY pw.season, pw.week)
