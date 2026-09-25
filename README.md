@@ -1555,6 +1555,11 @@ disagree around the 4th decimal. That's arithmetic, not a porting bug.
   `pg_attribute` to inspect `feat_*`.
 - Jobs that drive the async app (`warm_cache`) need the selector event loop on
   Windows, exactly like `python -m nflfp.api`.
+- SQLAlchemy 2.1 no longer installs `greenlet`, which the async engine needs.
+  The image resolves ranges fresh on every build, so an unpinned `sqlalchemy`
+  crashed every rebuilt service on import while local venvs (still on 2.0 with
+  greenlet) passed everything. Declare `sqlalchemy[asyncio]`; the version is
+  capped `<2.1`, and `tests/test_packaging.py` guards both.
 - Postgres `round(double, int)` doesn't exist — cast to `::numeric`. Probe SQL
   is written portably so it runs on both engines.
 - Postgres only allows `CREATE OR REPLACE VIEW` when the column list is

@@ -10,7 +10,13 @@ dependencies = [
     # pipeline and SQLAlchemy's sync *and* async driver, so pooling and TLS
     # behaviour cannot diverge between the API and the workers.
     "psycopg[binary]>=3.1",
-    "sqlalchemy>=2.0.30",
+    # `[asyncio]`, not bare: the API, the cache warmer and every service read
+    # through SQLAlchemy's async engine, which needs greenlet. SQLAlchemy 2.1
+    # stopped installing greenlet by default, so an unpinned build resolved
+    # 2.1.1 without it and every container crashed on import ("requires that
+    # the Python 'greenlet' library is installed"). The <2.1 cap keeps the
+    # image on the series the suite is run against; 2.1 is its own upgrade.
+    "sqlalchemy[asyncio]>=2.0.30,<2.1",
     "alembic>=1.13",
     "pydantic>=2.7",
     "pydantic-settings>=2.2",
