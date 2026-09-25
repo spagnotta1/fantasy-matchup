@@ -46,7 +46,7 @@ export function boardNotices(meta: ResponseMeta): string[] {
   if (!page || page.total <= page.returned) return meta.notices
   return [
     ...meta.notices,
-    `Only the top ${page.returned} of ${page.total} projected players were loaded. Sorting, search and counts on this screen cover those ${page.returned}.`,
+    `Only the top ${page.returned} of ${page.total} projected players were loaded, so sorting, search and counts on this screen only cover those ${page.returned}.`,
   ]
 }
 

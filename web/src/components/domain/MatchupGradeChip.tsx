@@ -38,7 +38,7 @@ export function MatchupGradeChip({
     return (
       <Tooltip
         align={align}
-        content={grade?.reason ?? 'Not enough completed defensive history to grade this matchup.'}
+        content={grade?.reason ?? 'This defence has not played enough games yet to grade the matchup.'}
       >
         <Badge tone="neutral" size={size} icon={<HelpCircle className="size-3" />}>
           Not graded
@@ -50,12 +50,12 @@ export function MatchupGradeChip({
   const parts = [
     opponent ? `Against ${opponent}.` : null,
     grade.defense_rank
-      ? `Ranked ${grade.defense_rank} of 32 against this position, where 1 is the toughest.`
+      ? `Ranked ${grade.defense_rank} of 32 against this position (1 = toughest).`
       : null,
     fpAllowed !== null && fpAllowed !== undefined
-      ? `Allowed ${formatPoints(fpAllowed)} fantasy points per game to the position over the last ${grade.sample_games ?? 4} games.`
+      ? `Has allowed ${formatPoints(fpAllowed)} fantasy points per game to this position over its last ${grade.sample_games ?? 4} games.`
       : null,
-    'Grades are percentiles across this week — an A means one of the softest matchups on the slate, not a soft defence in absolute terms.',
+    "Grades compare this week's matchups with each other: an A means one of the easiest matchups this week, not that the defence is bad overall.",
   ].filter(Boolean)
 
   return (

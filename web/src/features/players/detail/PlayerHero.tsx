@@ -103,27 +103,27 @@ export function PlayerHero({
             badge={<ProvenanceBadge provenance="model" showLabel={false} />}
             value={<ProjectionValue points={points} size="xl" markUncalibrated />}
             unit="pts"
-            detail={`Median ${formatPoints(points.median)} · ${formatScoringProfile(scoringProfile)}`}
+            detail={`Middle outcome ${formatPoints(points.median)} · ${formatScoringProfile(scoringProfile)}`}
           />
           <StatCard
             label="Floor"
             value={formatPoints(points.floor)}
             unit="pts"
-            detail="P10 — a bad week goes below this one time in ten."
+            detail="A bad week. Scores less than this about 1 week in 10."
           />
           <StatCard
             label="Ceiling"
             value={formatPoints(points.ceiling)}
             unit="pts"
-            detail="P90 — a big week clears this one time in ten."
+            detail="A strong week. Scores more than this about 1 week in 10."
           />
           <StatCard
             label="Confidence"
             value={<ConfidenceChip label={points.confidence_label} value={points.confidence} size="md" />}
             detail={
               points.confidence !== null && points.confidence !== undefined
-                ? `${formatPercent(points.confidence)} — how much the model knew, not how good the player is.`
-                : 'How much the model knew, not how good the player is.'
+                ? `${formatPercent(points.confidence)} — how much data backs this, not how good the player is.`
+                : 'How much data backs this, not how good the player is.'
             }
           />
         </div>

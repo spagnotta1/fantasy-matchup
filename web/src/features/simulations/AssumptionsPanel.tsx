@@ -36,35 +36,35 @@ export function AssumptionsPanel({
       ok: assumptions.kicker_projection_available,
       detail: assumptions.kicker_projection_available
         ? 'Included.'
-        : 'Not projected, so these totals cover skill positions only and are not comparable to a full lineup score.',
+        : 'Not included. Totals cover QB, RB, WR and TE only, so they will be lower than a full lineup score.',
     },
     {
       label: 'Team defence',
       ok: assumptions.defense_projection_available,
       detail: assumptions.defense_projection_available
         ? 'Included.'
-        : 'Not projected, so these totals cover skill positions only.',
+        : 'Not included. Totals cover QB, RB, WR and TE only.',
     },
     {
       label: 'Injury designations',
       ok: assumptions.injury_adjustment_applied,
       detail: assumptions.injury_adjustment_applied
         ? 'Applied.'
-        : 'Not applied. A player designated Out contributes their full projected distribution.',
+        : 'Not factored in. A player ruled Out is still simulated as if they play.',
     },
     {
       label: 'Matchup',
       ok: assumptions.matchup_adjustment_applied,
       detail: assumptions.matchup_adjustment_applied
         ? 'Applied.'
-        : 'Not applied. The matchup grade is derived above the model and is not an input to it.',
+        : 'Not factored in. The matchup grade is calculated separately and does not feed the projection.',
     },
     {
       label: 'Weather',
       ok: assumptions.weather_adjustment_applied,
       detail: assumptions.weather_adjustment_applied
         ? 'Applied.'
-        : 'Not applied. Conditions are reported as context and do not move the projection.',
+        : 'Not factored in. Weather is shown for information and does not change the projection.',
     },
   ]
 
@@ -73,7 +73,7 @@ export function AssumptionsPanel({
       <CardHeader
         as="h2"
         title="What this simulation assumes"
-        description="Read from the response, not restated here — each line follows a flag the API sets."
+        description="What this run did and did not include."
         action={<ProvenanceBadge provenance="derived" />}
       />
       <CardBody className="space-y-5">
@@ -81,12 +81,12 @@ export function AssumptionsPanel({
           <div className="bg-caution-soft flex gap-2.5 rounded-[var(--radius-control)] px-3 py-2.5">
             <AlertTriangle aria-hidden className="text-caution-text mt-0.5 size-4 shrink-0" />
             <p className="text-caution-text text-xs leading-relaxed">
-              <span className="font-semibold">Players were drawn independently.</span> Teammates
-              divide one offence&apos;s plays and opposing players share pace and game script, so
-              the true joint distribution is correlated. Measured over 2,878 held-out lineups, the
-              cost is small: the 80% range covered 79.4% of real outcomes against a target of 80%.
-              The correlated mode is available above, but it moves that past the target rather than
-              onto it, which is why it is not the default.
+              <span className="font-semibold">Each player was simulated on their own.</span> In
+              real games, teammates share one offence&apos;s plays and a game&apos;s pace affects both
+              sides, so scores are linked — most of all a quarterback and their own receivers. Tested
+              on 2,878 past lineups, the effect is small: the 80% range held the real score 79.4% of
+              the time, against a target of 80%. The linked mode above overshoots that target rather
+              than hitting it, which is why it is not the default.
             </p>
           </div>
         )}
@@ -130,11 +130,11 @@ export function AssumptionsPanel({
             How it was run
           </h3>
           <dl className="text-ink-muted grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
-            <Detail label="Iterations" value={simulation.iterations.toLocaleString()} />
+            <Detail label="Simulations" value={simulation.iterations.toLocaleString()} />
             <Detail label="Seed" value={String(simulation.seed)} />
-            <Detail label="Sampling" value={simulation.sampling_method.replace(/_/g, ' ')} />
+            <Detail label="Method" value={simulation.sampling_method.replace(/_/g, ' ')} />
             <Detail
-              label="Correlation"
+              label="Mode"
               value={
                 simulation.correlation_model_version
                   ? `${simulation.correlation_mode} v${simulation.correlation_model_version}`
@@ -143,7 +143,7 @@ export function AssumptionsPanel({
             />
             <Detail label="Lineup format" value={simulation.lineup_format.replace(/_/g, ' ')} />
             <Detail
-              label="Model run"
+              label="Projections used"
               value={
                 simulation.model
                   ? `#${simulation.model.run_id} · ${simulation.model.model_name} ${simulation.model.model_version}`
@@ -152,9 +152,8 @@ export function AssumptionsPanel({
             />
           </dl>
           <p className="text-ink-muted mt-2 text-xs leading-relaxed">
-            The same lineups against the same published run with the same seed produce identical
-            numbers. Nothing is invented at run time — every draw is taken from a stored
-            distribution the model was measured against.
+            Running the same lineups with the same seed against the same projections gives exactly
+            the same numbers. Every simulated score comes from a player&apos;s projected range.
           </p>
         </div>
       </CardBody>

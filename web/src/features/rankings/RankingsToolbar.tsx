@@ -37,7 +37,7 @@ export function RankingsToolbar({
     <div className="mb-4 space-y-3">
       <div className="flex flex-wrap items-end gap-3">
         <Input
-          label="Search this board"
+          label="Search these rankings"
           hideLabel
           placeholder="Search by name or team…"
           value={query}

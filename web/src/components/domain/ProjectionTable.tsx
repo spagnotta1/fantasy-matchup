@@ -8,6 +8,7 @@ import { ConfidenceChip } from '@/components/domain/ConfidenceChip'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { PlayerIdentity } from '@/components/domain/PlayerIdentity'
+import { InfoTip } from '@/components/ui/Tooltip'
 import { cn } from '@/utils/cn'
 import { boardCeiling, groupByTier } from '@/utils/board'
 import type { SortDirection, SortKey } from '@/utils/board'
@@ -19,21 +20,36 @@ interface Column {
   className: string
   /** Numeric columns are right-aligned so digits line up down the column. */
   numeric?: boolean
+  /** One plain-English line explaining the column, shown as an info tip. */
+  hint?: string
+}
+
+const HINTS = {
+  matchup:
+    'How easy the opponent is for this position, from A (easiest) to F (toughest), compared with every other matchup this week.',
+  range:
+    'The likely scoring range. Left: a bad week. Right: a strong week. The tick marks the middle outcome.',
+  floor: 'A bad-but-realistic week. The player scores less than this about 1 week in 10.',
+  ceiling: 'A strong week. The player scores more than this about 1 week in 10.',
+  confidence:
+    'How much data backs the projection. Not a rating of the player — low just means a wider range.',
+  projection: 'Expected fantasy points this week under your scoring settings.',
+  tier: 'Players in the same tier are close enough that either could outscore the other.',
 }
 
 const COLUMNS: Column[] = [
   { key: 'rank', label: '#', className: 'w-12' },
   { key: 'name', label: 'Player', className: 'min-w-56' },
-  { key: null, label: 'Matchup', className: 'w-24' },
+  { key: null, label: 'Matchup', className: 'w-24', hint: HINTS.matchup },
   // Range and the numeric Floor/Ceiling pair are the same information in two
   // forms, so they never appear together: the bar (which carries its own
   // endpoint labels) from `xl`, the bare numbers at `lg` where the bar has no
   // room to be readable. Both remain sortable from the toolbar dropdown.
-  { key: null, label: 'Range', className: 'w-48 hidden xl:table-cell' },
-  { key: 'floor', label: 'Floor', className: 'w-20 hidden lg:table-cell xl:hidden', numeric: true },
-  { key: 'ceiling', label: 'Ceiling', className: 'w-20 hidden lg:table-cell xl:hidden', numeric: true },
-  { key: 'confidence', label: 'Confidence', className: 'w-28 hidden md:table-cell' },
-  { key: 'projection', label: 'Projection', className: 'w-24', numeric: true },
+  { key: null, label: 'Range', className: 'w-48 hidden xl:table-cell', hint: HINTS.range },
+  { key: 'floor', label: 'Floor', className: 'w-20 hidden lg:table-cell xl:hidden', numeric: true, hint: HINTS.floor },
+  { key: 'ceiling', label: 'Ceiling', className: 'w-20 hidden lg:table-cell xl:hidden', numeric: true, hint: HINTS.ceiling },
+  { key: 'confidence', label: 'Confidence', className: 'w-28 hidden md:table-cell', hint: HINTS.confidence },
+  { key: 'projection', label: 'Projection', className: 'w-24', numeric: true, hint: HINTS.projection },
 ]
 
 export interface ProjectionTableProps {
@@ -104,7 +120,7 @@ export const ProjectionTable = memo(function ProjectionTable({
   const columns = showTierColumn
     ? [
         ...COLUMNS.slice(0, 2),
-        { key: null, label: 'Tier', className: 'w-16 hidden sm:table-cell' } satisfies Column,
+        { key: null, label: 'Tier', className: 'w-16 hidden sm:table-cell', hint: HINTS.tier } satisfies Column,
         ...COLUMNS.slice(2),
       ]
     : COLUMNS
@@ -154,6 +170,11 @@ export const ProjectionTable = memo(function ProjectionTable({
                             <ArrowDown aria-hidden className="size-3" />
                           ))}
                       </button>
+                    )}
+                    {column.hint && (
+                      <span className="ml-1 inline-flex align-middle normal-case">
+                        <InfoTip label={`What ${column.label.toLowerCase()} means`} content={column.hint} />
+                      </span>
                     )}
                   </th>
                 )

@@ -45,7 +45,7 @@ export function SimulationHistory({
       <CardHeader
         as="h2"
         title="Previous runs"
-        description="Kept in this browser only — the API stores no simulations, so these do not follow you to another device and clearing site data clears them."
+        description="Saved in this browser only. They will not appear on other devices, and clearing your browser data deletes them."
         action={
           entries.length > 0 ? (
             <Button size="sm" variant="ghost" onClick={onClear}>
@@ -60,7 +60,7 @@ export function SimulationHistory({
         <EmptyState
           icon={<History aria-hidden className="size-5" />}
           title="No simulations yet"
-          description="Run one and it is kept here, with the lineups and the seed, so you can load it back and reproduce it exactly."
+          description="Each simulation you run is saved here, so you can load it again and get the same result."
         />
       ) : (
         <ul className="divide-line divide-y">
@@ -98,8 +98,8 @@ export function SimulationHistory({
                       <Badge tone="info">{entry.correlationMode.replace(/_/g, ' ')}</Badge>
                     )}
                     {stale && (
-                      <Badge tone="caution" title={`Run against model run #${entry.modelRunId}`}>
-                        Older model run
+                      <Badge tone="caution" title={`Run against an older set of projections (#${entry.modelRunId})`}>
+                        Older projections
                       </Badge>
                     )}
                     <Button size="sm" variant="secondary" onClick={() => onLoad(entry)}>
@@ -124,9 +124,8 @@ export function SimulationHistory({
 
       <CardBody className="border-line border-t py-3">
         <p className="text-ink-muted text-xs leading-relaxed">
-          A run is reproducible from its lineups, its seed and the published model run it was made
-          against. All three are stored, which is why loading one back and running it again gives
-          the same numbers rather than similar ones.
+          Each saved run keeps its lineups, its seed and the projections it used, so running it
+          again gives exactly the same numbers.
         </p>
       </CardBody>
     </Card>

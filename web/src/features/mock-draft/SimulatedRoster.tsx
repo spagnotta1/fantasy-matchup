@@ -30,7 +30,7 @@ export function SimulatedRoster({ seat }: { seat: SeatAnalysis }) {
     <Card>
       <CardHeader
         title={`Simulated roster — draft position ${seat.draft_position}`}
-        description="The simulation whose roster value landed closest to the median, replayed with the reasoning behind every pick. Not the best of the run."
+        description="A typical draft from this spot (not the best one), with the reasoning behind every pick."
         as="h2"
         action={<ProvenanceBadge provenance="derived" />}
       />
@@ -198,7 +198,7 @@ function PickReasoning({ pick }: { pick: SimulatedPick }) {
                 value={`${formatNumber(rationale.marginal_value)} pts`}
               />
               <Figure
-                label="Over next available"
+                label="Better than next best"
                 value={`${formatNumber(rationale.value_over_next_available)} pts`}
               />
               {rationale.next_pick_overall != null && (
@@ -223,7 +223,7 @@ function PickReasoning({ pick }: { pick: SimulatedPick }) {
           </>
         ) : (
           <p className="text-ink-secondary text-sm">
-            No reasoning was captured for this pick.
+            No reasoning is available for this pick.
           </p>
         )}
       </div>
@@ -238,8 +238,8 @@ function HistoryPanel({ history }: { history: SimulatedPick['historical'] }) {
     return (
       <div className="border-line rounded-[var(--radius-control)] border p-3">
         <p className="text-ink-secondary text-xs leading-relaxed">
-          No completed season in the historical window, so expected games is the
-          position prior rather than this player&rsquo;s own record.
+          No full past season on record, so expected games played uses the typical figure
+          for the position rather than this player&rsquo;s own history.
         </p>
       </div>
     )

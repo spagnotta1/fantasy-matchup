@@ -168,7 +168,7 @@ def grade_matchup(
         return MatchupGrade(
             graded=False,
             sample_games=sample_games,
-            reason="no defensive ranking available for this opponent and position",
+            reason="No defensive ranking is available for this opponent at this position.",
         )
 
     if sample_games is not None and sample_games < MIN_GAMES_FOR_GRADE:
@@ -177,8 +177,8 @@ def grade_matchup(
             defense_rank=defense_rank,
             sample_games=sample_games,
             reason=(
-                f"only {sample_games} game(s) of defensive history; "
-                f"{MIN_GAMES_FOR_GRADE} needed before a rank means anything"
+                f"This defence has played only {sample_games} game(s). It needs "
+                f"{MIN_GAMES_FOR_GRADE} before the matchup can be graded."
             ),
         )
 

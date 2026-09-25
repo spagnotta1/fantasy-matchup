@@ -144,7 +144,7 @@ export default function LivePage() {
             <CardHeader
               as="h2"
               title="Points so far"
-              description="Unofficial in-game points, highest first, beside each player's published projection."
+              description="Unofficial points scored so far, highest first, next to each player's projection."
               action={
                 <span className="flex items-center gap-1.5">
                   <ProvenanceBadge provenance="actual" />
@@ -158,8 +158,8 @@ export default function LivePage() {
                 title={data?.games.length ? 'No points yet' : 'No games found for this week'}
                 description={
                   data?.games.length
-                    ? 'Nobody matching these filters has recorded a stat yet. Points appear once games kick off.'
-                    : 'The live scoreboard returned no games for the selected week.'
+                    ? 'Nobody matching these filters has scored yet. Points appear once games kick off.'
+                    : 'We could not find any games for the selected week.'
                 }
               />
             ) : (

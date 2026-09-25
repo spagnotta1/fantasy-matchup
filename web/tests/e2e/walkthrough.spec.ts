@@ -248,7 +248,7 @@ test('a search that matches nothing explains itself and offers a way out', async
   await page.goto('/rankings')
   await settle(page)
 
-  await page.getByLabel(/search this board/i).fill('zzzzzznotaplayer')
+  await page.getByLabel(/search these rankings/i).fill('zzzzzznotaplayer')
   await expect(page.getByText(/no players match that search/i)).toBeVisible()
 
   // The toolbar's inline X carries the same name; the empty state's is the

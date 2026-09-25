@@ -74,7 +74,7 @@ export function LineupBuilder({
   // Marks a search result the engine could not sample. Only offered once the
   // board is complete, for the same reason the rows go quiet without it.
   const note = board.complete
-    ? (player: Player) => (board.byPlayer.has(player.player_id) ? null : 'No board')
+    ? (player: Player) => (board.byPlayer.has(player.player_id) ? null : 'No projection')
     : undefined
 
   return (
@@ -219,7 +219,7 @@ function SlotRow({
               <ProjectionValue points={projection.prediction.points} />
             ) : blocked ? (
               <Badge tone="caution" icon={<AlertTriangle className="size-3" />}>
-                {status.reason === 'unprojected_position' ? 'Not projected' : 'No board'}
+                {status.reason === 'unprojected_position' ? 'Not projected' : 'No projection'}
               </Badge>
             ) : (
               // The board is not fully in hand, so absence from it means

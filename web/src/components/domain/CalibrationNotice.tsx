@@ -36,25 +36,25 @@ export function CalibrationNotice({
   return (
     <aside
       className={cn('bg-caution-soft rounded-[var(--radius-card)] px-4 py-3', className)}
-      aria-label="Data quality notice"
+      aria-label="Projection accuracy notice"
     >
       <div className="flex gap-2.5">
         <AlertTriangle aria-hidden className="text-caution-text mt-0.5 size-4 shrink-0" />
         <div className="text-caution-text space-y-1.5 text-xs leading-relaxed">
           <p>
             <span className="font-semibold">
-              {all ? 'This run' : `${uncalibrated.length} of ${projections.length} projections`} did not
-              store a calibrated mean.
+              {all
+                ? "This week's projections are approximate."
+                : `${uncalibrated.length} of ${projections.length} projections are approximate.`}
             </span>{' '}
-            The projections shown are the model&apos;s raw output, which is conditionally biased by
-            construction. Treat them as approximate rather than as the calibrated numbers the model
-            was measured on.
+            They skipped the model&apos;s final adjustment step, so they may run a little high or
+            low. They are less reliable than the numbers on the Track record page.
           </p>
           {banded && (
             <p>
-              The stored floor-to-ceiling ranges are also bucketed rather than per-player — groups
-              of players share an identical spread. A range here describes the group a player was
-              placed in, so read it as a rough band and not as that player&apos;s own volatility.
+              The floor-to-ceiling ranges are also shared across groups of similar players rather
+              than worked out for each player. Read a range as a rough guide, not as a precise read
+              on how boom-or-bust that player is.
             </p>
           )}
         </div>

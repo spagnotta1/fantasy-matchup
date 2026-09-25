@@ -33,10 +33,9 @@ export function ConfidenceChip({
     <Tooltip
       content={
         <>
-          <strong className="font-semibold">How much the model knows</strong>
-          {value !== null && value !== undefined ? ` (${formatPercent(value)})` : ''} — not how
-          good the player is. Low confidence means a wider range of outcomes, not a worse
-          projection.
+          <strong className="font-semibold">How much data backs this projection</strong>
+          {value !== null && value !== undefined ? ` (${formatPercent(value)})` : ''}. This is not
+          a rating of the player. Low confidence just means a wider range of possible scores.
         </>
       }
     >

@@ -57,7 +57,7 @@ export function ScoreDistribution({
           <div className="mb-1.5 flex items-baseline justify-between gap-4 text-sm">
             <span className="text-ink truncate font-medium">{side.label}</span>
             <span className="text-ink-muted tnum shrink-0 text-xs">
-              P10 {formatPoints(side.team.p10)} · P50 {formatPoints(side.team.median_score)} · P90{' '}
+              Low {formatPoints(side.team.p10)} · Middle {formatPoints(side.team.median_score)} · High{' '}
               {formatPoints(side.team.p90)}
             </span>
           </div>
@@ -100,11 +100,11 @@ export function ScoreDistribution({
       <div className="text-ink-muted flex items-center gap-4 text-xs">
         <span className="flex items-center gap-1.5">
           <span aria-hidden className="bg-chart-series/55 block h-2 w-6 rounded-full" />
-          Middle half of outcomes (P25–P75)
+          Half of simulated weeks land here
         </span>
         <span className="flex items-center gap-1.5">
           <span aria-hidden className="bg-chart-series/25 block h-2 w-6 rounded-full" />
-          P10–P90
+          8 in 10 weeks land here
         </span>
       </div>
     </div>

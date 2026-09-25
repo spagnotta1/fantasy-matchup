@@ -47,9 +47,9 @@ export function ShareMatchup() {
       </Button>
       <span aria-live="polite" className="text-ink-muted text-xs">
         {failed
-          ? 'Copying was blocked — the address bar holds this matchup.'
+          ? 'Copying was blocked — copy the page address instead to share this matchup.'
           : copied
-            ? 'Both lineups and the run settings are in the link.'
+            ? 'The link includes both lineups and your settings.'
             : ''}
       </span>
     </div>

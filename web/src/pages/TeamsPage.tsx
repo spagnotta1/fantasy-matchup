@@ -229,19 +229,19 @@ function TeamDetail({ team }: { team: string }) {
           <StatCard
             label="Spread"
             value={game ? `${team} ${formatSpread(game.team_spread)}` : '—'}
-            detail="Observed market line — not in the projection."
+            detail="Betting line — not factored into the projection."
             badge={<ProvenanceBadge provenance="context" />}
           />
           <StatCard
-            label="Implied points"
+            label="Expected points"
             value={formatPoints(game?.implied_team_total)}
-            detail={`Total ${formatPoints(game?.total_line)} — the market's estimate, not the model's.`}
+            detail={`Over/under ${formatPoints(game?.total_line)}. From betting markets, not our model.`}
             badge={<ProvenanceBadge provenance="context" />}
           />
           <StatCard
             label="Projected fantasy points"
             value={formatPoints(data?.projected_points)}
-            detail="Sum over projected skill players. Not a team score: no kickers, no defence."
+            detail="QB, RB, WR and TE projections added up. Not a team score — no kicker or defence."
             badge={<ProvenanceBadge provenance="model" />}
           />
         </div>
@@ -277,13 +277,13 @@ function TeamDetail({ team }: { team: string }) {
             <CardHeader
               as="h2"
               title="Projected players"
-              description="This week's published projections for the offence, by position."
+              description="This week's projections for the team's offence, by position."
               action={<ProvenanceBadge provenance="model" />}
             />
             {players.length === 0 ? (
               <EmptyState
                 title="No projected players"
-                description="The published run holds no projections for this team this week — a bye, or a week not yet run."
+                description="No projections for this team this week — either a bye week or projections are not out yet."
               />
             ) : (
               <div className="overflow-x-auto">
@@ -379,7 +379,7 @@ function DefenseCard({ team }: { team: string }) {
       <CardHeader
         as="h2"
         title="Defence by position"
-        description="What this defence has allowed over its last four completed games. Rank 1 is the toughest."
+        description="What this defence has allowed over its last four games. Rank 1 is the toughest to face."
         action={<ProvenanceBadge provenance="derived" />}
       />
       {defense.isPending ? (
@@ -390,7 +390,7 @@ function DefenseCard({ team }: { team: string }) {
         <EmptyState
           icon={<ShieldQuestion aria-hidden className="size-5" />}
           title="No defensive history yet"
-          description="There are no completed games before this week to rank the defence on."
+          description="This defence has not played any games yet this season, so it cannot be ranked."
         />
       ) : (
         <ul className="divide-line divide-y">
@@ -423,7 +423,7 @@ function TeamSchedule({ team }: { team: string }) {
       <CardHeader
         as="h2"
         title="Remaining schedule"
-        description="Each remaining opponent's current form against this position. Current form carried forward, not a forecast."
+        description="How each remaining opponent is defending this position right now. Based on current form, not a forecast of how they will play later."
         action={
           projected.length > 0 && (
             <SegmentedControl
@@ -515,7 +515,7 @@ function DepthChartCard({ team, players }: { team: string; players: RankedProjec
       ) : empty ? (
         <EmptyState
           title="No depth chart for this week"
-          description="No listing was captured for this team going into the selected week."
+          description="We do not have this team's depth chart for the selected week."
         />
       ) : (
         <>

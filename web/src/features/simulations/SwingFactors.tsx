@@ -50,7 +50,7 @@ export function SwingFactors({
   if (swings.length === 0) {
     return (
       <p className="text-ink-muted text-sm">
-        No outcome ranges were stored for these players, so there is nothing to rank.
+        No scoring ranges are available for these players, so there is nothing to rank.
       </p>
     )
   }
@@ -118,9 +118,9 @@ export function SwingFactors({
       </ul>
 
       <p className="text-ink-muted text-xs leading-relaxed">
-        Ranked by the width of each player&apos;s published P10–P90 range — the distance between a
-        bad week and a big one. The marker is the projection, which sits off-centre because these
-        distributions are not symmetric.
+        Ranked by the gap between each player&apos;s floor and ceiling — a bad week and a big one,
+        each about 1 week in 10. The marker is the projection, which is often off-centre because a
+        big week can run further above it than a bad week falls below it.
       </p>
     </div>
   )

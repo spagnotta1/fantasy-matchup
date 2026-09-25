@@ -43,8 +43,8 @@ export function DraftBoard({
           compact
             ? 'Your picks in order, with the wait between them.'
             : snake
-              ? `${teams} seats, ${rounds} rounds. Your picks are marked; the snake is why the gap between them alternates.`
-              : `${teams} seats, ${rounds} rounds, linear order — every round runs in the same direction.`
+              ? `${teams} teams, ${rounds} rounds. Your picks are marked. In a snake draft the order reverses each round, so the wait between your picks alternates.`
+              : `${teams} teams, ${rounds} rounds. Every round picks in the same order.`
         }
         as="h2"
       />

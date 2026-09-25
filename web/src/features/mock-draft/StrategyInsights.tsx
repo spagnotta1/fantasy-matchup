@@ -30,9 +30,9 @@ export function StrategyInsights({ seat }: { seat: SeatAnalysis }) {
         <CardHeader title="Draft strategy" as="h2" />
         <CardBody>
           <p className="text-ink-secondary text-sm leading-relaxed">
-            The simulations produced no finding that met its evidence threshold at this
-            seat. That is a result rather than a gap: no position dominated the early
-            rounds, no tier emptied sharply, and nothing was reliably deferrable.
+            No clear strategy stood out from this draft position. That is a real finding: no
+            position dominated the early rounds, no group of players ran out suddenly, and no
+            position was reliably safe to wait on.
           </p>
         </CardBody>
       </Card>

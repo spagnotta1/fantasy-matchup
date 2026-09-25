@@ -79,7 +79,7 @@ export function LeagueSettingsPanel({
     <Card aria-labelledby={headingId}>
       <CardHeader
         title={<span id={headingId}>League settings</span>}
-        description="Everything the draft depends on. Nothing is saved — the settings and the seed are the whole reproducible input."
+        description="Everything the draft depends on. Nothing is saved, but the same settings and seed always give the same result."
         as="h2"
       />
       <CardBody className="space-y-5">
@@ -92,7 +92,7 @@ export function LeagueSettingsPanel({
               value: String(season),
               label: String(season),
             }))}
-            hint="Seasons with a published week 1 board"
+            hint="Seasons with week 1 projections available"
           />
           <Select
             label="Teams"
@@ -160,11 +160,10 @@ export function LeagueSettingsPanel({
             <span>
               {skill.summary}{' '}
               <span className="text-ink-secondary">
-                Measured against this level: the 13th-ranked player on the board goes
-                within about {formatNumber(skill.scatter, 1)} picks of where they should,
-                and drafting well is worth roughly{' '}
-                {formatNumber(skill.strategy_edge, 0)} starting-lineup points over
-                drafting like the field.
+                At this level, the 13th-best player usually goes within about{' '}
+                {formatNumber(skill.scatter, 1)} picks of where they should, and drafting well
+                is worth roughly {formatNumber(skill.strategy_edge, 0)} starting-lineup points
+                over drafting like everyone else.
               </span>
             </span>
           </p>
@@ -197,8 +196,8 @@ export function LeagueSettingsPanel({
           <p className="text-ink-muted text-xs leading-relaxed">
             Kicker and team-defence slots are not offered:{' '}
             {config.unavailable_positions.map((entry) => entry.position).join(' and ')}{' '}
-            have no validated projection, and drafting a position with no projected value
-            would put an invented number into every roster total.
+            are not projected, and adding them would mean putting made-up numbers into every
+            roster total.
           </p>
         </fieldset>
 
@@ -216,7 +215,7 @@ export function LeagueSettingsPanel({
                 value: String(value),
                 label: value.toLocaleString(),
               }))}
-              hint="More drafts narrow the error, and cost time"
+              hint="More drafts give steadier results but take longer"
             />
             <div className="flex items-end gap-2">
               <Select
@@ -254,8 +253,8 @@ export function LeagueSettingsPanel({
           <Tooltip
             content={
               comparisonTooLarge
-                ? `${totalDrafts.toLocaleString()} simulated drafts is above the ${limits.max_total_drafts.toLocaleString()} one request may run. Lower the simulation count.`
-                : `Simulates all ${form.teams} seats — ${totalDrafts.toLocaleString()} drafts in total.`
+                ? `${totalDrafts.toLocaleString()} simulated drafts is more than the ${limits.max_total_drafts.toLocaleString()} limit. Lower the number of simulated drafts.`
+                : `Simulates all ${form.teams} draft positions — ${totalDrafts.toLocaleString()} drafts in total.`
             }
           >
             <span>
@@ -271,7 +270,7 @@ export function LeagueSettingsPanel({
             </span>
           </Tooltip>
           {comparisonTooLarge && (
-            <Badge tone="caution">Too many drafts to compare every seat</Badge>
+            <Badge tone="caution">Too many drafts to compare every position</Badge>
           )}
         </div>
       </CardBody>

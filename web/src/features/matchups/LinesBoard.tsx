@@ -112,7 +112,7 @@ export function LinesBoard() {
   if (rows.length === 0) {
     return (
       <Card>
-        <EmptyState title="No games this week" description="The schedule holds no games for the selected week." />
+        <EmptyState title="No games this week" description="There are no games in the selected week." />
       </Card>
     )
   }
@@ -126,7 +126,7 @@ export function LinesBoard() {
         showTitle
         notices={[
           reason ??
-            'The frozen model excludes market features, so none of these lines is reflected in any projection.',
+            'Betting lines are not an input to the projection model, so nothing on this page changes any projection.',
         ]}
       />
 
@@ -136,7 +136,7 @@ export function LinesBoard() {
             <CardHeader
               as="h2"
               title="Betting lines"
-              description="Spread, total and each side's implied points, highest total first."
+              description="Point spread, over/under and how many points each team is expected to score, highest-scoring games first."
               action={<ProvenanceBadge provenance="context" />}
             />
             <div className="overflow-x-auto">
@@ -156,7 +156,7 @@ export function LinesBoard() {
                         Move
                         <InfoTip
                           label="About line movement"
-                          content="How far the favourite's spread has moved since the line opened. An arrow up means the market moved toward that team."
+                          content="How far the favourite's spread has moved since betting opened. An up arrow means bettors have moved toward that team."
                         />
                       </span>
                     </th>
@@ -173,16 +173,16 @@ export function LinesBoard() {
               {rows[0]?.book
                 ? `Lines from ${rows[0].book}${rows[0].capturedAt ? `, captured ${formatGameDay(rows[0].capturedAt)}` : ''}. `
                 : ''}
-              Where no market line was captured the schedule's closing line stands in, and a game with
-              neither shows a dash.
+              If we have no live line for a game we show the closing line instead. A dash means we
+              have neither.
             </CardBody>
           </Card>
 
           <Card className="h-fit">
             <CardHeader
               as="h2"
-              title="Highest implied totals"
-              description="Points the market expects each offence to score."
+              title="Highest expected team scores"
+              description="How many points betting markets expect each offence to score."
             />
             <CardBody>
               <ol className="space-y-2.5">

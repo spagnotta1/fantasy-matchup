@@ -56,7 +56,7 @@ test('a deployment with nothing published says so rather than showing an empty b
   // The notice lives in the slate controls, which are behind a disclosure at
   // phone width — and it is rendered once per breakpoint copy of them.
   await openSlateControls(page)
-  await expect(page.getByText(/no published weeks/i).filter({ visible: true }).first()).toBeVisible()
+  await expect(page.getByText(/no weeks yet/i).filter({ visible: true }).first()).toBeVisible()
   // The claim must be about the data, never about a network failure.
   await expect(page.locator('main')).not.toContainText(/couldn't reach|offline/i)
 })
@@ -75,7 +75,7 @@ test('an empty board for a published week names the reason', async ({ page }) =>
 
   await page.goto('/rankings/rb')
   await settle(page)
-  await expect(page.locator('main')).toContainText(/no board for this week|no model run/i)
+  await expect(page.locator('main')).toContainText(/no rankings for this week|not out yet/i)
 })
 
 test('a slow response shows a skeleton, never a blank screen', async ({ page }) => {

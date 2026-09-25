@@ -21,8 +21,8 @@ export function UnprojectedPosition({ support }: { support: PositionSupport }) {
     <Card>
       <CardHeader
         as="h2"
-        title={`${support.label} projections are not published yet`}
-        description="This position is recognised by the API but is not covered by the current model."
+        title={`${support.label} projections are not available yet`}
+        description="We do not project this position yet."
         action={
           <span className="bg-caution-soft text-caution-text flex size-9 items-center justify-center rounded-full">
             <Construction aria-hidden className="size-4" />
@@ -37,7 +37,7 @@ export function UnprojectedPosition({ support }: { support: PositionSupport }) {
         {support.blocked_on.length > 0 && (
           <div>
             <h3 className="text-ink-muted mb-2 text-xs font-semibold tracking-wide uppercase">
-              What it is waiting on
+              What is needed first
             </h3>
             <ul className="text-ink-secondary space-y-1.5 text-sm">
               {support.blocked_on.map((item) => (
@@ -53,8 +53,7 @@ export function UnprojectedPosition({ support }: { support: PositionSupport }) {
         )}
 
         <p className="text-ink-muted text-xs leading-relaxed">
-          Nothing on this page estimates {support.label.toLowerCase()} scoring in the meantime. A
-          made-up number is worse than a missing one.
+          Until then we show no {support.label.toLowerCase()} numbers at all, rather than a guess.
         </p>
       </CardBody>
     </Card>

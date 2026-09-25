@@ -60,15 +60,15 @@ export function ProjectionValue({
         {formatPoints(value)}
       </span>
       {markUncalibrated && value !== null && !calibrated && (
-        <Tooltip content="This run did not store a calibrated mean, so the model's raw output is shown instead. Raw output is conditionally biased by construction — treat it as approximate.">
+        <Tooltip content="This number skipped the model's final adjustment step, so it may run a little high or low. Treat it as approximate.">
           <AlertTriangle
-            aria-label="Uncalibrated projection"
+            aria-label="Approximate projection"
             className="text-caution size-3.5"
           />
         </Tooltip>
       )}
       {actualPoints !== null && actualPoints !== undefined && (
-        <Tooltip content="Actual: a recorded outcome from a completed game, not a prediction.">
+        <Tooltip content="What the player actually scored in this finished game.">
           <span className="text-ink-muted tnum text-xs font-medium">
             actual {formatPoints(actualPoints)}
           </span>
@@ -121,7 +121,7 @@ export function OutcomeRange({
       <div
         className="bg-surface-sunken relative h-1.5 min-w-16 flex-1 overflow-hidden rounded-full"
         role="img"
-        aria-label={`Projected range ${formatPoints(floor)} to ${formatPoints(ceiling)} points, median ${formatPoints(median)}`}
+        aria-label={`Likely range ${formatPoints(floor)} to ${formatPoints(ceiling)} points, middle ${formatPoints(median)}`}
       >
         <div
           className="bg-accent/45 absolute inset-y-0 rounded-full"

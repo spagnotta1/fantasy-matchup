@@ -50,8 +50,8 @@ export function DraftPositionChart({
         title="Draft position comparison"
         description={
           resolvable
-            ? `Highest simulated roster value at position ${best}, ${formatNumber(comparison.spread)} points clear of the lowest. Simulated, not predicted.`
-            : 'The gap between the best and worst position is smaller than the simulation’s own error, so no position is marked as best. Raise the simulation count to resolve it.'
+            ? `Draft position ${best} built the strongest rosters, ${formatNumber(comparison.spread)} points ahead of the weakest. Based on simulations, not a prediction.`
+            : 'The best and worst draft positions are too close to call at this number of simulations, so none is marked as best. Run more simulations to separate them.'
         }
         as="h2"
         action={
@@ -118,12 +118,12 @@ export function DraftPositionChart({
         </ul>
 
         <p className="text-ink-muted mt-4 text-xs leading-relaxed">
-          Bars are scaled from {formatNumber(floor)} — the lowest seat — so the
-          differences are visible. Values are mean draft value (roster points above
-          replacement level) across{' '}
-          {comparison.settings.simulations.toLocaleString()} simulated drafts per seat,
-          with a Monte Carlo error of about{' '}
-          <Tooltip content="One standard error on the mean. Two seats closer together than roughly twice this are not distinguishable at this simulation count.">
+          Bars start at {formatNumber(floor)} (the weakest position) so the differences
+          are easier to see. Values are the average draft value — points your starters
+          score above easy-to-find replacements — across{' '}
+          {comparison.settings.simulations.toLocaleString()} simulated drafts per position,
+          give or take about{' '}
+          <Tooltip content="The margin of error. Two draft positions closer together than about twice this can't be told apart at this number of simulations.">
             <span className="decoration-line-strong underline decoration-dotted underline-offset-2">
               ±{formatNumber(averageError(comparison), 2)}
             </span>

@@ -382,44 +382,42 @@ def _notices(
 ) -> tuple[str, ...]:
     """Disclosures owed by anything that renders this board."""
     notices: list[str] = [
-        f"Season value is the published week {DRAFT_BOARD_WEEK} projection for "
-        f"{season} read as a per-game rate and multiplied by an estimated games "
-        f"played out of {season_games}. It is a draft-day rate, not a forecast "
-        "of how the season unfolds: no in-season injury, trade or role change "
-        "is modelled.",
-        "Expected games played is estimated from historical availability and "
-        "shrunk toward a position prior. It counts weeks in which a player "
-        "recorded a stat line, so it cannot separate an injury from a healthy "
-        "scratch or a growing role.",
-        "No rookies are on this board, and the gap is a large one. The model "
-        "projects from a trailing four-game usage window; a player who has "
-        "never played has no window, so the incoming class is absent entirely "
-        "rather than ranked low. Real drafts spend the first five rounds on "
-        "it. Two things follow: every pick after the first round lands on a "
-        "player a real draft would have taken earlier, and the late rounds "
-        "look deeper than they are. This is the veteran board, and a real "
-        "draft from the same seat will be harder than this one.",
+        f"Season value is each player's week {DRAFT_BOARD_WEEK} projection for "
+        f"{season}, used as a per-game rate and multiplied by how many of the "
+        f"{season_games} games they are expected to play. It is a draft-day rate, "
+        "not a forecast of how the season unfolds: injuries, trades and role "
+        "changes during the season are not modelled.",
+        "Expected games played is based on each player's past availability, "
+        "pulled toward the typical figure for their position. It only counts "
+        "games where a player recorded stats, so it cannot tell an injury apart "
+        "from a healthy benching.",
+        "No rookies are on this board, and that is a big gap. Projections are "
+        "built from a player's last four games, and rookies have not played "
+        "any, so they are left out rather than ranked low. Real drafts take many "
+        "rookies in the early rounds, so after round one the players here would "
+        "usually be gone sooner, and the late rounds look deeper than they "
+        "really are. Expect a real draft from the same spot to be harder.",
     ]
     if not history_seasons:
         notices.append(
             "No completed seasons were available before "
-            f"{season}, so every availability estimate is the position prior "
-            "alone and no consistency or trend is reported."
+            f"{season}, so every expected-games figure is the position's typical "
+            "figure and no consistency or trend is reported."
         )
     else:
         notices.append(
-            "Historical evidence covers "
+            "Past data covers "
             f"{min(history_seasons)}-{max(history_seasons)}. Nothing from "
-            f"{season} is used: a draft is decided before the season starts."
+            f"{season} is used, because a draft happens before the season starts."
         )
     no_history = sum(
         1 for p in players if p.historical.availability_basis == "position_prior"
     )
     if no_history:
         notices.append(
-            f"{no_history} of {len(players)} players have no completed-season "
-            "history in the window, so their expected games is the position "
-            "prior rather than their own record."
+            f"{no_history} of {len(players)} players have no full past season in "
+            "that range, so their expected games played uses their position's "
+            "typical figure rather than their own record."
         )
     # A rostered player who last recorded a stat line years ago still arrives
     # with a full four-game usage window, because that window counts games
@@ -440,12 +438,10 @@ def _notices(
         notices.append(
             f"{len(stale)} of {len(players)} players last recorded a stat line "
             f"before {season - 1}, the oldest {oldest_gap} seasons ago "
-            f"({oldest_name}). Their usage window is still four games, because "
-            "it counts games played rather than weeks elapsed, so the model "
-            "weights that stale evidence exactly as it weights a player who "
-            "finished last season healthy. The gap is reported rather than "
-            "discounted: how much a window that old should be trusted has not "
-            "been measured, and a factor invented here would not be one."
+            f"({oldest_name}). Their projection still uses their last four games, "
+            "however long ago those were, and treats them the same as recent "
+            "games. We flag this rather than adjust for it, because how much that "
+            "older data should be trusted has not been measured."
         )
     return tuple(notices)
 

@@ -10,18 +10,18 @@ const VERDICTS: Record<string, { label: string; tone: BadgeTone; description: st
   clear: {
     label: 'Clear',
     tone: 'accent',
-    description: 'One side wins comfortably more often than the other.',
+    description: 'One player comes out ahead clearly more often.',
   },
   lean: {
     label: 'Lean',
     tone: 'info',
-    description: 'A real but modest edge — worth acting on, not worth agonising over.',
+    description: 'A real but small edge — worth acting on, not worth stressing over.',
   },
   toss_up: {
     label: 'Toss-up',
     tone: 'neutral',
     description:
-      'The edge is smaller than the week-to-week noise the model itself reports, so no recommendation is made.',
+      'The difference is smaller than a normal week-to-week swing, so we do not pick a side.',
   },
 }
 
@@ -114,9 +114,9 @@ export function HeadToHeadCard({ result }: { result: StartSit }) {
             ) : (
               <>
                 <span className="text-ink-secondary font-medium">No recommendation.</span>{' '}
-                {verdict.description} The expected margin is{' '}
-                {formatPoints(Math.abs(result.expected_margin))} points, which is well inside both
-                players&apos; ranges.
+                {verdict.description} The expected difference is{' '}
+                {formatPoints(Math.abs(result.expected_margin))} points, well within how much
+                either player&apos;s score can swing.
               </>
             )}
           </p>

@@ -298,12 +298,12 @@ export default function SimulationPage() {
       {!slate.hasPublishedBoard && slate.resolved && (
         <aside
           className="bg-caution-soft mb-6 flex gap-2.5 rounded-[var(--radius-card)] px-4 py-3"
-          aria-label="No published board"
+          aria-label="No projections this week"
         >
           <ShieldAlert aria-hidden className="text-caution-text mt-0.5 size-4 shrink-0" />
           <p className="text-caution-text text-xs leading-relaxed">
-            No model run is published for week {slate.week ?? '—'}, so players will have no
-            projections to simulate. Pick a week with a published board from the header.
+            Projections for week {slate.week ?? '—'} are not out yet, so there is nothing to
+            simulate. Pick another week at the top of the page.
           </p>
         </aside>
       )}
@@ -312,7 +312,7 @@ export default function SimulationPage() {
         <Card>
           <EmptyState
             title="Lineup format unavailable"
-            description="The lineup slots this engine accepts could not be loaded, so the builder cannot be shown. This is usually temporary."
+            description="We could not load the lineup positions, so the lineup builder cannot be shown. This is usually temporary."
           />
         </Card>
       ) : catalog.isPending || teamA.length === 0 ? (
@@ -357,8 +357,8 @@ export default function SimulationPage() {
 
           {!catalog.formatKnown && (
             <p className="text-ink-muted mt-3 text-xs leading-relaxed">
-              The lineup composition could not be read from the API, so one row per simulable slot
-              is shown. The engine validates the lineup either way and will say what it expects.
+              We could not load your league&apos;s lineup format, so one row per position is shown.
+              If the lineup does not fit, the simulation will tell you what it expects.
             </p>
           )}
 
@@ -464,7 +464,7 @@ function RunControls({
           <div className="min-w-0">
             <p className="text-ink-secondary mb-1.5 text-xs font-medium">Player outcomes</p>
             <SegmentedControl
-              label="Correlation mode"
+              label="Simulation mode"
               value={correlationMode}
               onChange={onCorrelationModeChange}
               options={CORRELATION_MODES.map((entry) => ({
@@ -497,19 +497,19 @@ function RunControls({
         {showAdvanced && (
           <div className="border-line grid gap-3 border-t pt-4 sm:grid-cols-2">
             <Select
-              label="Iterations"
+              label="Number of simulations"
               value={iterations}
               onChange={(event) => onIterationsChange(event.target.value)}
               options={ITERATION_OPTIONS}
-              hint="More draws tighten the estimate, not the underlying uncertainty."
+              hint="More simulations give a steadier estimate. They do not make the outcome itself more certain."
             />
             <Input
               label="Seed"
               value={seed}
               onChange={(event) => onSeedChange(event.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="Leave blank for the API default"
+              placeholder="Leave blank for the default"
               inputMode="numeric"
-              hint="The same lineups and seed reproduce the same numbers exactly."
+              hint="Run the same lineups with the same seed to get exactly the same result again."
             />
           </div>
         )}
@@ -530,7 +530,7 @@ function RunControls({
             <div className="text-caution-text min-w-0 text-xs leading-relaxed">
               <p className="font-semibold">
                 {blocked.reduce((total, side) => total + side.problems.length, 0)} starter(s) cannot
-                be simulated, so the engine would refuse this matchup.
+                be simulated, so this matchup cannot run yet.
               </p>
               <ul className="mt-1 space-y-0.5">
                 {blocked.flatMap((side) =>
@@ -573,8 +573,8 @@ function RunningState({ iterations }: { iterations: number }) {
           Simulating {Number.isFinite(iterations) ? iterations.toLocaleString() : ''} weeks…
         </p>
         <p className="text-ink-muted mx-auto mt-1 max-w-md text-xs leading-relaxed">
-          Drawing each player from their published outcome distribution and summing both lineups,
-          one week at a time.
+          Playing out thousands of weeks: each player gets a score from their projected range,
+          and both lineups are added up.
         </p>
         <div className="bg-surface-sunken relative mx-auto mt-4 h-1.5 w-56 overflow-hidden rounded-full">
           <span className="bg-chart-series animate-indeterminate absolute inset-y-0 w-1/3 rounded-full" />

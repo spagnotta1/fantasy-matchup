@@ -19,9 +19,9 @@ from .catalog import resolve_window
 from .dto import SlateWindow
 
 DEPTH_UNAPPLIED_REASON = (
-    "The frozen model projects from usage — the snaps and targets a player "
-    "actually received — and does not read the depth chart. It is shown as "
-    "the team's own listing, for who is next in line."
+    "The model projects from how much a player has actually played (snaps "
+    "and targets), not from the depth chart. The depth chart is shown so you "
+    "can see who is next in line."
 )
 
 

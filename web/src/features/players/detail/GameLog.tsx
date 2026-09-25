@@ -96,7 +96,7 @@ export function GameLog({
         <CardHeader as="h2" title="Game log" />
         <EmptyState
           title="No completed games"
-          description="This player has no recorded weeks in the seasons covered by the warehouse."
+          description="We have no past games on record for this player."
         />
       </Card>
     )
@@ -221,18 +221,18 @@ function TrendSummary({ trend }: { trend: Trend }) {
           <p className="text-ink-muted text-[0.6875rem]">over {trend.games} games</p>
         </div>
         <div>
-          <dt className="text-ink-muted text-xs font-medium tracking-wide uppercase">Volatility</dt>
+          <dt className="text-ink-muted text-xs font-medium tracking-wide uppercase">Swing</dt>
           <dd className="tnum text-ink mt-0.5 text-lg font-semibold">
             {formatPoints(trend.standard_deviation)}
           </dd>
-          <p className="text-ink-muted text-[0.6875rem]">standard deviation</p>
+          <p className="text-ink-muted text-[0.6875rem]">typical week-to-week swing</p>
         </div>
         <div>
           <dt className="text-ink-muted flex items-center gap-1 text-xs font-medium tracking-wide uppercase">
             Avg error
             <InfoTip
               label="About average error"
-              content="Mean absolute error between the projection stored at the time and what the player actually scored. Only weeks that carried a stored projection are counted."
+              content="On average, how far our projection was from what the player actually scored. Only counts weeks where we had a projection."
             />
           </dt>
           <dd className="tnum text-ink mt-0.5 text-lg font-semibold">
@@ -243,20 +243,19 @@ function TrendSummary({ trend }: { trend: Trend }) {
           </p>
         </div>
         <div>
-          <dt className="text-ink-muted text-xs font-medium tracking-wide uppercase">Bias</dt>
+          <dt className="text-ink-muted text-xs font-medium tracking-wide uppercase">Lean</dt>
           <dd className="tnum text-ink mt-0.5 text-lg font-semibold">
             {trend.graded_games > 0 ? formatSigned(trend.bias) : '—'}
           </dd>
-          <p className="text-ink-muted text-[0.6875rem]">projected minus actual</p>
+          <p className="text-ink-muted text-[0.6875rem]">positive = we projected too high</p>
         </div>
       </dl>
 
       {accuracyIsThin && trend.graded_games > 0 && (
         <p className="text-ink-muted mt-3 text-xs leading-relaxed">
-          Accuracy is measured over {trend.graded_games} stored{' '}
-          {trend.graded_games === 1 ? 'projection' : 'projections'}, which is far too few to
-          describe how the model performs for this player. Read it as an anecdote, not a track
-          record.
+          This is based on only {trend.graded_games}{' '}
+          {trend.graded_games === 1 ? 'projection' : 'projections'} — too few to say how accurate we
+          are for this player. Treat it as a rough hint, not a track record.
         </p>
       )}
     </div>

@@ -18,7 +18,7 @@ export function ShowMoreRows({ budget, noun = 'players' }: { budget: RenderBudge
     <div className="border-line flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
       <p className="text-ink-muted text-xs" aria-live="polite">
         {budget.hasMore
-          ? `Showing the top ${budget.shown} of ${budget.total} ${noun}. Search and sort cover all ${budget.total}.`
+          ? `Showing the top ${budget.shown} of ${budget.total} ${noun}. Search and sort still include all ${budget.total}.`
           : `Showing all ${budget.total} ${noun}.`}
       </p>
       {budget.hasMore && (

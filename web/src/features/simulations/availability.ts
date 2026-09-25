@@ -97,14 +97,14 @@ export function slotStatus(
     return {
       kind: 'unavailable',
       reason: 'unprojected_position',
-      detail: `${position} is not a position this engine projects, so this slot cannot be simulated.`,
+      detail: `We do not project ${position}, so this slot cannot be simulated.`,
     }
   }
 
   return {
     kind: 'unavailable',
     reason: 'no_projection',
-    detail: `No projection published for week ${week ?? '—'} — a bye, an inactive designation, or a run that has not covered them.`,
+    detail: `No projection for week ${week ?? '—'} — usually a bye week or an inactive listing.`,
   }
 }
 

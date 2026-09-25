@@ -79,7 +79,7 @@ export function ScheduleGrid() {
       <CardHeader
         as="h2"
         title="Strength of schedule"
-        description="Every remaining opponent, graded on its current form against this position. A is the softest draw."
+        description="Every opponent left on each team's schedule, graded on how they currently defend this position. A is the easiest."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <ProvenanceBadge provenance="derived" />
@@ -125,15 +125,15 @@ export function ScheduleGrid() {
         <EmptyState
           icon={<CalendarRange aria-hidden className="size-5" />}
           title="No remaining schedule"
-          description="The selected week is past the end of the regular season."
+          description="The selected week is after the end of the regular season."
         />
       ) : (
         <Refreshing active={isPlaceholderData}>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full border-collapse text-xs">
               <caption className="sr-only">
-                Remaining schedule strength for {position}, from week {data?.data.from_week}. Scores run
-                0 to 100, where 100 is the softest schedule.
+                How easy each team&apos;s remaining schedule is for {position}, from week{' '}
+                {data?.data.from_week}. Scores run 0 to 100, where 100 is the easiest schedule.
               </caption>
               <thead>
                 <tr className="border-line text-ink-muted border-b font-medium tracking-wide uppercase">
@@ -145,7 +145,7 @@ export function ScheduleGrid() {
                       Rest
                       <InfoTip
                         label="About the schedule score"
-                        content="The mean of every graded remaining opponent's 0–100 matchup score. 100 is the softest schedule. Ungraded opponents and byes are left out, not averaged in as middling."
+                        content="The average matchup score (0–100) of every remaining opponent. 100 is the easiest schedule. Byes and opponents too early in the season to grade are left out rather than counted as average."
                       />
                     </span>
                   </th>
@@ -166,9 +166,9 @@ export function ScheduleGrid() {
             </table>
           </div>
           <CardBody className="border-line text-ink-muted border-t py-3 text-xs leading-relaxed">
-            Cells show the opponent (@ for away) and its current grade against {position}. A dash is an
-            opponent without three completed games of history; BYE is a bye. Scores are percentiles
-            across the league this week, not a verdict on a defence in absolute terms.
+            Each cell shows the opponent (@ means away) and how easy they currently are for{' '}
+            {position}. A dash means the opponent has played fewer than three games, so it is not
+            graded yet. Grades compare defences with each other, not against an absolute standard.
           </CardBody>
         </Refreshing>
       )}

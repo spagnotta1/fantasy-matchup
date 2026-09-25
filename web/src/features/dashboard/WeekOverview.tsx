@@ -56,7 +56,7 @@ export function WeekOverview() {
             </Badge>
           ) : (
             <Badge tone="caution" icon={<CircleDot className="size-3" />}>
-              No board yet
+              Not out yet
             </Badge>
           )
         }
@@ -65,15 +65,15 @@ export function WeekOverview() {
       <CardBody className="space-y-4">
         {!week.projections_published && (
           <p className="bg-caution-soft text-caution-text rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
-            The schedule for this week is final, but the projection job has not published a run
-            for it. Nothing below will show players until it does.
+            The schedule for this week is set, but projections are not out yet. Player lists will
+            stay empty until they are.
           </p>
         )}
 
         {week.projections_published && week.projection_count === 0 && (
           <p className="bg-caution-soft text-caution-text rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
-            A run is published for this week but holds no projections. That is a real state, not
-            a loading failure.
+            This week&apos;s update ran but produced no projections. Nothing failed to load — there
+            is simply nothing to show.
           </p>
         )}
 

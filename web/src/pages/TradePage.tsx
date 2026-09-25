@@ -122,14 +122,14 @@ export default function TradePage() {
     <>
       <PageHeader
         title="Trade helper"
-        question="On the numbers, what does this trade move — this week and for the rest of the season?"
+        question="What does this trade change — this week and for the rest of the season?"
       />
 
       <NoticeList
         className="mb-6"
         notices={[
-          '“At this week’s rate” is each player’s published projection multiplied by the games his team has left. It assumes he plays every one of them in his current role — no injury, no role change — so read it as a rate, not a forecast. The same construction values the mock draft’s pool.',
-          'The schedule grade is each remaining opponent’s current form at the player’s position, carried forward. It is not a forecast of those defences.',
+          '“At this week’s rate” is each player’s projection this week multiplied by the games their team has left. It assumes they play every game in their current role — no injuries, no role change — so read it as a rate, not a forecast.',
+          'The schedule grade shows how each remaining opponent is defending the position right now. It is not a forecast of how those defences will play later.',
         ]}
       />
 
@@ -163,7 +163,7 @@ export default function TradePage() {
           <EmptyState
             icon={<ArrowLeftRight aria-hidden className="size-5" />}
             title="Add a player to each side"
-            description="Search for the players on both sides of the trade to set them against each other."
+            description="Search for the players on both sides of the trade to compare them."
           />
         ) : (
           <Refreshing active={board.isPlaceholderData}>
@@ -174,7 +174,7 @@ export default function TradePage() {
             {missing.length > 0 && (
               <CardBody className="border-line text-caution-text border-t py-3 text-xs">
                 {missing.map((r) => r.player?.name ?? r.id).join(', ')} {missing.length === 1 ? 'has' : 'have'} no
-                projection this week (a bye, an inactive listing, or not covered by the run), so{' '}
+                projection this week (usually a bye week or an inactive listing), so{' '}
                 {missing.length === 1 ? 'counts' : 'count'} as zero above.
               </CardBody>
             )}
@@ -255,7 +255,7 @@ function SideCard({
                     Rate × games
                     <InfoTip
                       label="About rate times games"
-                      content="This week's projection times the games his team has left. Assumes he plays them all in his current role."
+                      content="This week's projection times the games their team has left. Assumes they play every game in their current role."
                     />
                   </span>
                 </th>

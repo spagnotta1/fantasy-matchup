@@ -76,7 +76,7 @@ export default function MatchupsPage() {
           <p className="text-ink-muted mb-4 text-xs">
             {slate.week === null
               ? 'Select a week to see its schedule.'
-              : `Week ${slate.week} schedule. Open a game for both defences broken out by position.`}
+              : `Week ${slate.week} schedule. Open a game to see how each defence matches up by position.`}
           </p>
           <GameList />
         </>

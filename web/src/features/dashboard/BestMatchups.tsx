@@ -70,8 +70,8 @@ export function BestMatchups({ count = 6 }: { count?: number }) {
     <Card>
       <CardHeader
         as="h2"
-        title="Softest matchups"
-        description="Startable players drawing an A-graded defence. A grade is a percentile across this week, not a verdict on the defence in absolute terms."
+        title="Easiest matchups"
+        description="Startable players facing one of this week's easiest defences (an A grade). Grades compare this week's matchups with each other."
         action={<ProvenanceBadge provenance="derived" />}
       />
 
@@ -84,8 +84,8 @@ export function BestMatchups({ count = 6 }: { count?: number }) {
           title="No standout matchups"
           description={
             data.data.length === 0
-              ? 'There is no published board for this week yet.'
-              : 'No startable projected player draws an A-grade matchup this week. Grades are withheld below three completed games of defensive history.'
+              ? 'Projections for this week are not out yet.'
+              : 'No startable player has an A-grade matchup this week. A defence needs at least three games played before it gets graded.'
           }
         />
       ) : (

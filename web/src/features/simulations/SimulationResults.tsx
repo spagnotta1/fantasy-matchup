@@ -93,14 +93,14 @@ export function SimulationResults({
           label="Expected margin"
           value={formatPoints(Math.abs(result.score_differential))}
           unit="pts"
-          detail={`${teamA.expected_score >= teamB.expected_score ? labelA : labelB} ahead on average. Median margin ${formatPoints(Math.abs(result.median_differential))}.`}
+          detail={`${teamA.expected_score >= teamB.expected_score ? labelA : labelB} ahead on average. Typical margin ${formatPoints(Math.abs(result.median_differential))}.`}
         />
         <StatCard
-          label="Sum of projections"
+          label="Projections added up"
           value={formatPoints(teamA.projection_sum)}
           unit="pts"
           badge={<ProvenanceBadge provenance="model" showLabel={false} />}
-          detail={`${labelB} ${formatPoints(teamB.projection_sum)}. The projections themselves, added up — see below.`}
+          detail={`${labelB} ${formatPoints(teamB.projection_sum)}. Each lineup's player projections, added together.`}
         />
       </div>
 
@@ -115,7 +115,7 @@ export function SimulationResults({
           <CardHeader
             as="h2"
             title="Where the scores land"
-            description="Both lineups on one scale. The overlap is the reason the probability above is not a verdict."
+            description="Both lineups on one chart. The overlap is why the result above is a chance, not a certainty."
             action={<ProvenanceBadge provenance="derived" />}
           />
           <CardBody>
@@ -127,7 +127,7 @@ export function SimulationResults({
           <CardHeader
             as="h2"
             title="Where the gap is"
-            description="Simulated mean points by position, one lineup against the other."
+            description="Average simulated points at each position, one lineup against the other."
             action={<ProvenanceBadge provenance="derived" />}
           />
           <CardBody>
@@ -143,8 +143,8 @@ export function SimulationResults({
         <Card>
           <CardHeader
             as="h2"
-            title="Widest ranges"
-            description="The players whose weeks are least settled, on either side."
+            title="Most unpredictable players"
+            description="The players on either side whose score could swing the most."
             action={<ProvenanceBadge provenance="model" />}
           />
           <CardBody>
@@ -188,8 +188,8 @@ function AdjustAndRerun({ onAdjust }: { onAdjust: () => void }) {
         <div className="min-w-0">
           <p className="text-ink text-sm font-medium">Ask a different question</p>
           <p className="text-ink-secondary mt-0.5 text-sm leading-relaxed">
-            Change the lineups, the correlation mode or the number of draws. This same run repeated
-            would return this same result.
+            Change the lineups, the simulation mode or the number of simulations. Running this
+            exact setup again would give the same result.
           </p>
         </div>
         <Button variant="secondary" onClick={onAdjust}>
@@ -271,8 +271,8 @@ function WinProbability({
               <> Both lineups tied in {formatPercent(tieProbability, 2)}.</>
             )}{' '}
             <span className="text-ink-muted">
-              This is an estimate from the published outcome distributions, not a forecast of the
-              result.
+              This is an estimate based on each player&apos;s projected range, not a prediction of
+              the result.
             </span>
           </p>
           <ShareMatchup />
@@ -316,18 +316,16 @@ function Reconciliation({
     >
       <p className="text-caution-text text-xs leading-relaxed">
         <span className="font-semibold">
-          The simulated total and the sum of the projections disagree.
+          The simulated total and the added-up projections do not match.
         </span>{' '}
         For {labelA} the simulation averages {formatPoints(simulated)} while the projections add up
-        to {formatPoints(projected)}. The API treats those agreeing as the check that the sampler
-        drew from the stored distributions, so the gap is worth stating: this published run did not
-        store calibrated means, so the projections shown are the model&apos;s raw output while the
-        simulation draws from the stored outcome curve, whose average is higher. Read the win
-        probability and the margins — which come from one consistent set of draws — rather than the
-        absolute totals.
+        to {formatPoints(projected)}. Normally these match. This week&apos;s projections skipped the
+        model&apos;s final adjustment step, while the simulation uses each player&apos;s full range,
+        which averages higher. Trust the win chance and the margins — they all come from the same
+        simulation — more than the total points.
         <InfoTip
           label="About the two totals"
-          content="expected_score is the mean of the simulated team totals. projection_sum adds up each player's stored headline projection. They coincide when a run stores calibrated means."
+          content="The simulated total is the average team score across every simulated week. The projection total adds up each player's projection. The two match when projections have had their final adjustment."
         />
       </p>
     </aside>

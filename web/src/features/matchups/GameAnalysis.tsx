@@ -162,7 +162,7 @@ function OffenseCard({
             {offense} attacking the {defense} defence
           </span>
         }
-        description="How much this defence has given up to each position over its last four completed games, as a percentile across the week."
+        description="How much this defence has given up to each position over its last four games, compared with every other defence this week."
         action={<ProvenanceBadge provenance="derived" />}
       />
       <CardBody>
@@ -184,9 +184,8 @@ function OffenseCard({
         )}
 
         <p className="text-ink-muted mt-4 text-xs leading-relaxed">
-          A longer bar is a softer draw. The scale is a percentile across every defence this week,
-          so an A means one of the softest matchups on the slate rather than a weak defence in
-          absolute terms.
+          A longer bar means an easier matchup. Grades compare this week&apos;s matchups with each
+          other, so an A means one of the easiest this week — not that the defence is bad overall.
         </p>
       </CardBody>
     </Card>
@@ -223,7 +222,7 @@ function TopProjectionsCard({ analysis }: { analysis: MatchupAnalysis }) {
       {entries.length === 0 ? (
         <EmptyState
           title="No projections for this game"
-          description="No model run covering this week has published players for either team."
+          description="Projections for this week do not include players from either team."
         />
       ) : (
         <ul className="divide-line max-h-[28rem] divide-y overflow-y-auto">
@@ -286,8 +285,8 @@ function GameContextCard({ context }: { context: PlayerContext }) {
     <Card>
       <CardHeader
         as="h2"
-        title="Conditions and market"
-        description="Observed facts about the game. Useful for your judgement; not folded into any number on this page."
+        title="Weather and betting line"
+        description="Useful for your own judgement. None of this is factored into any projection on this page."
         action={<ProvenanceBadge provenance="context" />}
       />
       <CardBody className="space-y-6">
@@ -299,7 +298,7 @@ function GameContextCard({ context }: { context: PlayerContext }) {
             <p className="text-ink-muted text-sm">No forecast is available for this game.</p>
           ) : weather.is_indoor ? (
             <p className="text-ink-secondary text-sm">
-              Indoor venue — conditions are not a factor.
+              Indoor stadium — weather is not a factor.
             </p>
           ) : (
             <>
@@ -320,12 +319,12 @@ function GameContextCard({ context }: { context: PlayerContext }) {
                       : `${Math.round(weather.wind_mph)} mph`
                   }
                 />
-                <Row label="Precipitation" value={formatPercent(weather.precipitation_probability)} />
+                <Row label="Chance of rain/snow" value={formatPercent(weather.precipitation_probability)} />
                 <Row label="Source" value={weather.source ?? '—'} />
               </dl>
               {weather.is_adverse && (
                 <p className="bg-caution-soft text-caution-text mt-3 rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
-                  Flagged as adverse: 20+ mph wind or 60%+ chance of precipitation, outdoors.
+                  Bad-weather game: 20+ mph wind or a 60%+ chance of rain or snow.
                 </p>
               )}
               {!weather.applied_to_projection && (
@@ -340,13 +339,13 @@ function GameContextCard({ context }: { context: PlayerContext }) {
             Betting market
           </h3>
           {!game ? (
-            <p className="text-ink-muted text-sm">No market data is available for this game.</p>
+            <p className="text-ink-muted text-sm">No betting line is available for this game.</p>
           ) : (
             <>
               <dl>
                 <Row label="Kickoff" value={formatGameDay(game.gameday)} />
                 <Row label={`Spread (${game.team ?? 'home'})`} value={formatSpread(game.team_spread)} />
-                <Row label="Game total" value={formatPoints(game.total_line)} />
+                <Row label="Over/under" value={formatPoints(game.total_line)} />
                 <Row
                   label={`Implied total (${game.team ?? 'home'})`}
                   value={formatPoints(game.implied_team_total)}

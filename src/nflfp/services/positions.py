@@ -53,16 +53,15 @@ POSITION_SUPPORT: tuple[PositionSupport, ...] = (
         "Kicker",
         "planned",
         reason=(
-            "Kicker scoring is distance-bucketed field goals and extra points. "
-            "The component model projects targets, carries, yards and "
-            "touchdowns, none of which describe a kicker, and the feature layer "
-            "carries no kicking usage."
+            "Kickers score from field goals (worth more the longer they are) "
+            "and extra points. Our model projects things like targets, carries, "
+            "yards and touchdowns, none of which apply to a kicker."
         ),
         blocked_on=(
-            "a kicking component vocabulary (attempts and makes by distance band)",
-            "team field-goal opportunity features, which need raw_pbp",
-            "its own residual distribution — kicker outcomes are discrete and "
-            "low-count, so the continuous quantile approach does not transfer",
+            "a way to project field-goal and extra-point attempts and makes by distance",
+            "data on how often each team gets into field-goal range",
+            "a separate way to estimate a kicker's scoring range, because kicking "
+            "points come in a few big chunks rather than a smooth spread",
         ),
     ),
     PositionSupport(
@@ -70,17 +69,15 @@ POSITION_SUPPORT: tuple[PositionSupport, ...] = (
         "Team Defense",
         "planned",
         reason=(
-            "A team defence is not a player-week row. Its scoring comes from "
-            "sacks, takeaways, return touchdowns and points allowed, which are "
-            "properties of a game rather than of a player."
+            "A team defence scores from sacks, takeaways, return touchdowns and "
+            "points allowed — things that belong to the whole team's game rather "
+            "than to one player — so it does not fit how our model works."
         ),
         blocked_on=(
-            "a team-week fact table; feat_defense_game is the natural base and "
-            "already aggregates most of the inputs",
-            "opponent offensive-line and turnover-propensity features",
-            "a discrete outcome model — DST scoring is dominated by rare, "
-            "high-value events and is poorly described by residual quantiles "
-            "fitted on continuous production",
+            "team-level defensive data for each game",
+            "data on opposing offensive lines and how often offences turn the ball over",
+            "a way to model rare, high-value plays like defensive touchdowns, "
+            "which drive most defence scoring",
         ),
     ),
 )

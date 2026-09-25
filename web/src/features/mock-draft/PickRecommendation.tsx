@@ -29,7 +29,7 @@ export function PickRecommendation({ seat }: { seat: SeatAnalysis }) {
     <Card>
       <CardHeader
         title={`Opening pick at position ${seat.draft_position}`}
-        description={`Pick #${opener.overall} overall. Shown from the median simulated draft; the position mix below is across all ${seat.simulations.toLocaleString()}.`}
+        description={`Pick #${opener.overall} overall, from a typical simulated draft. The position mix below covers all ${seat.simulations.toLocaleString()} drafts.`}
         as="h2"
         action={<ProvenanceBadge provenance="derived" />}
       />
@@ -58,7 +58,7 @@ export function PickRecommendation({ seat }: { seat: SeatAnalysis }) {
         {firstRound.length > 0 && (
           <div className="space-y-2">
             <h3 className="text-ink text-sm font-semibold">
-              What this seat opens with, across the run
+              Who you take first, across all drafts
             </h3>
             <ul className="flex flex-wrap gap-2">
               {firstRound.map((entry) => (
@@ -74,9 +74,8 @@ export function PickRecommendation({ seat }: { seat: SeatAnalysis }) {
               ))}
             </ul>
             <p className="text-ink-muted text-xs leading-relaxed">
-              Share of simulated drafts in which this seat&rsquo;s first pick went to each
-              position. A single position near 100% means the board reliably falls the
-              same way here; a spread means it does not.
+              How often your first pick was each position. One position near 100% means the
+              draft reliably falls the same way for you; a mix means it varies.
             </p>
           </div>
         )}
@@ -100,7 +99,7 @@ export function PositionStrength({ seat }: { seat: SeatAnalysis }) {
     <Card>
       <CardHeader
         title="Position strength"
-        description="Mean projected points contributed by each position's starters, across the run."
+        description="Average projected points from each position's starters, across all drafts."
         as="h2"
       />
       <CardBody>
