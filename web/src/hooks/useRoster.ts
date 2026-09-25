@@ -73,6 +73,69 @@ export function useRoster(): [string[], (ids: string[]) => void] {
   return [ids, setIds]
 }
 
+const LINEUP_PARAM = 'lineup'
+const LINEUP_STORAGE_KEY = 'nflfp.lineup'
+
+function readStoredLineup(): string[] | null {
+  try {
+    const raw = window.localStorage.getItem(LINEUP_STORAGE_KEY)
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null
+    return Array.isArray(parsed) ? parsed.map((id) => (typeof id === 'string' ? id : '')) : null
+  } catch {
+    return null
+  }
+}
+
+function writeStoredLineup(ids: string[] | null): void {
+  try {
+    if (ids) window.localStorage.setItem(LINEUP_STORAGE_KEY, JSON.stringify(ids))
+    else window.localStorage.removeItem(LINEUP_STORAGE_KEY)
+  } catch {
+    // As above: no storage is not a failure.
+  }
+}
+
+/**
+ * The starting lineup a manager chose by hand, or null for the default.
+ *
+ * One player id per lineup slot, in slot order, with an empty string for a slot
+ * left empty — `"a,,c"`. Null means "no choice made", and the page falls back to
+ * the highest-projected lineup; that is a different state from a lineup whose
+ * every slot was deliberately emptied.
+ *
+ * It travels with the roster and follows the same rule: the URL wins, and the
+ * remembered copy is used only when the roster itself came from memory. A
+ * shared roster link with no lineup must not pick up this browser's lineup for
+ * someone else's players.
+ */
+export function useLineupChoice(): [string[] | null, (ids: string[] | null) => void] {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rosterInUrl = searchParams.get(PARAM) !== null
+  const fromUrl = searchParams.get(LINEUP_PARAM)
+  const choice = useMemo(() => {
+    if (fromUrl !== null) return fromUrl.split(',').map((id) => id.trim())
+    return rosterInUrl ? null : readStoredLineup()
+  }, [fromUrl, rosterInUrl])
+
+  const setChoice = useCallback(
+    (next: string[] | null) => {
+      writeStoredLineup(next)
+      setSearchParams(
+        (current) => {
+          const params = new URLSearchParams(current)
+          if (next) params.set(LINEUP_PARAM, next.join(','))
+          else params.delete(LINEUP_PARAM)
+          return params
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
+  return [choice, setChoice]
+}
+
 /** The remembered roster, for views that highlight it without owning it. */
 export function useRememberedRoster(): Set<string> {
   const [ids] = useRoster()
