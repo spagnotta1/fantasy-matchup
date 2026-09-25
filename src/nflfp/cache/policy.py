@@ -78,6 +78,16 @@ RULES: tuple[CacheRule, ...] = (
     CacheRule("/api/v1/rankings", 300, "same board, filtered"),
     CacheRule("/api/v1/defense-rankings", 300, "aggregate over the same slate"),
     CacheRule("/api/v1/matchups", 300, "reads the slate plus defensive form"),
+    # A ~46,000-row aggregate that changes only when a game completes or a run
+    # publishes; the publish half is covered by the epoch, so the TTL bounds
+    # how long a finished game waits to be graded.
+    CacheRule("/api/v1/track-record", 900, "historical aggregate; grows as games complete"),
+    CacheRule("/api/v1/schedule-strength", 300, "defensive form as of a week, like the matchups"),
+    CacheRule(
+        "/api/v1/mock-draft/value-board",
+        900,
+        "the week 1 pool and a draft-day ADP snapshot; both change only on publish or ingest",
+    ),
     # Listed with a TTL of zero so the table answers the question rather than
     # leaving it to the reader. `POST` never reaches the cache anyway — the
     # middleware handles `GET` only — and a simulation's inputs are two whole

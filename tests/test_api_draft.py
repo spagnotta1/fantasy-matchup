@@ -340,3 +340,45 @@ class TestComparison:
         notices = " ".join(comparison["meta"]["notices"])
         assert "simulated outcomes" in notices
         assert "not predictions" in notices
+
+
+class TestValueBoard:
+    def test_the_market_and_the_pool_keep_their_labels(self, client, draftable_season):
+        response = client.get(
+            "/api/v1/mock-draft/value-board",
+            params={"season": draftable_season, "scoring_profile": "ppr"},
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        notices = " ".join(payload["meta"]["notices"])
+        assert "not an input to any projection" in notices
+        market = payload["data"]["market"]
+        if market is not None:
+            assert market["provenance"] == "context"
+
+    def test_ranks_run_one_to_n_within_each_position(self, client, draftable_season):
+        entries = client.get(
+            "/api/v1/mock-draft/value-board",
+            params={"season": draftable_season, "scoring_profile": "ppr"},
+        ).json()["data"]["entries"]
+        by_position: dict[str, list[dict]] = {}
+        for entry in entries:
+            by_position.setdefault(entry["player"]["position"], []).append(entry)
+        for group in by_position.values():
+            n = len(group)
+            assert sorted(e["market_rank"] for e in group) == list(range(1, n + 1))
+            assert sorted(e["value_rank"] for e in group) == list(range(1, n + 1))
+            for e in group:
+                assert e["rank_gap"] == e["market_rank"] - e["value_rank"]
+
+    def test_market_entries_without_a_projection_say_why(self, client, draftable_season):
+        data = client.get(
+            "/api/v1/mock-draft/value-board", params={"season": draftable_season}
+        ).json()["data"]
+        for entry in data["market_only"]:
+            assert entry["reason"]
+
+    def test_an_undraftable_season_is_refused_with_a_reason(self, client):
+        response = client.get("/api/v1/mock-draft/value-board", params={"season": 2001})
+        assert response.status_code in (404, 422, 503)
+        assert response.json()["message"]

@@ -35,7 +35,9 @@ Four properties of these responses are contractual:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, status
 
 from ...services import positions as position_registry
 from ...services.catalog import scoring_profiles
@@ -245,5 +247,42 @@ async def compare_draft_positions(
             scoring_profile=comparison.settings.scoring_profile,
             model=mappers.model_ref(comparison.model),
             notices=list(comparison.notices),
+        ),
+    )
+
+
+@router.get(
+    "/value-board",
+    response_model=schemas.Envelope[schemas.ValueBoardOut],
+    responses={503: {"model": schemas.ErrorOut}},
+    summary="The draft pool beside the market's ADP",
+    description=(
+        "Every player the mock draft can value, beside the market's observed "
+        "average draft position for the season. Season value is the pool's own "
+        "number — the published week 1 expectation times expected games, "
+        "`provenance: derived` — and ADP is observed, `provenance: context`: "
+        "neither the projection nor the mock draft's opponents read it.\n\n"
+        "Ranks are compared **within position, among players with both**. "
+        "Comparing overall ranks would flag every quarterback as a bargain, and "
+        "ranking the market over its rookies — whom the pool cannot value — "
+        "would make every veteran look like one. `rank_gap` is market rank "
+        "minus value rank: positive means the pool values the player above "
+        "where the market takes him.\n\n"
+        "`market_only` lists ADP entries with no projection and why; "
+        "`unpriced` lists pool players the market did not draft."
+    ),
+)
+async def value_board(
+    db: DbSession,
+    season: Annotated[int, Query(ge=1999, le=2200, description="Season being drafted.")],
+    scoring_profile: Annotated[str | None, Query(description="League format.")] = None,
+) -> schemas.Envelope[schemas.ValueBoardOut]:
+    result = await service.value_board(db, season=season, scoring_profile=scoring_profile)
+    return schemas.Envelope[schemas.ValueBoardOut](
+        data=mappers.value_board(result),
+        meta=schemas.MetaOut(
+            scoring_profile=result.scoring_profile,
+            model=mappers.model_ref(result.model),
+            notices=list(result.notices),
         ),
     )

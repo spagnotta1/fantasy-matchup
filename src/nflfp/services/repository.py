@@ -1199,3 +1199,214 @@ async def fetch_season_game_counts(session: AsyncSession) -> dict[int, int]:
         {},
     )
     return {int(row["season"]): int(row["games"]) for row in rows}
+
+
+# ---------------------------------------------------------------------------
+# Track record — stored projections against what happened
+# ---------------------------------------------------------------------------
+
+#: Stored projections from published runs joined to the recorded outcome of the
+#: same player-week. An inner join on ``player_week``: a projected player with
+#: no stat line did not play, and there is no outcome to grade them against —
+#: counting that as zero points would grade the injury report, not the model.
+_GRADED_CTE = """
+    graded AS (
+        SELECT
+            p.season,
+            p.week,
+            p.position,
+            COALESCE(pp.expected_points, pp.predicted_points) AS projected,
+            pp.floor_points,
+            pp.ceiling_points,
+            pp.p25_points,
+            pp.p75_points,
+            pp.boom_probability,
+            pp.bust_probability,
+            pp.boom_threshold,
+            pp.bust_threshold,
+            pw.{points_column} AS actual
+        FROM projections AS p
+        JOIN model_runs AS r
+          ON r.id = p.model_run_id AND r.status = 'published'
+        JOIN projection_points AS pp
+          ON pp.projection_id = p.id AND pp.scoring_profile = :scoring_profile
+        JOIN player_week AS pw
+          ON pw.player_id = p.player_id AND pw.season = p.season AND pw.week = p.week
+        WHERE pw.{points_column} IS NOT NULL
+          AND COALESCE(pp.expected_points, pp.predicted_points) IS NOT NULL
+          AND (CAST(:season AS integer) IS NULL OR p.season = CAST(:season AS integer))
+    )
+"""
+
+#: Width of the projection bands the conditional-bias check groups by, in
+#: points, and the band everything above is folded into. The frozen foundation
+#: reports its worst band; this is the same check over the stored runs.
+TRACK_RECORD_BAND = 5
+TRACK_RECORD_TOP_BAND = 25
+
+
+async def fetch_track_record(
+    session: AsyncSession, *, scoring_profile: str, season: int | None = None
+) -> list[dict]:
+    """Accuracy of stored projections, aggregated several ways in one pass.
+
+    ``GROUPING SETS`` rather than six queries: every figure is an average over
+    the same joined rows, and scanning ~46,000 graded player-weeks once is the
+    whole cost. Each row carries ``g_*`` flags saying which grouping produced it
+    (1 means "rolled up over this column"), which is how the service tells the
+    overall row from the per-position ones without guessing from nulls.
+    """
+    points_column = _profile_column(scoring_profile)
+    await require_relations(
+        session, "projections", "projection_points", "model_runs", "player_week"
+    )
+    sql = f"""
+    WITH {_GRADED_CTE.format(points_column=points_column)},
+    banded AS (
+        SELECT g.*,
+               LEAST(FLOOR(projected / {TRACK_RECORD_BAND}) * {TRACK_RECORD_BAND},
+                     {TRACK_RECORD_TOP_BAND}) AS band
+        FROM graded AS g
+    )
+    SELECT
+        GROUPING(season)   AS g_season,
+        GROUPING(week)     AS g_week,
+        GROUPING(position) AS g_position,
+        GROUPING(band)     AS g_band,
+        season, week, position, band,
+        count(*)                                   AS graded,
+        avg(abs(projected - actual))               AS mean_absolute_error,
+        avg(projected - actual)                    AS bias,
+        count(*) FILTER (WHERE floor_points IS NOT NULL AND ceiling_points IS NOT NULL)
+                                                   AS interval_graded,
+        avg(CASE WHEN actual BETWEEN floor_points AND ceiling_points THEN 1.0 ELSE 0.0 END)
+            FILTER (WHERE floor_points IS NOT NULL AND ceiling_points IS NOT NULL)
+                                                   AS coverage_80,
+        avg(CASE WHEN actual BETWEEN p25_points AND p75_points THEN 1.0 ELSE 0.0 END)
+            FILTER (WHERE p25_points IS NOT NULL AND p75_points IS NOT NULL)
+                                                   AS coverage_50,
+        avg(boom_probability)
+            FILTER (WHERE boom_probability IS NOT NULL AND boom_threshold IS NOT NULL)
+                                                   AS boom_predicted,
+        avg(CASE WHEN actual >= boom_threshold THEN 1.0 ELSE 0.0 END)
+            FILTER (WHERE boom_probability IS NOT NULL AND boom_threshold IS NOT NULL)
+                                                   AS boom_observed,
+        avg(bust_probability)
+            FILTER (WHERE bust_probability IS NOT NULL AND bust_threshold IS NOT NULL)
+                                                   AS bust_predicted,
+        avg(CASE WHEN actual <= bust_threshold THEN 1.0 ELSE 0.0 END)
+            FILTER (WHERE bust_probability IS NOT NULL AND bust_threshold IS NOT NULL)
+                                                   AS bust_observed
+    FROM banded
+    GROUP BY GROUPING SETS (
+        (), (season), (position), (season, position), (season, week), (band)
+    )
+    """
+    return await _rows(session, sql, {"scoring_profile": scoring_profile, "season": season})
+
+
+async def fetch_week_outcomes(
+    session: AsyncSession, *, season: int, week: int, scoring_profile: str
+) -> list[dict]:
+    """Every graded player-week of one week: what was stored, what happened."""
+    points_column = _profile_column(scoring_profile)
+    await require_relations(
+        session, "projections", "projection_points", "model_runs", "player_week"
+    )
+    return await _rows(
+        session,
+        f"""
+        SELECT
+            p.player_id,
+            COALESCE(pl.display_name, pw.player_name, p.player_id) AS player_name,
+            pl.headshot,
+            p.position,
+            p.team,
+            p.opponent,
+            p.is_home,
+            COALESCE(pp.expected_points, pp.predicted_points) AS projected,
+            pp.floor_points,
+            pp.ceiling_points,
+            pw.{points_column} AS actual
+        FROM projections AS p
+        JOIN model_runs AS r
+          ON r.id = p.model_run_id AND r.status = 'published'
+        JOIN projection_points AS pp
+          ON pp.projection_id = p.id AND pp.scoring_profile = :scoring_profile
+        JOIN player_week AS pw
+          ON pw.player_id = p.player_id AND pw.season = p.season AND pw.week = p.week
+        LEFT JOIN raw_players AS pl
+          ON pl.gsis_id = p.player_id
+        WHERE p.season = :season AND p.week = :week
+          AND pw.{points_column} IS NOT NULL
+          AND COALESCE(pp.expected_points, pp.predicted_points) IS NOT NULL
+        ORDER BY projected DESC, p.player_id
+        """,
+        {"season": season, "week": week, "scoring_profile": scoring_profile},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Schedule and market reads for the planning views
+# ---------------------------------------------------------------------------
+
+
+async def fetch_team_schedule(
+    session: AsyncSession, *, season: int, from_week: int
+) -> list[dict]:
+    """Regular-season games from a week onward, one row per team per game.
+
+    ``game_team`` already holds each game twice, once from each side, which is
+    exactly the shape a team-by-week grid wants.
+    """
+    await require_relations(session, "game_team")
+    return await _rows(
+        session,
+        """
+        SELECT g.team, g.opponent, g.week, g.is_home, g.game_id
+        FROM game_team AS g
+        WHERE g.season = :season AND g.week >= :from_week AND g.game_type = 'REG'
+        ORDER BY g.team, g.week
+        """,
+        {"season": season, "from_week": from_week},
+    )
+
+
+async def fetch_regular_season_weeks(session: AsyncSession, *, season: int) -> list[int]:
+    """Every regular-season week of a season."""
+    await require_relations(session, "game_team")
+    result = await session.execute(
+        text(
+            "SELECT DISTINCT week FROM game_team "
+            "WHERE season = :season AND game_type = 'REG' ORDER BY week"
+        ),
+        {"season": season},
+    )
+    return [int(value) for value in result.scalars()]
+
+
+async def fetch_adp(session: AsyncSession, *, season: int) -> list[dict]:
+    """A season's draft-day ADP for the projected positions, as matched.
+
+    Read from the ``player_adp`` view, which chooses the pre-kickoff window and
+    matches names to ids (see ``transform._player_adp_select``). Unmatched and
+    ambiguous entries are returned too, with no id: they are still part of the
+    market's ordering even when they cannot be joined to a projection.
+
+    Absent view, empty list. The view is built only once ADP has been loaded,
+    and "no market data yet" is a state the value board reports, not an error.
+    """
+    if not await relation_exists(session, "player_adp"):
+        return []
+    return await _rows(
+        session,
+        """
+        SELECT player_id, adp_name, position, team, adp, adp_round, adp_formatted,
+               times_drafted, high, low, stdev, teams, total_drafts,
+               window_start, window_end, is_preseason, match_status
+        FROM player_adp
+        WHERE season = :season AND position IN ('QB', 'RB', 'WR', 'TE')
+        ORDER BY adp
+        """,
+        {"season": season},
+    )

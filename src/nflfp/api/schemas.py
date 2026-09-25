@@ -1676,6 +1676,214 @@ class DraftConfigOut(Schema):
     )
 
 
+# ---------------------------------------------------------------------------
+# Track record — stored projections graded against outcomes
+# ---------------------------------------------------------------------------
+
+
+class AccuracyOut(Schema):
+    """How a group of stored projections fared. Provenance: ``derived``.
+
+    Which group this is follows from which of ``season``, ``week``,
+    ``position`` and ``band_low`` are set; a null means "all of them".
+    """
+
+    provenance: Provenance = Provenance.DERIVED
+    season: int | None = None
+    week: int | None = None
+    position: str | None = None
+    band_low: float | None = Field(
+        default=None, description="Lower edge of a projection band, in points."
+    )
+    band_high: float | None = Field(
+        default=None, description="Upper edge; null for the open top band."
+    )
+    graded: int = Field(description="Player-weeks with both a stored projection and an outcome.")
+    thin: bool = Field(description="Fewer graded player-weeks than a rate should be read from.")
+    mean_absolute_error: float | None = None
+    bias: float | None = Field(
+        default=None, description="Projected minus actual. Positive means projections ran high."
+    )
+    interval_graded: int = 0
+    coverage_80: float | None = Field(
+        default=None, description="Share of outcomes inside P10-P90. Nominal 0.80."
+    )
+    coverage_50: float | None = Field(
+        default=None, description="Share of outcomes inside P25-P75. Nominal 0.50."
+    )
+    boom_predicted: float | None = Field(
+        default=None, description="Mean stored boom probability."
+    )
+    boom_observed: float | None = Field(
+        default=None, description="Share that actually reached the boom threshold."
+    )
+    bust_predicted: float | None = None
+    bust_observed: float | None = None
+
+
+class OutcomeOut(Schema):
+    """One player-week as stored (``model``) and as played (``actual``)."""
+
+    player_id: str
+    name: str
+    headshot_url: str | None = None
+    position: str | None = None
+    team: str | None = None
+    opponent: str | None = None
+    is_home: bool | None = None
+    projected: float = Field(description="`provenance: model` — the stored calibrated mean.")
+    floor: float | None = Field(default=None, description="`provenance: model` — stored P10.")
+    ceiling: float | None = Field(default=None, description="`provenance: model` — stored P90.")
+    actual: float = Field(description="`provenance: actual` — what the player scored.")
+    difference: float = Field(description="Actual minus projected.")
+    inside_range: bool | None = Field(
+        default=None, description="Whether the outcome landed inside the stored P10-P90."
+    )
+
+
+class ScorecardOut(Schema):
+    season: int
+    week: int
+    summary: AccuracyOut | None = None
+    beats: list[OutcomeOut]
+    misses: list[OutcomeOut]
+    min_projection: float = Field(
+        description="Only player-weeks projected at least this high are listed."
+    )
+
+
+class ValidationRecordOut(Schema):
+    """The frozen foundation's walk-forward measurement, for comparison only."""
+
+    seasons: list[int]
+    held_out_distributions: int
+    coverage_80: float
+    coverage_50: float
+    nominal_80: float
+    nominal_50: float
+    max_conditional_bias: float
+
+
+class TrackRecordOut(Schema):
+    scoring_profile: str
+    season: int | None = Field(default=None, description="The season filter; null is all.")
+    seasons: list[int] = Field(description="Seasons with graded outcomes, ascending.")
+    overall: AccuracyOut | None = None
+    by_position: list[AccuracyOut]
+    by_season: list[AccuracyOut]
+    by_season_position: list[AccuracyOut]
+    by_band: list[AccuracyOut] = Field(
+        description="Grouped by projected points, which is where conditional bias shows."
+    )
+    weekly: list[AccuracyOut]
+    scorecard: ScorecardOut | None = None
+    validation: ValidationRecordOut = Field(
+        description=(
+            "What the frozen model measured when it was validated. A fixed record "
+            "beside the live aggregate — not the same numbers and not a substitute."
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Strength of schedule
+# ---------------------------------------------------------------------------
+
+
+class ScheduleCellOut(Schema):
+    """One team-week. ``opponent`` null is a bye."""
+
+    week: int
+    opponent: str | None = None
+    is_home: bool | None = None
+    game_id: str | None = None
+    grade: MatchupGradeOut | None = Field(
+        default=None,
+        description="The opponent's current form against this position. Null on a bye.",
+    )
+    fp_allowed_l4: float | None = None
+
+
+class TeamScheduleOut(Schema):
+    provenance: Provenance = Provenance.DERIVED
+    team: str
+    cells: list[ScheduleCellOut]
+    mean_score: float | None = Field(
+        default=None,
+        description="Mean 0-100 score over graded remaining games. 100 = softest.",
+    )
+    graded_games: int
+    next_score: float | None = Field(
+        default=None, description="Mean score over the next four weeks."
+    )
+    playoff_score: float | None = Field(
+        default=None, description="Mean score over weeks 15-17, a common playoff bracket."
+    )
+
+
+class ScheduleStrengthOut(Schema):
+    season: int
+    from_week: int
+    position: str
+    weeks: list[int]
+    teams: list[TeamScheduleOut]
+
+
+# ---------------------------------------------------------------------------
+# ADP value board
+# ---------------------------------------------------------------------------
+
+
+class ValueEntryOut(Schema):
+    """A player both the pool and the market price."""
+
+    player: DraftPlayerOut
+    adp: float = Field(description="`provenance: context` — observed average draft slot.")
+    adp_formatted: str | None = None
+    adp_high: float | None = None
+    adp_low: float | None = None
+    adp_stdev: float | None = None
+    market_rank: int = Field(description="Positional rank by ADP, among players with both.")
+    value_rank: int = Field(
+        description="Positional rank by season value, among players with both."
+    )
+    rank_gap: int = Field(
+        description="Market rank minus value rank. Positive: the pool values the player above his ADP."
+    )
+
+
+class MarketOnlyOut(Schema):
+    """An ADP entry with no projection, and why."""
+
+    name: str
+    position: str
+    team: str | None = None
+    adp: float
+    reason: str
+
+
+class MarketWindowOut(Schema):
+    provenance: Provenance = Provenance.CONTEXT
+    total_drafts: int | None = None
+    teams: int | None = None
+    window_start: str | None = None
+    window_end: str | None = None
+    is_preseason: bool | None = None
+
+
+class ValueBoardOut(Schema):
+    season: int
+    scoring_profile: str
+    board_week: int
+    season_games: int
+    entries: list[ValueEntryOut]
+    unpriced: list[DraftPlayerOut] = Field(
+        description="Pool players the market did not draft, best season value first."
+    )
+    market_only: list[MarketOnlyOut]
+    market: MarketWindowOut | None = None
+
+
 MetaOut.model_rebuild()
 WeekOut.model_rebuild()
 DraftAnalysisOut.model_rebuild()

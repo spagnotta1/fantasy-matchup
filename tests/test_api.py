@@ -808,3 +808,157 @@ class TestOperational:
         body = (await client.get("/")).json()
         assert body["api"] == API_PREFIX
         assert body["model"] == "shrinkage_eb"
+
+
+# ---------------------------------------------------------------------------
+# Track record and strength of schedule
+# ---------------------------------------------------------------------------
+
+#: The completed week the track record grades. The stub records a stat line for
+#: every player in weeks 1-9, all scoring ``12.5 + week`` in half-PPR.
+GRADED_WEEK = UPCOMING_WEEK - 1
+GRADED_ACTUAL = 12.5 + GRADED_WEEK
+
+
+async def publish_completed_week(session) -> None:
+    """Store a published run for a week that has already been played.
+
+    Floors and ceilings are the stub's own shape (expected -7 / +9.2), which
+    puts the tight end's 9.6 projection's ceiling at 18.8 — below the 21.5 he
+    scored — and everyone else's range around it.
+    """
+    run_id = (
+        await session.execute(
+            text(
+                "INSERT INTO model_runs (model_name, model_version, algorithm, season,"
+                " week, status, feature_schema_version, published_at, created_at,"
+                " updated_at) VALUES ('shrinkage_eb', '1.0.0', 'baseline', :s, :w,"
+                " 'published', 1, now(), now(), now()) RETURNING id"
+            ),
+            {"s": SEASON, "w": GRADED_WEEK},
+        )
+    ).scalar_one()
+    for player_id, _, position, team, expected in PLAYERS:
+        projection_id = (
+            await session.execute(
+                text(
+                    "INSERT INTO projections (model_run_id, player_id, season, week,"
+                    " game_id, team, opponent, position, is_home, created_at, updated_at)"
+                    " VALUES (:r, :i, :s, :w, :g, :t, :o, :p, false, now(), now())"
+                    " RETURNING id"
+                ),
+                {
+                    "r": run_id,
+                    "i": player_id,
+                    "s": SEASON,
+                    "w": GRADED_WEEK,
+                    "g": f"{SEASON}_{GRADED_WEEK}_BUF_KC",
+                    "t": team,
+                    "o": "BUF" if team == "KC" else "KC",
+                    "p": position,
+                },
+            )
+        ).scalar_one()
+        await session.execute(
+            text(
+                "INSERT INTO projection_points (projection_id, scoring_profile,"
+                " predicted_points, expected_points, floor_points, p25_points,"
+                " median_points, p75_points, ceiling_points, standard_deviation,"
+                " confidence, boom_probability, bust_probability, boom_threshold,"
+                " bust_threshold, calibration_method, distribution_samples, extrapolated)"
+                " VALUES (:p, 'half_ppr', :e, :e, :f, :q1, :e, :q3, :c, 6.4, 0.7, 0.2,"
+                " 0.1, 20.0, 5.0, 'heldout_residual_quantiles_v1', 1200, false)"
+            ),
+            {
+                "p": projection_id,
+                "e": expected,
+                "f": expected - 7.0,
+                "q1": expected - 3.5,
+                "q3": expected + 3.8,
+                "c": expected + 9.2,
+            },
+        )
+    await session.commit()
+
+
+class TestTrackRecord:
+    async def test_only_weeks_with_outcomes_are_graded(self, client, async_db_session):
+        await publish_completed_week(async_db_session)
+        response = await client.get(url("/track-record"), params={"scoring_profile": "half_ppr"})
+        assert response.status_code == 200
+        data = response.json()["data"]
+        # The week 10 run has no stat lines yet and must contribute nothing.
+        assert data["overall"]["graded"] == len(PLAYERS)
+        assert data["seasons"] == [SEASON]
+        assert [(w["season"], w["week"]) for w in data["weekly"]] == [(SEASON, GRADED_WEEK)]
+
+    async def test_coverage_counts_outcomes_inside_the_stored_range(self, client, async_db_session):
+        await publish_completed_week(async_db_session)
+        overall = (
+            await client.get(url("/track-record"), params={"scoring_profile": "half_ppr"})
+        ).json()["data"]["overall"]
+        assert overall["coverage_80"] == pytest.approx(0.75)
+        expected_bias = sum(p[4] - GRADED_ACTUAL for p in PLAYERS) / len(PLAYERS)
+        assert overall["bias"] == pytest.approx(expected_bias)
+        assert overall["provenance"] == Provenance.DERIVED.value
+
+    async def test_the_scorecard_orders_beats_by_size_and_labels_both_sides(
+        self, client, async_db_session
+    ):
+        await publish_completed_week(async_db_session)
+        card = (
+            await client.get(url("/track-record"), params={"scoring_profile": "half_ppr"})
+        ).json()["data"]["scorecard"]
+        assert (card["season"], card["week"]) == (SEASON, GRADED_WEEK)
+        assert [o["name"] for o in card["beats"]][0] == "Charlie End"
+        assert card["beats"][0]["inside_range"] is False
+        assert all(o["actual"] == pytest.approx(GRADED_ACTUAL) for o in card["beats"])
+
+    async def test_it_carries_the_validation_record_beside_the_live_one(self, client):
+        response = await client.get(url("/track-record"))
+        payload = response.json()
+        assert payload["data"]["validation"]["nominal_80"] == pytest.approx(0.80)
+        assert any("backfilling" in n for n in payload["meta"]["notices"])
+        assert any("did not play" in n for n in payload["meta"]["notices"])
+
+
+class TestScheduleStrength:
+    async def test_every_remaining_week_is_laid_out_per_team(self, client):
+        response = await client.get(
+            url("/schedule-strength"),
+            params={"season": SEASON, "week": UPCOMING_WEEK, "position": "WR"},
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["weeks"] == [UPCOMING_WEEK]
+        assert {t["team"] for t in data["teams"]} == {"KC", "BUF"}
+        kc = next(t for t in data["teams"] if t["team"] == "KC")
+        # BUF has nine games of WR history, so KC's receivers get a real grade.
+        assert kc["cells"][0]["opponent"] == "BUF"
+        assert kc["cells"][0]["grade"]["graded"] is True
+
+    async def test_a_defence_with_no_history_at_the_position_is_not_graded(self, client):
+        data = (
+            await client.get(
+                url("/schedule-strength"),
+                params={"season": SEASON, "week": UPCOMING_WEEK, "position": "WR"},
+            )
+        ).json()["data"]
+        buf = next(t for t in data["teams"] if t["team"] == "BUF")
+        grade = buf["cells"][0]["grade"]
+        assert grade["graded"] is False and grade["reason"]
+        assert buf["mean_score"] is None
+
+    async def test_it_says_the_grade_is_carried_forward(self, client):
+        payload = (
+            await client.get(
+                url("/schedule-strength"), params={"season": SEASON, "position": "RB"}
+            )
+        ).json()
+        assert any("not a forecast" in n for n in payload["meta"]["notices"])
+
+    async def test_an_unprojected_position_is_refused(self, client):
+        response = await client.get(
+            url("/schedule-strength"), params={"season": SEASON, "position": "K"}
+        )
+        assert response.status_code == 422
