@@ -72,9 +72,15 @@ FEATURE_RELATIONS = (
     "feat_training_dataset",
 )
 
+#: Relations the read path uses when present and does without when absent —
+#: probed with :func:`relation_exists` rather than required. Listed so the probe
+#: rides in the same batched existence check as everything else instead of
+#: costing a cold request a round-trip of its own.
+OPTIONAL_RELATIONS = ("feat_upcoming_slate", "raw_injuries", "player_adp")
+
 #: Every relation the read path guards on, which is what makes one round-trip
 #: enough. See :func:`_load_relations`.
-KNOWN_RELATIONS = APP_RELATIONS + WAREHOUSE_RELATIONS + FEATURE_RELATIONS
+KNOWN_RELATIONS = APP_RELATIONS + WAREHOUSE_RELATIONS + FEATURE_RELATIONS + OPTIONAL_RELATIONS
 
 #: How long a relation-existence check is trusted, in seconds. Existence changes
 #: only when the pipeline runs, so re-asking on every request would be a

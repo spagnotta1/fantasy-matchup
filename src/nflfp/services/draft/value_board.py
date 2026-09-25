@@ -89,7 +89,10 @@ class ValueBoard:
 
 #: Why an ADP entry has no pool entry, in the words a manager needs.
 REASONS = {
-    "matched": "no projection — no prior usage window (usually a rookie)",
+    "matched": (
+        "no week 1 projection — a rookie with no usage window, or a player the "
+        "week 1 run did not cover (injured, suspended or unsigned at the time)"
+    ),
     "ambiguous": "name matched more than one player, so no projection was attached",
     "unmatched": "name did not match any player in the warehouse",
 }
