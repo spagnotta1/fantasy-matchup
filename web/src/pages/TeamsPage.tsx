@@ -20,12 +20,12 @@ import { ScheduleRow } from '@/features/matchups/ScheduleGrid'
 import { useDocumentTitle } from '@/app/page-title'
 import { useSlate } from '@/app/slate-context'
 import { usePositions, useTeams } from '@/hooks/useCatalog'
-import { useAllDefenseForm, useScheduleStrength, useTeamOutlook } from '@/hooks/useInsights'
+import { useAllDefenseForm, useDepthChart, useScheduleStrength, useTeamOutlook } from '@/hooks/useInsights'
 import { useGames } from '@/hooks/useMatchups'
 import { useUrlState } from '@/hooks/useUrlState'
 import { boardCeiling } from '@/utils/board'
-import { formatGameDay, formatPercent, formatPoints, formatSpread } from '@/utils/format'
-import type { Game, Team } from '@/api/schemas'
+import { formatGameDay, formatPercent, formatPoints, formatSpread, headlinePoints } from '@/utils/format'
+import type { Game, RankedProjection, Team } from '@/api/schemas'
 
 /** `/teams` lists every team; `/teams/:team` is one team's week. One route, one page. */
 export default function TeamsPage() {
@@ -350,6 +350,7 @@ function TeamDetail({ team }: { team: string }) {
           <DefenseCard team={team} />
         </div>
 
+        <DepthChartCard team={team} players={players} />
         <TeamSchedule team={team} />
       </Refreshing>
     </>
@@ -474,6 +475,90 @@ function TeamSchedule({ team }: { team: string }) {
             </Link>
           </CardBody>
         </Refreshing>
+      )}
+    </Card>
+  )
+}
+
+/**
+ * The team's own listing, going into the week — with each player's projection.
+ *
+ * The depth chart answers what usage cannot on its own: who is next in line.
+ * Set beside the projections, it is also where a handcuff shows — a backup
+ * whose projection is small today and whose role is one injury away. It is
+ * `context`: the model reads usage, not this listing.
+ */
+function DepthChartCard({ team, players }: { team: string; players: RankedProjection[] }) {
+  const chart = useDepthChart(team)
+  const byId = new Map(players.map((entry) => [entry.projection.player.player_id, entry]))
+  const data = chart.data?.data
+  const empty = !data || Object.values(data.positions).every((entries) => entries.length === 0)
+
+  return (
+    <Card className="mt-6 overflow-hidden">
+      <CardHeader
+        as="h2"
+        title="Depth chart"
+        description={
+          data?.as_of
+            ? `The team's listing going into week ${data.week}${data.as_of.startsWith('week') ? '' : `, as of ${formatGameDay(data.as_of)}`}.`
+            : "The team's own listing, going into the week."
+        }
+        action={<ProvenanceBadge provenance="context" />}
+      />
+      {chart.isPending ? (
+        <CardBody>
+          <Skeleton className="h-32" />
+        </CardBody>
+      ) : chart.isError ? (
+        <ErrorState error={chart.error} onRetry={() => void chart.refetch()} compact />
+      ) : empty ? (
+        <EmptyState
+          title="No depth chart for this week"
+          description="No listing was captured for this team going into the selected week."
+        />
+      ) : (
+        <>
+          <div className="grid gap-px bg-[var(--color-line)] sm:grid-cols-2 xl:grid-cols-4">
+            {POSITION_ORDER.map((position) => (
+              <section key={position} className="bg-surface p-4" aria-label={`${position} depth`}>
+                <h3 className="text-ink-muted mb-2 text-xs font-semibold tracking-wide uppercase">{position}</h3>
+                <ol className="space-y-1.5">
+                  {(data?.positions[position] ?? []).slice(0, 6).map((entry) => {
+                    const projected = entry.player_id ? byId.get(entry.player_id) : undefined
+                    return (
+                      <li key={`${entry.depth}-${entry.name}`} className="flex items-center gap-2 text-sm">
+                        <span className="tnum text-ink-muted w-7 shrink-0 text-xs">
+                          {position}
+                          {entry.depth}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {entry.player_id ? (
+                            <Link
+                              to={`/players/${encodeURIComponent(entry.player_id)}`}
+                              className={entry.depth === 1 ? 'text-ink font-medium hover:text-accent-text' : 'text-ink-secondary hover:text-accent-text'}
+                            >
+                              {entry.name}
+                            </Link>
+                          ) : (
+                            <span className="text-ink-secondary">{entry.name}</span>
+                          )}
+                        </span>
+                        {projected && <InjuryBadge injury={projected.projection.context.injury} />}
+                        <span className="tnum text-ink-secondary w-9 shrink-0 text-right text-xs">
+                          {projected ? formatPoints(headlinePoints(projected.projection.prediction.points).value) : '—'}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ol>
+              </section>
+            ))}
+          </div>
+          <div className="px-4 pb-4">
+            <NotAppliedNotice reason={data?.unapplied_reason} />
+          </div>
+        </>
       )}
     </Card>
   )

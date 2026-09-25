@@ -107,3 +107,39 @@ export function useAllDefenseForm() {
     placeholderData: keepPreviousSubject('defense-all'),
   })
 }
+
+/** A team's offensive depth chart going into the slate's week. */
+export function useDepthChart(team: string | undefined) {
+  const slate = useSlate()
+  return useQuery({
+    queryKey: queryKeys.matchups.depthChart(team ?? '', slate.season, slate.week),
+    queryFn: ({ signal }) =>
+      matchupsApi.getDepthChart(team as string, { season: slate.season, week: slate.week }, signal),
+    enabled: Boolean(team) && slate.resolved,
+  })
+}
+
+/** How often live data is re-read while a game is in progress. Matches the API's cache. */
+export const LIVE_REFRESH_MS = 60_000
+
+/**
+ * Live games and unofficial points for the slate's week.
+ *
+ * Refreshes itself once a minute, but only while a game is actually in
+ * progress: a finished or unstarted week does not change, and polling it would
+ * spend a request a minute per open tab for nothing.
+ */
+export function useLive() {
+  const slate = useSlate()
+  const params = { season: slate.season, week: slate.week, scoringProfile: slate.scoringProfile }
+  return useQuery({
+    queryKey: queryKeys.insights.live(params),
+    queryFn: ({ signal }) => insightsApi.getLive(params, signal),
+    enabled: slate.resolved,
+    staleTime: 30_000,
+    refetchInterval: (query) =>
+      query.state.data?.data.games.some((game) => game.state === 'in') ? LIVE_REFRESH_MS : false,
+    meta: { subject: 'live' },
+    placeholderData: keepPreviousSubject('live'),
+  })
+}

@@ -704,8 +704,10 @@ GET /api/v1/weeks/{week}                 a week: schedule + is there a board yet
 GET /api/v1/matchups/{game_id}           one game, both sides, per position
 GET /api/v1/defense-rankings             which defences to attack
 GET /api/v1/teams/{team}/outlook         a team's week
+GET /api/v1/teams/{team}/depth-chart     QB/RB/WR/TE in depth order going into the week
 GET /api/v1/schedule-strength?position=  every team's remaining opponents, graded
 GET /api/v1/track-record                 stored projections graded against outcomes
+GET /api/v1/live                         games in progress, unofficial points so far
 GET /api/v1/start-sit?player_a=&player_b= head-to-head call
 GET /api/v1/compare?player_ids=          up to six players
 GET /api/v1/meta/model                   the frozen foundation, audited
@@ -770,6 +772,33 @@ withheld.
 and only among players both lists hold: overall ranks would make every
 quarterback a bargain, and ranking the market over rookies the pool cannot
 value would make every veteran one.
+
+### Depth charts and live scoring
+
+**`/teams/{team}/depth-chart`** reads both nflverse shapes: the per-week chart
+through 2024, and from 2025 the timestamped snapshots (`dt`, no season column
+— 1.09M rows through the current week). The chart for a week is the latest
+snapshot before noon UTC on the team's game day: the chart going into the game.
+Provenance `context`, `applied_to_projection: false` — the model projects from
+usage and never reads the listing.
+
+**`/live`** is the one endpoint that calls an upstream at request time: ESPN's
+scoreboard plus a box score per started game, scored with `scoring.points_for`
+— the same arithmetic as the official line — and set beside each player's
+published projection, which it never adjusts. `provenance: actual`,
+`official: false`; an unreachable upstream is a notice, not a 500; the response
+cache holds it 60 s so the upstream sees one read a minute however many people
+watch. Against the official line for three completed weeks (2024 wk 14, 2025
+wk 5 and wk 10) it matched **833 of 858** players exactly; every difference is
+a two-point conversion except one blocked-punt touchdown, neither of which a box
+score carries.
+
+The web app's *My team* and *Trade helper* views are built on these reads plus
+the board. The roster lives in the URL (and the browser, like the slate) —
+there is no account and nothing stored server-side. The trade helper's
+rest-of-season figure is this week's projection times the games left, the same
+rate-times-games construction as the draft pool, and is labelled a rate, not a
+forecast.
 
 ### Deliberate response behaviours
 
@@ -1421,6 +1450,8 @@ Nothing here is asserted without a check that fails loudly:
 | Upcoming-week context | usage / injury blocks, 2026 wk 2 | usage 636/639 (was 22), injury reports 62 (was 0) |
 | Track record | `/track-record`, half-PPR, 2018–2026 | P10–P90 coverage 0.791, P25–P75 0.497, 45,974 player-weeks |
 | Board render cost | Playwright, 4× CPU throttle, `/players` | 18,447 → 4,010 DOM nodes; 1,343 → 745 ms blocking |
+| Live scoring ≡ official line | `/live` vs `player_week`, 3 completed weeks | 833/858 exact; the rest are 2-pt conversions and 1 blocked-punt TD |
+| Warmer hits the browser's keys | `jobs run warm_cache`, key test | 43 paths incl. every profile's board as the client requests it |
 | Python ≡ SQL scoring | both renderers, 5 profiles | exact over 20,000 player-weeks |
 | Components ≡ points | score lagged components vs `fp_half_ppr_l4` | **0 mismatches** / 56,518 |
 | Walk-forward has no leakage | re-check every fold's rows | enforced per fold, unit-tested |
@@ -1517,7 +1548,13 @@ disagree around the 4th decimal. That's arithmetic, not a porting bug.
 - `position` exists on the stats, players *and* snap-count tables — always
   qualify it. This is why `points_expression()` takes an `alias`.
 - nflverse dropped the season column from `depth_charts` 2025+, which is why
-  that dataset is `refresh="full"` rather than `by_season`.
+  that dataset is `refresh="full"` rather than `by_season`. It also means
+  `max(season)` on that table says 2024 — the 2025+ rows have a NULL season and
+  are keyed by the `dt` snapshot timestamp instead.
+- `information_schema.columns` does not list materialized-view columns; use
+  `pg_attribute` to inspect `feat_*`.
+- Jobs that drive the async app (`warm_cache`) need the selector event loop on
+  Windows, exactly like `python -m nflfp.api`.
 - Postgres `round(double, int)` doesn't exist — cast to `::numeric`. Probe SQL
   is written portably so it runs on both engines.
 - Postgres only allows `CREATE OR REPLACE VIEW` when the column list is

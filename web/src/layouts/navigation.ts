@@ -1,5 +1,6 @@
 import {
   Activity,
+  ArrowLeftRight,
   BarChart3,
   ClipboardList,
   GitCompareArrows,
@@ -11,6 +12,8 @@ import {
   Shuffle,
   Swords,
   Target,
+  Radio,
+  UserRound,
   Users,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -82,6 +85,14 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'week',
   },
   {
+    to: '/live',
+    label: 'Live',
+    icon: Radio,
+    description: 'Games in progress and points so far (unofficial)',
+    primary: false,
+    group: 'week',
+  },
+  {
     to: '/teams',
     label: 'Teams',
     icon: Shield,
@@ -111,6 +122,22 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Shuffle,
     description: 'Simulate a head-to-head fantasy week',
     primary: true,
+    group: 'tools',
+  },
+  {
+    to: '/my-team',
+    label: 'My team',
+    icon: UserRound,
+    description: 'Your roster, projected, with its highest-projected lineup',
+    primary: false,
+    group: 'tools',
+  },
+  {
+    to: '/trade',
+    label: 'Trade helper',
+    icon: ArrowLeftRight,
+    description: 'Set two sides of a trade against each other',
+    primary: false,
     group: 'tools',
   },
   {

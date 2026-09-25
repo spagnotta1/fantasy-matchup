@@ -145,6 +145,7 @@ if (gameId) await check('matchup analysis', () => matchups.getMatchup(gameId, sl
 await check('defense rankings RB', () => matchups.getDefenseRankings({ season, week, position: 'RB' }))
 const team = board?.data?.[0]?.projection?.team
 if (team) await check('team outlook', () => matchups.getTeamOutlook(team, slate))
+if (team) await check('team depth chart', () => matchups.getDepthChart(team, { season, week }))
 
 // ---- advice --------------------------------------------------------------
 if (first && second) {
@@ -158,6 +159,7 @@ await check(`track record (${season})`, () =>
   insights.getTrackRecord({ season, week, scoringProfile: 'ppr' }),
 )
 await check('schedule strength WR', () => insights.getScheduleStrength('WR', { season, week }))
+await check('live scoring', () => insights.getLive(slate))
 await expectRefusal('schedule strength K refused', () =>
   insights.getScheduleStrength('K', { season, week }),
 )

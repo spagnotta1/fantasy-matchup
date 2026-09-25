@@ -118,3 +118,46 @@ test('the draft board labels both sides and never compares across positions', as
     expect(market, pair).toBe(model)
   }
 })
+
+test('my team fills a lineup from a roster in the link, and keeps it out of any server', async ({ page }) => {
+  await page.goto('/players')
+  await settle(page)
+  const ids = await page
+    .locator('main a[href^="/players/"]')
+    .evaluateAll((links) => links.slice(0, 10).map((a) => (a.getAttribute('href') ?? '').split('/').pop()))
+  await page.goto(`/my-team?roster=${ids.join(',')}`)
+  await settle(page)
+
+  await expect(page.getByRole('heading', { name: /Highest-projected lineup/ })).toBeVisible()
+  await expect(page.getByText(/nothing is stored on a server/)).toBeVisible()
+  // Slots are filled from the roster, and the link is the roster.
+  expect(await page.locator('main tbody tr').count()).toBeGreaterThan(3)
+  expect(page.url()).toContain('roster=')
+})
+
+test('the trade helper states a difference and names its assumption', async ({ page }) => {
+  await page.goto('/rankings')
+  await settle(page)
+  const ids = await page
+    .locator('main a[href^="/players/"]')
+    .evaluateAll((links) => links.slice(0, 3).map((a) => (a.getAttribute('href') ?? '').split('/').pop()))
+  await page.goto(`/trade?give=${ids[0]}&get=${ids[1]},${ids[2]}`)
+  await settle(page)
+
+  await expect(page.getByRole('heading', { name: 'The difference' })).toBeVisible()
+  await expect(page.getByText(/read it as a rate, not a forecast/)).toBeVisible()
+  await expect(page.locator('main').getByText('This week', { exact: true })).toBeVisible()
+})
+
+test('live scoring is labelled unofficial and never replaces the projection', async ({ page }) => {
+  await page.goto('/live')
+  await settle(page)
+  await expect(page.getByText(/They are unofficial/).first()).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Projected' }).or(page.getByText(/No points yet|No games found/))).toBeVisible()
+})
+
+test('a team page shows its depth chart as context', async ({ page }) => {
+  await page.goto('/teams/KC')
+  await settle(page)
+  await expect(page.getByRole('heading', { name: 'Depth chart' })).toBeVisible()
+})

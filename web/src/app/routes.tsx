@@ -25,6 +25,9 @@ const InjuriesPage = lazy(() => import('@/pages/InjuriesPage'))
 const UsagePage = lazy(() => import('@/pages/UsagePage'))
 const TrackRecordPage = lazy(() => import('@/pages/TrackRecordPage'))
 const DraftBoardPage = lazy(() => import('@/pages/DraftBoardPage'))
+const LivePage = lazy(() => import('@/pages/LivePage'))
+const MyTeamPage = lazy(() => import('@/pages/MyTeamPage'))
+const TradePage = lazy(() => import('@/pages/TradePage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 
 export const router = createBrowserRouter([
@@ -54,6 +57,9 @@ export const router = createBrowserRouter([
       { path: 'usage', element: <UsagePage /> },
       { path: 'track-record', element: <TrackRecordPage /> },
       { path: 'draft-board', element: <DraftBoardPage /> },
+      { path: 'live', element: <LivePage /> },
+      { path: 'my-team', element: <MyTeamPage /> },
+      { path: 'trade', element: <TradePage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

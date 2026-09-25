@@ -1,8 +1,8 @@
 /** The track record and strength of schedule — planning and accountability reads. */
 
 import { request } from './client'
-import { scheduleStrengthSchema, trackRecordSchema } from './schemas'
-import type { SlateParams } from './projections'
+import { liveSlateSchema, scheduleStrengthSchema, trackRecordSchema } from './schemas'
+import { slateQuery, type SlateParams } from './projections'
 
 export interface TrackRecordParams {
   /** Restrict every aggregate to one season. Omit for all seasons. */
@@ -33,4 +33,9 @@ export function getScheduleStrength(
     signal,
     params: { season: params.season, week: params.week, position },
   })
+}
+
+/** Games in progress and every started player's unofficial points so far. */
+export function getLive(params: SlateParams = {}, signal?: AbortSignal) {
+  return request('/live', liveSlateSchema, { signal, params: slateQuery(params) })
 }

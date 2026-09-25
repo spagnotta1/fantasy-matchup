@@ -57,6 +57,8 @@ export const queryKeys = {
       [...queryKeys.matchups.all, 'game', gameId, params] as const,
     defense: (params: SlateParams & { position?: string | null }) =>
       [...queryKeys.matchups.all, 'defense', params] as const,
+    depthChart: (team: string, season: number | null, week: number | null) =>
+      [...queryKeys.matchups.all, 'depth-chart', team, season, week] as const,
     teamOutlook: (team: string, params: SlateParams) =>
       [...queryKeys.matchups.all, 'team-outlook', team, params] as const,
   },
@@ -65,6 +67,7 @@ export const queryKeys = {
     all: ['insights'] as const,
     trackRecord: (params: TrackRecordParams) =>
       [...queryKeys.insights.all, 'track-record', params] as const,
+    live: (params: SlateParams) => [...queryKeys.insights.all, 'live', params] as const,
     scheduleStrength: (position: string, season: number | null, week: number | null) =>
       [...queryKeys.insights.all, 'schedule-strength', position, season, week] as const,
   },

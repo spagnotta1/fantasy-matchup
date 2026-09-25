@@ -1132,3 +1132,69 @@ export const valueBoardSchema = z.object({
   market: marketWindowSchema.nullish(),
 })
 export type ValueBoard = z.infer<typeof valueBoardSchema>
+
+// ---------------------------------------------------------------------------
+// Depth chart (context) and live scoring (actual, unofficial)
+// ---------------------------------------------------------------------------
+
+export const depthEntrySchema = z.object({
+  depth: z.number(),
+  player_id: maybeString,
+  name: z.string(),
+})
+export type DepthEntry = z.infer<typeof depthEntrySchema>
+
+export const depthChartSchema = z.object({
+  provenance: provenanceSchema,
+  applied_to_projection: z.boolean(),
+  unapplied_reason: z.string(),
+  team: z.string(),
+  season: z.number(),
+  week: z.number(),
+  as_of: maybeString,
+  positions: z.record(z.string(), z.array(depthEntrySchema)),
+})
+export type DepthChart = z.infer<typeof depthChartSchema>
+
+export const liveGameSchema = z.object({
+  event_id: z.string(),
+  home: z.string(),
+  away: z.string(),
+  /** `pre`, `in` or `post`. */
+  state: z.string(),
+  detail: maybeString,
+  clock: maybeString,
+  period: z.number().nullish(),
+  home_score: z.number().nullish(),
+  away_score: z.number().nullish(),
+  kickoff: maybeString,
+})
+export type LiveGame = z.infer<typeof liveGameSchema>
+
+export const livePlayerSchema = z.object({
+  provenance: provenanceSchema,
+  /** Always false: an in-game box score, replaced by the official line later. */
+  official: z.boolean(),
+  player_id: z.string(),
+  name: z.string(),
+  position: z.string(),
+  team: z.string(),
+  headshot_url: maybeString,
+  event_id: z.string(),
+  live_points: z.number(),
+  /** Provenance `model`: the published projection, unchanged by the live number. */
+  projected: maybeNumber,
+  floor: maybeNumber,
+  ceiling: maybeNumber,
+  components: z.record(z.string(), z.number()),
+})
+export type LivePlayer = z.infer<typeof livePlayerSchema>
+
+export const liveSlateSchema = z.object({
+  season: z.number(),
+  week: z.number(),
+  scoring_profile: z.string(),
+  games: z.array(liveGameSchema),
+  players: z.array(livePlayerSchema),
+})
+export type LiveSlate = z.infer<typeof liveSlateSchema>
