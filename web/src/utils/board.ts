@@ -8,7 +8,7 @@
  * the headline) and never presented as a model output.
  *
  * This is safe to do in the browser only because a whole slate arrives in one
- * page (the API's limit is 500, a slate is ~400). Sorting a paginated board
+ * page (the client asks for 1,000; the 2026 week 2 slate is 639). Sorting a paginated board
  * client-side would reorder one page and present it as the ranking.
  */
 

@@ -37,20 +37,5 @@ export default defineConfig(({ mode }) => {
         '/api': { target, changeOrigin: true },
       },
     },
-    build: {
-      // Route-level code splitting is handled by React.lazy; this keeps the
-      // charting library out of the initial bundle, which is the single
-      // biggest win available and does not depend on route boundaries.
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
-              return 'charts'
-            }
-            return undefined
-          },
-        },
-      },
-    },
   }
 })

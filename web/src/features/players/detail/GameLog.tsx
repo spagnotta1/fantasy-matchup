@@ -1,15 +1,4 @@
 import { useMemo, useState } from 'react'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip as RechartsTooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
@@ -17,6 +6,7 @@ import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { InfoTip } from '@/components/ui/Tooltip'
 import { EmptyState } from '@/components/feedback/States'
 import { formatPoints, formatSigned } from '@/utils/format'
+import { GameLogChart, type GameLogDatum } from './GameLogChart'
 import type { HistoricalWeek, Trend } from '@/api/schemas'
 
 /**
@@ -30,16 +20,7 @@ import type { HistoricalWeek, Trend } from '@/api/schemas'
  */
 const CHART_GAMES = 17
 
-interface Datum {
-  key: string
-  label: string
-  season: number
-  week: number
-  points: number
-  opponent: string
-  isHome: boolean
-  projected: number | null
-}
+type Datum = GameLogDatum
 
 /**
  * Completed weeks: a column chart of what actually happened, plus the table.
@@ -162,119 +143,6 @@ export function GameLog({
         <TrendSummary trend={trend} />
       </CardBody>
     </Card>
-  )
-}
-
-function GameLogChart({
-  data,
-  boomThreshold,
-  bustThreshold,
-}: {
-  data: Datum[]
-  boomThreshold: number | null
-  bustThreshold: number | null
-}) {
-  if (data.length === 0) {
-    return <p className="text-ink-muted text-sm">No scored games to chart.</p>
-  }
-
-  const labelByKey = new Map(data.map((datum) => [datum.key, datum.label]))
-
-  return (
-    <div className="h-64 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
-          <CartesianGrid
-            vertical={false}
-            stroke="var(--color-chart-grid)"
-            strokeWidth={1}
-          />
-          {/* Keyed on season-week, which is unique; the label is not (2025 W1
-              and 2026 W1 can share a window) and a category axis misplaces
-              duplicate values. */}
-          <XAxis
-            dataKey="key"
-            tickFormatter={(key: string) => labelByKey.get(key) ?? key}
-            tickLine={false}
-            axisLine={{ stroke: 'var(--color-chart-axis)' }}
-            tick={{ fill: 'var(--color-ink-muted)', fontSize: 11 }}
-            interval="preserveStartEnd"
-          />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            width={44}
-            tick={{ fill: 'var(--color-ink-muted)', fontSize: 11 }}
-          />
-
-          {/* Thresholds the API supplied, so "boom" and "bust" mean the same
-              thing here as they do in the probabilities above. */}
-          {boomThreshold !== null && (
-            <ReferenceLine
-              y={boomThreshold}
-              stroke="var(--color-chart-reference)"
-              strokeDasharray="4 4"
-              label={{
-                value: `Boom ${formatPoints(boomThreshold)}`,
-                position: 'insideTopRight',
-                fill: 'var(--color-ink-muted)',
-                fontSize: 10,
-              }}
-            />
-          )}
-          {bustThreshold !== null && (
-            <ReferenceLine
-              y={bustThreshold}
-              stroke="var(--color-chart-reference)"
-              strokeDasharray="4 4"
-              label={{
-                value: `Bust ${formatPoints(bustThreshold)}`,
-                position: 'insideBottomRight',
-                fill: 'var(--color-ink-muted)',
-                fontSize: 10,
-              }}
-            />
-          )}
-          {/* No reference line for the player's average. It lands within a
-              point of the boom threshold for most startable players, and two
-              near-coincident horizontal rules read as one mislabelled line.
-              The average is stated numerically directly beneath the chart. */}
-
-          <RechartsTooltip
-            cursor={{ fill: 'var(--color-surface-hover)' }}
-            content={<ChartTooltip />}
-          />
-
-          <Bar dataKey="points" maxBarSize={24} radius={[4, 4, 0, 0]} isAnimationActive={false}>
-            {data.map((datum) => (
-              <Cell key={datum.key} fill="var(--color-chart-series)" />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-function ChartTooltip({ active, payload }: { active?: boolean; payload?: { payload: Datum }[] }) {
-  const datum = payload?.[0]?.payload
-  if (!active || !datum) return null
-
-  return (
-    <div className="bg-surface-raised border-line rounded-[var(--radius-control)] border px-3 py-2 shadow-overlay">
-      <p className="text-ink text-xs font-semibold">
-        {datum.season} Week {datum.week}
-      </p>
-      <p className="text-ink-muted text-xs">
-        {datum.isHome ? 'vs' : 'at'} {datum.opponent}
-      </p>
-      <p className="text-ink tnum mt-1 text-sm font-medium">{formatPoints(datum.points)} pts</p>
-      {datum.projected !== null && (
-        <p className="text-ink-muted tnum text-xs">
-          Projected {formatPoints(datum.projected)} · {formatSigned(datum.points - datum.projected)}
-        </p>
-      )}
-    </div>
   )
 }
 

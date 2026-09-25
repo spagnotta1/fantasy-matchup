@@ -8,9 +8,8 @@ import { RootErrorBoundary } from './RootErrorBoundary'
  * Route-level code splitting.
  *
  * Every page is lazy except the shell. The dashboard is the common entry point,
- * but a user who lands on a player link should not download the simulation view
- * to see it — and the simulation view is the one that pulls in the charting
- * library.
+ * but a user who lands on a player link should not download the simulation or
+ * mock-draft views — the two largest page chunks — to see it.
  */
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const PlayersPage = lazy(() => import('@/pages/PlayersPage'))
@@ -32,12 +31,14 @@ export const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: 'players', element: <PlayersPage /> },
       { path: 'players/:playerId', element: <PlayerDetailPage /> },
-      { path: 'rankings', element: <RankingsPage /> },
       // The position is a route segment rather than a query param: a link to
-      // the RB board is a thing people send each other.
-      { path: 'rankings/:position', element: <RankingsPage /> },
-      { path: 'matchups', element: <MatchupsPage /> },
-      { path: 'matchups/:gameId', element: <MatchupsPage /> },
+      // the RB board is a thing people send each other. It is *optional* —
+      // one route, not two — so moving between position tabs is a param
+      // change on a mounted page rather than a new route. The shell keys its
+      // Suspense boundary on the route, and two routes here meant every tab
+      // click tore down and rebuilt the whole board.
+      { path: 'rankings/:position?', element: <RankingsPage /> },
+      { path: 'matchups/:gameId?', element: <MatchupsPage /> },
       { path: 'compare', element: <ComparePage /> },
       { path: 'simulation', element: <SimulationPage /> },
       { path: 'mock-draft', element: <MockDraftPage /> },

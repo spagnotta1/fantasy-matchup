@@ -139,7 +139,7 @@ test('the game log charts the most recent 17 games, oldest to newest', async ({ 
 
   // The player page has one chart and one table, both in the game log card.
   const log = page.locator('main')
-  const bars = log.locator('.recharts-bar-rectangle')
+  const bars = log.locator('[data-chart-bar]')
   await expect(bars.first()).toBeVisible()
 
   // The table lists every loaded game, newest first, so it is the reference for
@@ -157,7 +157,7 @@ test('the game log charts the most recent 17 games, oldest to newest', async ({ 
     // Forced: the boom-line label sits over the right-hand columns, and the
     // tooltip follows the pointer over the chart rather than the element hit.
     await bars.nth(index).hover({ force: true })
-    const text = await page.locator('.recharts-tooltip-wrapper').innerText()
+    const text = await page.locator('[data-chart-tooltip]').innerText()
     const found = text.match(/(\d{4}) Week (\d+)/)!
     return { season: Number(found[1]), week: Number(found[2]) }
   }

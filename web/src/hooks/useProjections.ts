@@ -14,18 +14,41 @@ import * as matchupsApi from '@/api/matchups'
 import * as playersApi from '@/api/players'
 import * as projectionsApi from '@/api/projections'
 import { queryKeys } from '@/api/queryKeys'
+import type { ResponseMeta } from '@/api/schemas'
 import { useSlate } from '@/app/slate-context'
 
 /**
  * A whole slate in one request.
  *
- * The API's page ceiling is 500 and a full slate is roughly 400 projected
- * players, so the board is fetched entire and filtered in the browser. That is
- * a deliberate trade: sorting or filtering a *paginated* board client-side
- * would silently sort one page and present it as the ranking, which is worse
- * than either doing it server-side or not offering it.
+ * The board is fetched entire and filtered in the browser. That is a
+ * deliberate trade: sorting or filtering a *paginated* board client-side would
+ * silently sort one page and present it as the ranking, which is worse than
+ * either doing it server-side or not offering it.
+ *
+ * This was 500, against the belief that a slate is ~400 players. The 2026 week
+ * 2 board holds 639, so the bottom 139 were being dropped without a word — and
+ * pages cannot be stitched together here, because the API ranks and tiers each
+ * page from 1. The API's ceiling moved to match (`MAX_PAGE_SIZE`), and
+ * `boardNotices` makes any future overflow visible instead of silent.
  */
-export const FULL_SLATE_LIMIT = 500
+export const FULL_SLATE_LIMIT = 1000
+
+/**
+ * A board response's notices, plus one the API cannot write for us.
+ *
+ * `meta.page.total` above `returned` means this board is a truncated slice of
+ * the slate. Every screen that consumes it treats it as whole — sorts it,
+ * counts it, searches it — so a truncation must be said on screen, not
+ * discovered by someone looking for a backup running back who is not there.
+ */
+export function boardNotices(meta: ResponseMeta): string[] {
+  const page = meta.page
+  if (!page || page.total <= page.returned) return meta.notices
+  return [
+    ...meta.notices,
+    `Only the top ${page.returned} of ${page.total} projected players were loaded. Sorting, search and counts on this screen cover those ${page.returned}.`,
+  ]
+}
 
 /** The ranked board for the current slate. Returns the envelope — meta matters here. */
 export function useBoard(options: { positions?: string[]; teams?: string[]; enabled?: boolean } = {}) {

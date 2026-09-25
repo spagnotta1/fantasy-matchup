@@ -388,12 +388,13 @@
 /*
  * Skip layout and paint for cards scrolled out of view.
  *
- * A full slate is roughly 400 players, and the card grid draws each one with a
- * range bar, two chips and an avatar. `content-visibility` lets the browser
- * leave the off-screen ones unrendered until they approach the viewport, which
- * costs one CSS rule instead of a virtualisation library — and unlike a virtual
- * list it keeps the real DOM intact, so find-in-page, ⌘F, tab order and screen
- * reader navigation still traverse the whole board.
+ * The board draws a hundred cards at a time (a full slate is ~640 — see
+ * `useRenderBudget`), each with a range bar, two chips and an avatar.
+ * `content-visibility` lets the browser leave the off-screen ones unrendered
+ * until they approach the viewport, which costs one CSS rule instead of a
+ * virtualisation library — and unlike a virtual list it keeps the real DOM
+ * intact, so find-in-page, ⌘F, tab order and screen reader navigation traverse
+ * every card that has been drawn. The board's own search covers the rest.
  *
  * The intrinsic size is the measured height of a real card. Getting it wrong is
  * not a rendering bug but it does make the scrollbar shift as rows resolve.
