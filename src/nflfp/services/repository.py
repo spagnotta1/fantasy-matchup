@@ -76,7 +76,7 @@ FEATURE_RELATIONS = (
 #: probed with :func:`relation_exists` rather than required. Listed so the probe
 #: rides in the same batched existence check as everything else instead of
 #: costing a cold request a round-trip of its own.
-OPTIONAL_RELATIONS = ("feat_upcoming_slate", "raw_injuries", "player_adp")
+OPTIONAL_RELATIONS = ("feat_upcoming_slate", "raw_injuries", "player_adp", "raw_depth_charts")
 
 #: Every relation the read path guards on, which is what makes one round-trip
 #: enough. See :func:`_load_relations`.
@@ -1498,4 +1498,119 @@ async def fetch_adp(session: AsyncSession, *, season: int) -> list[dict]:
         ORDER BY adp
         """,
         {"season": season},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Depth charts
+# ---------------------------------------------------------------------------
+
+#: The offensive positions a depth chart is read for. Offensive linemen and the
+#: defence are in the source too; nothing here projects them.
+DEPTH_POSITIONS = ("QB", "RB", "WR", "TE")
+
+
+async def fetch_depth_chart(
+    session: AsyncSession, *, team: str, season: int, week: int
+) -> list[dict]:
+    """A team's offensive depth chart as it stood going into a week.
+
+    nflverse changed the shape of this dataset in 2025, and both shapes are in
+    the warehouse:
+
+    * **Through 2024** — one chart per (season, week), keyed by ``club_code``
+      with a ``depth_team`` level (``'1'``, ``'2'``…). Several receivers share a
+      level (X and Z are both starters), so the rank within a position is
+      ordered by level and then by slot.
+    * **2025 on** — timestamped snapshots (``dt``) with **no season column**
+      (see the README gotcha), keyed by ``team`` with an explicit ``pos_rank``.
+      The chart for a week is the latest snapshot taken before noon UTC on the
+      team's game day — the chart going into the game. For a week not yet
+      played that is simply the latest snapshot.
+      A floor of March of the season keeps a request for a season with no
+      snapshots from silently returning last season's chart.
+
+    Returns rows of ``position, depth, player_id, player_name, as_of`` ordered
+    by position and depth, or an empty list when neither shape has a chart.
+    """
+    if not await relation_exists(session, "raw_depth_charts"):
+        return []
+    params = {"team": team, "season": season, "week": week, "positions": list(DEPTH_POSITIONS)}
+
+    weekly = await _rows(
+        session,
+        """
+        SELECT position, depth, player_id, player_name, as_of
+        FROM (
+            SELECT
+                d.position,
+                ROW_NUMBER() OVER (
+                    PARTITION BY d.position
+                    ORDER BY CAST(d.depth_team AS integer), d.depth_position, d.full_name
+                ) AS depth,
+                d.gsis_id AS player_id,
+                COALESCE(d.full_name, d.football_name || ' ' || d.last_name) AS player_name,
+                'week ' || CAST(d.week AS text) AS as_of
+            FROM raw_depth_charts AS d
+            WHERE d.season = :season AND d.week = :week AND d.club_code = :team
+              AND d.formation = 'Offense' AND d.game_type = 'REG'
+              AND d.position = ANY(:positions)
+        ) AS ranked
+        ORDER BY position, depth
+        """,
+        params,
+    )
+    if weekly:
+        return weekly
+
+    return await _rows(
+        session,
+        """
+        WITH cutoff AS (
+            -- Noon UTC on the team's game day (or the week's first game day on
+            -- a bye): after that morning's snapshot, before the earliest
+            -- kickoff the league plays (London, 13:30 UTC).
+            SELECT CAST(COALESCE(
+                       MIN(CAST(g.gameday AS date)) FILTER (WHERE g.team = :team),
+                       MIN(CAST(g.gameday AS date))
+                   ) AS timestamp) + INTERVAL '12 hours' AS before
+            FROM game_team AS g
+            WHERE g.season = :season AND g.week = :week
+        ),
+        snapshot AS (
+            SELECT MAX(d.dt) AS dt
+            FROM raw_depth_charts AS d, cutoff AS c
+            WHERE d.season IS NULL AND d.team = :team
+              AND CAST(d.dt AS timestamp) >= make_timestamp(:season, 3, 1, 0, 0, 0)
+              AND (c.before IS NULL OR CAST(d.dt AS timestamp) < c.before)
+        )
+        SELECT
+            d.pos_abb AS position,
+            ROW_NUMBER() OVER (PARTITION BY d.pos_abb ORDER BY d.pos_rank, d.player_name) AS depth,
+            d.gsis_id AS player_id,
+            d.player_name,
+            d.dt AS as_of
+        FROM raw_depth_charts AS d
+        JOIN snapshot AS s ON s.dt = d.dt
+        WHERE d.season IS NULL AND d.team = :team AND d.pos_abb = ANY(:positions)
+          AND d.pos_grp <> 'Special Teams'
+        ORDER BY position, depth
+        """,
+        params,
+    )
+
+
+async def fetch_players_by_espn_id(session: AsyncSession, espn_ids: Sequence[str]) -> list[dict]:
+    """Player dimension rows for ESPN athlete ids — the live box score's key."""
+    if not espn_ids:
+        return []
+    await require_relations(session, "raw_players")
+    return await _rows(
+        session,
+        """
+        SELECT espn_id, gsis_id AS player_id, display_name, position, latest_team, headshot
+        FROM raw_players
+        WHERE espn_id = ANY(:ids) AND gsis_id IS NOT NULL
+        """,
+        {"ids": list(espn_ids)},
     )

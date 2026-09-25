@@ -10,6 +10,8 @@ lost its ``applied_to_projection`` flag.
 from __future__ import annotations
 
 from ..services import dto, simulation
+from ..services import depth as depth_service
+from ..services import live as live_service
 from ..services import schedule as schedule_service
 from ..services import track_record as track_record_service
 from ..services.draft import aggregate as draft_aggregate
@@ -816,4 +818,60 @@ def value_board(source: draft_service.ValueBoardResult) -> schemas.ValueBoardOut
                 is_preseason=market.is_preseason,
             )
         ),
+    )
+
+
+def depth_chart(source: depth_service.DepthChart) -> schemas.DepthChartOut:
+    return schemas.DepthChartOut(
+        unapplied_reason=depth_service.DEPTH_UNAPPLIED_REASON,
+        team=source.team,
+        season=source.season,
+        week=source.week,
+        as_of=source.as_of,
+        positions={
+            position: [
+                schemas.DepthEntryOut(depth=e.depth, player_id=e.player_id, name=e.name)
+                for e in entries
+            ]
+            for position, entries in source.positions.items()
+        },
+    )
+
+
+def live_slate(source: live_service.LiveSlate) -> schemas.LiveSlateOut:
+    return schemas.LiveSlateOut(
+        season=source.season,
+        week=source.week,
+        scoring_profile=source.scoring_profile,
+        games=[
+            schemas.LiveGameOut(
+                event_id=g.event_id,
+                home=g.home,
+                away=g.away,
+                state=g.state,
+                detail=g.detail,
+                clock=g.clock,
+                period=g.period,
+                home_score=g.home_score,
+                away_score=g.away_score,
+                kickoff=g.kickoff,
+            )
+            for g in source.games
+        ],
+        players=[
+            schemas.LivePlayerOut(
+                player_id=p.player_id,
+                name=p.name,
+                position=p.position,
+                team=p.team,
+                headshot_url=p.headshot_url,
+                event_id=p.event_id,
+                live_points=p.live_points,
+                projected=p.projected,
+                floor=p.floor,
+                ceiling=p.ceiling,
+                components=dict(p.components),
+            )
+            for p in source.players
+        ],
     )

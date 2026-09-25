@@ -1,4 +1,4 @@
-"""Planning and accountability views: the track record and strength of schedule.
+"""Planning, accountability and live views: track record, schedule strength, live scoring.
 
 Both are ``derived``. The track record grades stored ``model`` output against
 ``actual`` outcomes; strength of schedule applies the defensive-form grade to
@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from ...predict.foundation import VALIDATION
+from ...services import live as live_service
 from ...services import schedule as schedule_service
 from ...services import track_record as track_record_service
 from .. import mappers, schemas
@@ -100,5 +101,38 @@ async def schedule_strength(
         meta=schemas.MetaOut(
             window=schemas.slate_window_out(strength.window),
             notices=list(strength.notices),
+        ),
+    )
+
+
+@router.get(
+    "/live",
+    response_model=schemas.Envelope[schemas.LiveSlateOut],
+    summary="Games in progress and each player's unofficial points so far",
+    description=(
+        "ESPN's in-game box score, scored with this app's rules, beside each "
+        "player's published projection — which is never adjusted by it. "
+        "Provenance `actual` with `official: false`: two-point conversions "
+        "and stat corrections are absent until the official "
+        "line is loaded. An unreachable upstream is a notice, not an error. "
+        "Cached for 60 seconds."
+    ),
+)
+async def live(
+    db: DbSession,
+    slate_query: SlateQuery,
+) -> schemas.Envelope[schemas.LiveSlateOut]:
+    slate = await live_service.get_live(
+        db,
+        season=slate_query.season,
+        week=slate_query.week,
+        scoring_profile=slate_query.scoring_profile,
+    )
+    return schemas.Envelope[schemas.LiveSlateOut](
+        data=mappers.live_slate(slate),
+        meta=schemas.MetaOut(
+            window=schemas.slate_window_out(slate.window),
+            scoring_profile=slate.scoring_profile,
+            notices=list(slate.notices),
         ),
     )

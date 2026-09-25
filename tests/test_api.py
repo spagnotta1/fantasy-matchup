@@ -1078,3 +1078,107 @@ class TestUpcomingWeekContext:
         assert usage[PLAYERS[0][0]]["snap_pct_l4"] == pytest.approx(0.91)
         assert usage[PLAYERS[0][0]]["snap_pct_trend"] == pytest.approx(-0.05)
         assert usage[PLAYERS[1][0]]["snap_pct_l4"] is None
+
+
+# ---------------------------------------------------------------------------
+# Depth charts and live scoring
+# ---------------------------------------------------------------------------
+
+
+class TestDepthChart:
+    @pytest.fixture(autouse=True)
+    def _fresh_relation_cache(self):
+        from nflfp.services.repository import clear_relation_cache
+
+        clear_relation_cache()
+        yield
+        clear_relation_cache()
+
+    async def test_no_listing_is_an_empty_chart_with_a_notice(self, client):
+        response = await client.get(url("/teams/KC/depth-chart"), params={"season": SEASON})
+        assert response.status_code == 200
+        payload = response.json()
+        assert all(entries == [] for entries in payload["data"]["positions"].values())
+        assert payload["meta"]["notices"]
+
+    async def test_a_weekly_chart_is_ranked_within_position(self, client, async_db_session):
+        from nflfp.services.repository import clear_relation_cache
+
+        await async_db_session.execute(
+            text(
+                "CREATE TABLE raw_depth_charts (season int, week int, club_code text,"
+                " team text, formation text, game_type text, position text,"
+                " depth_team text, depth_position text, gsis_id text, full_name text,"
+                " football_name text, last_name text, dt text, pos_abb text,"
+                " pos_rank int, pos_grp text, player_name text)"
+            )
+        )
+        for depth, slot, pid, name in (("2", "X", "00-9", "Backup Receiver"), ("1", "X", PLAYERS[0][0], "Alpha Receiver")):
+            await async_db_session.execute(
+                text(
+                    "INSERT INTO raw_depth_charts (season, week, club_code, formation,"
+                    " game_type, position, depth_team, depth_position, gsis_id, full_name)"
+                    " VALUES (:s, :w, 'KC', 'Offense', 'REG', 'WR', :d, :slot, :pid, :n)"
+                ),
+                {"s": SEASON, "w": UPCOMING_WEEK, "d": depth, "slot": slot, "pid": pid, "n": name},
+            )
+        await async_db_session.commit()
+        clear_relation_cache()
+
+        data = (
+            await client.get(url("/teams/KC/depth-chart"), params={"season": SEASON})
+        ).json()["data"]
+        assert data["provenance"] == Provenance.CONTEXT.value
+        assert data["applied_to_projection"] is False
+        assert [(e["depth"], e["name"]) for e in data["positions"]["WR"]] == [
+            (1, "Alpha Receiver"),
+            (2, "Backup Receiver"),
+        ]
+
+
+class TestLiveScoring:
+    async def test_live_points_are_unofficial_and_sit_beside_the_projection(
+        self, client, async_db_session, monkeypatch
+    ):
+        from nflfp.providers.live import EspnLiveProvider, LiveGame, LiveLine, LiveWeek
+
+        # The stub dimension omits the id columns it never needed; the real
+        # nflverse players table carries espn_id.
+        await async_db_session.execute(text("ALTER TABLE raw_players ADD COLUMN espn_id text"))
+        await async_db_session.execute(
+            text("UPDATE raw_players SET espn_id = '555' WHERE gsis_id = :i"), {"i": PLAYERS[0][0]}
+        )
+        await async_db_session.commit()
+
+        def fake_fetch(self, season, week):
+            return LiveWeek(
+                games=[LiveGame("1", "BUF", "KC", "in", "Q3", "4:12", 3, 17, 10, None)],
+                lines=[LiveLine("555", "Alpha Receiver", "KC", "1", {"receptions": 5.0, "receiving_yards": 70.0})],
+            )
+
+        monkeypatch.setattr(EspnLiveProvider, "fetch_week", fake_fetch)
+        response = await client.get(
+            url("/live"), params={"season": SEASON, "week": UPCOMING_WEEK, "scoring_profile": "half_ppr"}
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        (player,) = payload["data"]["players"]
+        assert player["provenance"] == Provenance.ACTUAL.value
+        assert player["official"] is False
+        assert player["live_points"] == pytest.approx(9.5)
+        # The published projection, not a blend with the live number.
+        assert player["projected"] == pytest.approx(PLAYERS[0][4])
+        assert any("unofficial" in n for n in payload["meta"]["notices"])
+
+    async def test_an_unreachable_upstream_is_a_notice_not_an_error(self, client, monkeypatch):
+        from nflfp.providers.live import EspnLiveProvider, LiveWeek
+
+        monkeypatch.setattr(
+            EspnLiveProvider,
+            "fetch_week",
+            lambda self, season, week: LiveWeek(warnings=["scoreboard unavailable: timeout"]),
+        )
+        response = await client.get(url("/live"), params={"season": SEASON, "week": UPCOMING_WEEK})
+        assert response.status_code == 200
+        assert response.json()["data"]["games"] == []
+        assert any("could not be fetched" in n for n in response.json()["meta"]["notices"])

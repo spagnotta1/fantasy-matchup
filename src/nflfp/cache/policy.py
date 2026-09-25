@@ -83,6 +83,9 @@ RULES: tuple[CacheRule, ...] = (
     # how long a finished game waits to be graded.
     CacheRule("/api/v1/track-record", 900, "historical aggregate; grows as games complete"),
     CacheRule("/api/v1/schedule-strength", 300, "defensive form as of a week, like the matchups"),
+    # One upstream read a minute however many people are watching. Shorter
+    # would be "more live" and would make the public endpoint pay per viewer.
+    CacheRule("/api/v1/live", 60, "in-game box scores; bounds the upstream to one read a minute"),
     CacheRule(
         "/api/v1/mock-draft/value-board",
         900,

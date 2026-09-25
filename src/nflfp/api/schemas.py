@@ -1892,6 +1892,73 @@ class ValueBoardOut(Schema):
     market: MarketWindowOut | None = None
 
 
+# ---------------------------------------------------------------------------
+# Depth chart (context) and live scoring (actual, unofficial)
+# ---------------------------------------------------------------------------
+
+
+class DepthEntryOut(Schema):
+    depth: int = Field(description="1 is the starter at this position.")
+    player_id: str | None = None
+    name: str
+
+
+class DepthChartOut(Schema):
+    provenance: Provenance = Provenance.CONTEXT
+    applied_to_projection: bool = False
+    unapplied_reason: str
+    team: str
+    season: int
+    week: int
+    as_of: str | None = Field(
+        default=None,
+        description="The snapshot's timestamp (2025 on) or 'week N' (through 2024).",
+    )
+    positions: dict[str, list[DepthEntryOut]] = Field(description="QB, RB, WR and TE, in depth order.")
+
+
+class LiveGameOut(Schema):
+    event_id: str
+    home: str
+    away: str
+    state: str = Field(description="`pre`, `in` or `post`.")
+    detail: str | None = None
+    clock: str | None = None
+    period: int | None = None
+    home_score: int | None = None
+    away_score: int | None = None
+    kickoff: str | None = None
+
+
+class LivePlayerOut(Schema):
+    provenance: Provenance = Provenance.ACTUAL
+    official: bool = Field(
+        default=False,
+        description="Always false: an in-game box score, replaced by the official line later.",
+    )
+    player_id: str
+    name: str
+    position: str
+    team: str
+    headshot_url: str | None = None
+    event_id: str
+    live_points: float
+    projected: float | None = Field(
+        default=None, description="`provenance: model` — the published projection, unchanged."
+    )
+    floor: float | None = None
+    ceiling: float | None = None
+    components: dict[str, float]
+
+
+class LiveSlateOut(Schema):
+    season: int
+    week: int
+    scoring_profile: str
+    games: list[LiveGameOut]
+    players: list[LivePlayerOut]
+
+
 MetaOut.model_rebuild()
 WeekOut.model_rebuild()
 DraftAnalysisOut.model_rebuild()
