@@ -25,27 +25,27 @@ const PRESENTATION: Record<
     tone: 'accent',
     icon: Cpu,
     explanation:
-      'Produced by the published model run. Interval coverage and calibration for these numbers are measured and published.',
+      'Comes straight from the projection model. How accurate these numbers have been is tracked on the Track record page.',
   },
   derived: {
-    label: 'Derived',
+    label: 'Calculated',
     tone: 'info',
     icon: FunctionSquare,
     explanation:
-      'Computed above the model from data the model never saw — for example a matchup grade from trailing defensive points allowed. Reproducible, but not validated as a prediction.',
+      'Worked out separately from the projection — for example, a matchup grade based on points a defence has allowed recently. It does not change the projection, and its accuracy has not been tested.',
   },
   context: {
-    label: 'Context',
+    label: 'Info only',
     tone: 'neutral',
     icon: Eye,
     explanation:
-      'Observed and reported, but not an input to the projection. Weather, the betting market and injury designations do not move the number shown.',
+      'Shown for your information. It is not factored into the projection — injuries, weather and betting lines do not change the number shown.',
   },
   actual: {
     label: 'Actual',
     tone: 'positive',
     icon: History,
-    explanation: 'A recorded outcome from a completed game. Not a prediction.',
+    explanation: 'What actually happened in a finished game. Not a prediction.',
   },
 }
 
@@ -68,6 +68,28 @@ export function ProvenanceBadge({
 }
 
 /**
+ * One row of the Settings legend: the badge and its plain-English meaning.
+ *
+ * Uses the badge's own wording so the legend matches the labels everywhere
+ * else. The API's text is the fallback for a value this build does not know.
+ */
+export function ProvenanceLegendRow({ provenance, fallback }: { provenance: string; fallback: string }) {
+  const known = provenance in PRESENTATION ? PRESENTATION[provenance as Provenance] : null
+  return (
+    <div className="grid gap-1 sm:grid-cols-[7rem_1fr] sm:gap-4">
+      <dt>
+        {known ? (
+          <ProvenanceBadge provenance={provenance as Provenance} />
+        ) : (
+          <Badge tone="neutral">{provenance}</Badge>
+        )}
+      </dt>
+      <dd className="text-ink-secondary text-sm leading-relaxed">{known?.explanation ?? fallback}</dd>
+    </div>
+  )
+}
+
+/**
  * The "this is not baked into the projection" notice.
  *
  * Rendered next to any context block whose `applied_to_projection` is false.
@@ -79,7 +101,7 @@ export function NotAppliedNotice({ reason }: { reason?: string | null }) {
   return (
     <p className="text-ink-muted border-line mt-3 border-t pt-3 text-xs leading-relaxed">
       <span className="text-ink-secondary font-medium">Not included in the projection.</span>{' '}
-      {reason ?? 'This is shown as context for your own judgement.'}
+      {reason ?? 'It is here to help you make your own call.'}
     </p>
   )
 }

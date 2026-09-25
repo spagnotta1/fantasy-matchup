@@ -146,7 +146,7 @@ export default function RankingsPage() {
       {unknownPosition ? (
         <Card>
           <EmptyState
-            title={`${position} is not a position this API knows`}
+            title={`${position} is not a position we recognise`}
             description="Pick a position from the tabs above."
           />
         </Card>
@@ -186,13 +186,13 @@ export default function RankingsPage() {
             ) : !active.data || entries.length === 0 ? (
               <EmptyState
                 icon={<SearchX aria-hidden className="size-5" />}
-                title={filtered ? 'No players match that search' : 'No board for this week'}
+                title={filtered ? 'No players match that search' : 'No rankings for this week'}
                 description={
                   filtered
-                    ? 'Try a different name, or clear the search to see the whole board.'
+                    ? 'Try a different name, or clear the search to see everyone.'
                     : active.data?.meta.model == null
-                      ? 'No model run has been published for this week yet. Rankings appear once the weekly job runs.'
-                      : `The published run holds no ${position ?? 'projected'} players for week ${slate.week ?? '—'}.`
+                      ? 'Projections for this week are not out yet. Rankings appear after the weekly update runs.'
+                      : `This week's projections include no ${position ?? 'projected'} players for week ${slate.week ?? '—'}.`
                 }
                 action={
                   filtered ? (
@@ -248,12 +248,12 @@ function TierNote() {
     <p className="text-ink-muted mb-3 flex items-start gap-1.5 text-xs leading-relaxed">
       <Layers aria-hidden className="mt-0.5 size-3.5 shrink-0" />
       <span>
-        Rows are grouped into the tiers the API published. Inside a tier the player below still
-        has a realistic chance of outscoring the player above, so the order between them is close
-        to noise — the boundary between tiers is the decision worth making.
+        Players are grouped into tiers. Within a tier the order barely matters — any player could
+        realistically outscore the one above. Where one tier ends and the next begins is the line
+        worth paying attention to.
         <InfoTip
           label="How tiers are drawn"
-          content="A tier continues while the next player down has at least a 45% chance of outscoring the one above, measured from their published outcome distributions. It is not a fixed points gap."
+          content="A new tier starts when the next player down has less than a 45% chance of outscoring the player above. It is based on those chances, not a fixed points gap."
         />
       </span>
     </p>

@@ -99,7 +99,7 @@ export function DefenseBoard() {
       <CardHeader
         as="h2"
         title="Defensive form"
-        description="What every defence has allowed to one position over its last four completed games. Rank 1 is the toughest draw."
+        description="What each defence has allowed to one position over its last four games. Rank 1 is the toughest to face."
         action={
           <div className="flex items-center gap-2">
             <ProvenanceBadge provenance="derived" />
@@ -126,8 +126,8 @@ export function DefenseBoard() {
       ) : rows.length === 0 ? (
         <EmptyState
           icon={<ShieldQuestion aria-hidden className="size-5" />}
-          title="No defensive form for this week"
-          description="Grades need completed games behind them. Early in a season, and in a week the warehouse has not ingested, there is nothing to rank."
+          title="No defensive data for this week"
+          description="Defences need a few games played before they can be ranked, so early-season weeks have nothing to show yet."
         />
       ) : (
         <Refreshing active={isPlaceholderData}>
@@ -221,10 +221,9 @@ export function DefenseBoard() {
 
           <CardBody className="border-line border-t py-3">
             <p className="text-ink-muted text-xs leading-relaxed">
-              Points allowed are measured in the API&apos;s reference scoring format and do not
-              change with your league&apos;s settings. Grades are percentiles across this week, and
-              a defence with fewer than three completed games behind it is left ungraded rather
-              than given a middle letter.
+              Points allowed use one standard scoring format and do not change with your league
+              settings. Grades compare this week&apos;s matchups with each other. A defence with fewer
+              than three games played is left ungraded rather than given an average grade.
             </p>
           </CardBody>
         </Refreshing>

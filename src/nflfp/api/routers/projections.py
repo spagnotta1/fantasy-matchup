@@ -26,8 +26,7 @@ def _meta(slate, window, page: PageQuery | None = None) -> schemas.MetaOut:
     notices: list[str] = []
     if slate.model is None:
         notices.append(
-            f"No projection run is published for {slate.season} week {slate.week}. "
-            "This is an empty board, not an error — meta.model is null."
+            f"Projections for {slate.season} week {slate.week} are not out yet."
         )
     ungraded = sum(
         1
@@ -36,8 +35,8 @@ def _meta(slate, window, page: PageQuery | None = None) -> schemas.MetaOut:
     )
     if ungraded:
         notices.append(
-            f"{ungraded} of {len(slate.entries)} matchups could not be graded "
-            "(fewer than three completed games of defensive history)."
+            f"{ungraded} of {len(slate.entries)} matchups are not graded, because "
+            "the defence has played fewer than three games."
         )
     return schemas.MetaOut(
         window=schemas.slate_window_out(window),

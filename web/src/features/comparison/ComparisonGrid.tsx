@@ -47,21 +47,21 @@ const METRICS: Metric[] = [
   },
   {
     label: 'Floor',
-    hint: 'P10',
+    hint: 'a bad week',
     better: 'higher',
     group: 'projection',
     value: (entry) => entry.floor ?? null,
   },
   {
     label: 'Ceiling',
-    hint: 'P90',
+    hint: 'a strong week',
     better: 'higher',
     group: 'projection',
     value: (entry) => entry.ceiling ?? null,
   },
   {
     label: 'Boom chance',
-    hint: 'over the boom line',
+    hint: 'chance of a big week',
     better: 'higher',
     group: 'projection',
     value: (entry) => entry.projection.prediction.points.boom_probability ?? null,
@@ -69,7 +69,7 @@ const METRICS: Metric[] = [
   },
   {
     label: 'Bust risk',
-    hint: 'under the bust line',
+    hint: 'chance of a dud',
     better: 'lower',
     group: 'projection',
     value: (entry) => entry.projection.prediction.points.bust_probability ?? null,
@@ -77,7 +77,7 @@ const METRICS: Metric[] = [
   },
   {
     label: 'Confidence',
-    hint: 'how much the model knew',
+    hint: 'how much data backs it',
     better: null,
     group: 'projection',
     value: () => null,
@@ -158,7 +158,7 @@ export function ComparisonGrid({ entries }: { entries: ComparisonEntry[] }) {
       <CardHeader
         as="h2"
         title="Side by side"
-        description="Every figure as the API published it for the selected week and scoring format."
+        description="Every number for the selected week and scoring format, straight from the projections."
         action={<ProvenanceBadge provenance="model" />}
       />
 
@@ -276,9 +276,9 @@ export function ComparisonGrid({ entries }: { entries: ComparisonEntry[] }) {
 
       <CardBody className="border-line border-t py-3">
         <p className="text-ink-muted text-xs leading-relaxed">
-          The highlighted cell is simply the best published value in that row. It is not a
-          recommendation: the gap between two projections is usually far smaller than either
-          player&apos;s own range, which is what the head-to-head probabilities below account for.
+          The highlighted cell is just the best number in that row, not a recommendation. The
+          gap between two projections is usually much smaller than how much either player&apos;s
+          score can swing — the head-to-head chances below take that into account.
         </p>
       </CardBody>
     </Card>

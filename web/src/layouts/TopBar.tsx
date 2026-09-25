@@ -128,7 +128,7 @@ export function TopBar() {
           */}
           <span
             className="border-line text-ink-muted ml-1 inline-flex size-8 items-center justify-center rounded-full border"
-            title="Not signed in. Accounts are a later phase."
+            title="You are not signed in. Accounts are not available yet."
           >
             <User aria-hidden className="size-4" />
             <span className="sr-only">Not signed in</span>

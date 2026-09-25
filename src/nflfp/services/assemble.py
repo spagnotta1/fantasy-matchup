@@ -284,21 +284,19 @@ def game_context(row: Row) -> GameContext:
 #: frozen foundation's own record so the API's explanation and the model's
 #: documentation cannot drift apart.
 WEATHER_UNAPPLIED_REASON = (
-    "The frozen model excludes weather. History carries observed conditions "
-    "while upcoming games carry forecasts, so training and serving would see "
-    "different objects; measured against the baseline's residual, weather "
-    "added nothing. Reported here as context for your own judgement."
+    "The model does not use weather. When we tested adding it, it did not "
+    "make the projections any more accurate. It is shown here so you can make "
+    "your own call."
 )
 INJURY_UNAPPLIED_REASON = (
-    "The frozen model applies no injury adjustment. The designation is an "
-    "official pre-kickoff fact and is reported verbatim; a projection for a "
-    "player listed Out describes a player who will not take the field."
+    "The model does not adjust for injuries. The status shown is the official "
+    "injury report, word for word. A player listed Out still shows a normal "
+    "projection, but will not play."
 )
 MARKET_UNAPPLIED_REASON = (
-    "The frozen model excludes market features. Correlation with the lagged "
-    "baseline's residual measured -0.039 to +0.021 across positions over "
-    "2019-2025 — the raw relationship is confounded by good players playing "
-    "on good offences."
+    "The model does not use betting lines. Tested on 2019-2025, they told "
+    "it almost nothing it did not already know — good players already tend "
+    "to be on high-scoring offences."
 )
 
 

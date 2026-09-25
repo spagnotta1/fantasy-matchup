@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Select } from '@/components/ui/Select'
 import { SkeletonText } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/feedback/States'
+import { ProvenanceLegendRow } from '@/components/domain/ProvenanceBadge'
 import {
   useHealth,
   useModelFoundation,
@@ -68,7 +69,7 @@ function ScoringCard({
     <Card>
       <CardHeader
         title="Scoring format"
-        description="Applies everywhere. Projections are published for each format separately, so switching does not rescale a number — it reads a different one."
+        description="Applies across the whole app. Each format has its own projections, so switching shows different numbers rather than adjusting the same ones."
       />
       <CardBody>
         <Select
@@ -98,7 +99,7 @@ function ServiceCard() {
 
   return (
     <Card>
-      <CardHeader title="Service" description="Live status of the projections API." />
+      <CardHeader title="Service" description="Whether the projections service is up and running." />
       <CardBody>
         {isPending ? (
           <SkeletonText lines={3} />
@@ -146,7 +147,7 @@ function CoverageCard() {
     <Card className="lg:col-span-2">
       <CardHeader
         title="Data coverage"
-        description="Every season and week with a published board. These are exactly the slates the season and week selectors offer."
+        description="Every season and week that has projections. These are the weeks you can pick at the top of the page."
       />
       <CardBody>
         {isPending ? (
@@ -155,12 +156,12 @@ function CoverageCard() {
           <ErrorState error={error} onRetry={() => void refetch()} compact />
         ) : data.length === 0 ? (
           <p className="text-ink-secondary text-sm leading-relaxed">
-            No projection run has been published yet, so there is no board to show. The
-            weekly job publishes the upcoming week;{' '}
+            No projections have been published yet. The weekly update adds each upcoming week.
+            To fill in past weeks, an admin can run{' '}
             <code className="text-ink-primary text-xs">
               python -m nflfp.jobs run backfill_projections
             </code>{' '}
-            publishes every week the feature layer supports.
+            .
           </p>
         ) : (
           <>
@@ -178,9 +179,8 @@ function CoverageCard() {
             </dl>
             <p className="text-ink-muted mt-4 text-xs leading-relaxed">
               {data.length} season{data.length === 1 ? '' : 's'}, {totalWeeks} published
-              week{totalWeeks === 1 ? '' : 's'}. Weeks 19–22 are the NFL playoffs, which
-              the feature layer does not cover; a season the warehouse holds but no run
-              covers is not listed, because it has no board to show.
+              week{totalWeeks === 1 ? '' : 's'}. Playoff weeks (19–22) are not projected, and
+              seasons without projections are not listed.
             </p>
           </>
         )}
@@ -219,7 +219,7 @@ function ProvenanceCard() {
     <Card className="lg:col-span-2">
       <CardHeader
         title="What the labels mean"
-        description="Every number in this product carries one of these. They are not interchangeable, and the interface keeps them apart on purpose."
+        description="Every number in the app carries one of these labels, so you can tell a projection apart from extra information."
       />
       <CardBody>
         {isPending ? (
@@ -229,14 +229,7 @@ function ProvenanceCard() {
         ) : (
           <dl className="space-y-4">
             {Object.entries(data).map(([label, explanation]) => (
-              <div key={label} className="grid gap-1 sm:grid-cols-[7rem_1fr] sm:gap-4">
-                <dt>
-                  <Badge tone={label === 'model' ? 'accent' : label === 'derived' ? 'info' : 'neutral'}>
-                    {formatLabel(label)}
-                  </Badge>
-                </dt>
-                <dd className="text-ink-secondary text-sm leading-relaxed">{explanation}</dd>
-              </div>
+              <ProvenanceLegendRow key={label} provenance={label} fallback={explanation} />
             ))}
           </dl>
         )}
@@ -252,7 +245,7 @@ function PositionsCard() {
     <Card>
       <CardHeader
         title="Positions"
-        description="Which positions are projected, and what the others are waiting on. Filters throughout the product are built from this list rather than a hard-coded one."
+        description="Which positions we project, and what the others still need."
       />
       <CardBody>
         {isPending ? (
@@ -303,7 +296,7 @@ function ModelCard() {
     <Card>
       <CardHeader
         title="Model"
-        description="The frozen prediction foundation behind every model-provenance number."
+        description="Technical details of the model behind every number labelled “Model”."
       />
       <CardBody>
         {isPending ? (

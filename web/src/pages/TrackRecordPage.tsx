@@ -49,7 +49,7 @@ export default function TrackRecordPage() {
     <>
       <PageHeader
         title="Track record"
-        question="When the range said 80%, did it land 80% of the time?"
+        question="When we said a score would land in a range 80% of the time, did it?"
       />
 
       {isPending ? (
@@ -72,7 +72,7 @@ export default function TrackRecordPage() {
           <EmptyState
             icon={<Target aria-hidden className="size-5" />}
             title="Nothing graded yet"
-            description="No stored projection has a recorded outcome for this selection. The record fills in as games complete."
+            description="None of these projections has a final result yet. This fills in as games are played."
           />
         </Card>
       ) : (
@@ -90,8 +90,8 @@ export default function TrackRecordPage() {
               ]}
             />
             <p className="text-ink-muted pb-1.5 text-xs">
-              {formatScoringProfile(record.scoring_profile)} scoring, from the header. Actual points are
-              scored the same way, so the comparison is like for like.
+              {formatScoringProfile(record.scoring_profile)} scoring (set at the top of the page).
+              Actual points use the same scoring, so it is a fair comparison.
             </p>
           </div>
 
@@ -129,25 +129,25 @@ function Headline({ record }: { record: TrackRecord }) {
         label="Inside the 80% range"
         value={formatPercent(overall.coverage_80, 1)}
         emphasis="primary"
-        detail={`Nominal ${formatPercent(v.nominal_80)}. The frozen validation measured ${formatPercent(v.coverage_80, 1)}.`}
+        detail={`Target ${formatPercent(v.nominal_80)}. When the model was first tested: ${formatPercent(v.coverage_80, 1)}.`}
         badge={<ProvenanceBadge provenance="derived" />}
       />
       <StatCard
         label="Inside the 50% range"
         value={formatPercent(overall.coverage_50, 1)}
-        detail={`Nominal ${formatPercent(v.nominal_50)}. Validation measured ${formatPercent(v.coverage_50, 1)}.`}
+        detail={`Target ${formatPercent(v.nominal_50)}. When the model was first tested: ${formatPercent(v.coverage_50, 1)}.`}
       />
       <StatCard
         label="Average miss"
         value={formatPoints(overall.mean_absolute_error)}
         unit="pts"
-        detail={`Mean absolute error over ${overall.graded.toLocaleString()} graded player-weeks.`}
+        detail={`How far off a typical projection was, across ${overall.graded.toLocaleString()} player-games.`}
       />
       <StatCard
-        label="Bias"
+        label="Lean"
         value={formatSigned(overall.bias, 2)}
         unit="pts"
-        detail="Projected minus actual. Positive means the projections ran high."
+        detail="Projected minus actual. Positive means we projected too high on average."
       />
     </div>
   )
@@ -191,7 +191,7 @@ function PositionTable({ rows }: { rows: Accuracy[] }) {
       <CardHeader
         as="h2"
         title="By position"
-        description="Interval coverage against nominal (the tick), and boom/bust calibration: the stored probability, then how often it happened."
+        description="How often scores landed inside the range (the tick is the target), and whether boom and bust chances matched how often they happened."
       />
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
@@ -207,7 +207,7 @@ function PositionTable({ rows }: { rows: Accuracy[] }) {
                   Boom
                   <InfoTip
                     label="About boom calibration"
-                    content="The average stored chance of reaching the boom threshold, then the share that actually did. Close together means the boom probabilities can be taken at face value."
+                    content="The average predicted chance of a boom week, then how often it actually happened. If the two are close, the boom chances can be trusted."
                   />
                 </span>
               </th>
@@ -256,8 +256,8 @@ function BandTable({ rows }: { rows: Accuracy[] }) {
     <Card className="min-w-0 overflow-hidden">
       <CardHeader
         as="h2"
-        title="Bias by projection"
-        description="Projected minus actual, grouped by how many points were projected. Right of centre ran high; left ran low."
+        title="Too high or too low?"
+        description="Projected minus actual, grouped by how many points we projected. Right of centre means we projected too high; left, too low."
       />
       <ul className="divide-line divide-y">
         {rows.map((row) => {
@@ -364,7 +364,7 @@ function WeeklyStrip({ rows, season, className }: { rows: Accuracy[]; season: nu
       <CardHeader
         as="h2"
         title={`${season}, week by week`}
-        description="Share of outcomes inside the 80% range each week. The line is the nominal 80%."
+        description="How often scores landed inside the 80% range each week. The line marks the 80% target."
         action={<ProvenanceBadge provenance="derived" />}
       />
       <CardBody>
@@ -444,7 +444,7 @@ function ScorecardCard({
       <CardHeader
         as="h2"
         title={`Scorecard: ${card.season} week ${card.week}`}
-        description={`The week's biggest beats and misses among players projected ${formatPoints(card.min_projection, 0)}+ points. Projected is the stored model number; actual is what happened.`}
+        description={`The week's biggest surprises among players projected for ${formatPoints(card.min_projection, 0)}+ points: what we projected at the time against what they actually scored.`}
         action={
           <Select
             label="Scorecard week"

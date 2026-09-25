@@ -116,9 +116,9 @@ export function PositionalEdges({
       })}
 
       <p className="text-ink-muted pt-1 text-xs leading-relaxed">
-        Simulated mean points by position, {labelA} minus {labelB}. These sum to the totals above.
-        A gap here is an average, not an outcome — the ranges behind these averages overlap, which
-        is what the win probability accounts for and this breakdown does not.
+        Average simulated points at each position, {labelA} minus {labelB}. These add up to the
+        totals above. Each gap is an average, not a guaranteed result — the win chance above
+        accounts for how much the two sides overlap; this breakdown does not.
       </p>
     </div>
   )

@@ -528,29 +528,27 @@ def _notices(
         depth = (
             f"This league drafts {settings.total_picks} players and only "
             f"{len(pool.players)} are projected, so the last rounds run out of "
-            "board. Seats reached those picks in a different order, so their "
-            "late-round rosters are not strictly comparable. Reduce the rounds "
-            "or the league size to remove the effect.",
+            "players. Different draft positions reached those picks in a different "
+            "order, so their late-round rosters are not a fair comparison. Use "
+            "fewer rounds or fewer teams to avoid this.",
         )
 
     scatter: tuple[str, ...] = ()
     if opponents.scatter_ratio > MAX_ORDERLY_SCATTER:
         scatter = (
-            "At this noise setting the randomness in the opposing managers' "
-            f"selections is {opponents.scatter_ratio:.0f} times the spacing "
-            "between neighbouring players on their own board, so a player's "
-            "effective draft position moves by more than a round for no "
-            "reason. Talent will slide to your seat that would not slide in "
-            "any real draft, and the draft positions will finish closer "
-            "together than they should. Lower the noise, or pick a sharper "
-            "opponent skill level.",
+            "At this setting the other managers draft very randomly — "
+            f"{opponents.scatter_ratio:.0f} times the gap between neighbouring "
+            "players on their board — so players can slide more than a round for "
+            "no reason. Good players will fall to you in ways they would not in a "
+            "real draft, and draft positions will look closer together than they "
+            "should. Lower the randomness, or pick a higher league skill level.",
         )
 
     return pool.notices + depth + scatter + (
         f"These are simulated outcomes from {settings.simulations:,} drafts at "
-        f"seed {settings.seed}, not predictions. The same settings, published "
-        "run and seed reproduce them exactly; a different seed will not.",
-        "Opposing managers are simulated from an internal consensus board — "
+        f"seed {settings.seed}, not predictions. The same settings, projections "
+        "and seed give exactly the same result; a different seed will not.",
+        "The other managers draft from a shared ranking — "
         f"{1 - opponents.history_weight:.0%} value over replacement, "
         f"{opponents.history_weight:.0%} last completed season's actual "
         f"points — with randomness added, at the "
@@ -560,13 +558,11 @@ def _notices(
             if opponents.overridden
             else ""
         )
-        + ". That model has not been fitted to average-draft-position data, so "
-        "it is a stated assumption and has not been validated against how "
-        "people really draft. It is a request field precisely so a conclusion "
-        "that depends on it can be found out.",
-        "Kickers and team defences are not draftable here: no validated "
-        "projection exists for either. A roster including them would need "
-        "values this engine would have to invent. See /meta/positions.",
+        + ". That behaviour has not been fitted to average-draft-position data, "
+        "so it is an assumption, not a measurement of how people really draft. "
+        "You can change the league skill to see whether a conclusion depends on it.",
+        "Kickers and team defences cannot be drafted here because we do not "
+        "project them, and including them would mean making up their values.",
     )
 
 

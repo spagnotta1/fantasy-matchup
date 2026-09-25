@@ -21,25 +21,25 @@ export function PreRunExplainer() {
       icon: Percent,
       title: 'An estimated win probability',
       detail:
-        'The share of simulated weeks each lineup finished ahead in — not a prediction of the result.',
+        'How often each lineup came out ahead across thousands of simulated weeks. An estimate, not a prediction of the result.',
     },
     {
       icon: Dices,
-      title: 'Both score distributions',
+      title: 'The range of likely scores',
       detail:
-        'Where each total lands across every draw, on one scale, so the overlap is visible rather than implied.',
+        'Where each team’s total tends to land, on one chart, so you can see how much they overlap.',
     },
     {
       icon: Scale,
       title: 'Where the gap comes from',
       detail:
-        'Mean simulated points by position, and the players whose weeks are least settled on either side.',
+        'Average simulated points by position, and the players on each side with the most unpredictable weeks.',
     },
     {
       icon: ShieldQuestion,
       title: 'What it did not account for',
       detail:
-        'Players are drawn independently by default, kickers and defences are not projected, and no injury or weather adjustment is applied. Every one of those is read from the response.',
+        'By default each player is simulated on their own, kickers and defences are left out, and injuries and weather are not factored in. The result lists each of these.',
     },
   ]
 
@@ -48,8 +48,8 @@ export function PreRunExplainer() {
       <CardBody className="p-5 sm:p-6">
         <h2 className="text-ink text-sm font-semibold">What a run will tell you</h2>
         <p className="text-ink-secondary mt-1 text-sm leading-relaxed">
-          Fill both lineups and run the simulation. Every draw is taken from a published outcome
-          distribution — nothing on the result is computed in the browser.
+          Fill in both lineups and run the simulation. In each simulated week, every player gets a
+          score drawn from their projected range.
         </p>
 
         <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2">

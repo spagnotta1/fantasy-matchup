@@ -43,8 +43,8 @@ export function RiskOpportunity() {
     <Card>
       <CardHeader
         as="h2"
-        title="Risk and opportunity"
-        description="Players whose week carries more uncertainty than their projection alone suggests."
+        title="Upside and risk"
+        description="Players whose week could swing more than their projection alone suggests."
         action={
           <SegmentedControl<Lens>
             label="Which risk to show"
@@ -148,9 +148,9 @@ function detailFor(entry: RankedProjection, lens: Lens): React.ReactNode {
 
   switch (lens) {
     case 'ceiling':
-      return `${position} ${opponent} · ceiling ${formatPoints(points.ceiling)} · ${formatPercent(points.boom_probability)} chance of clearing ${formatPoints(points.boom_threshold)}`
+      return `${position} ${opponent} · ceiling ${formatPoints(points.ceiling)} · ${formatPercent(points.boom_probability)} chance of ${formatPoints(points.boom_threshold)}+`
     case 'bust':
-      return `${position} ${opponent} · ${formatPercent(points.bust_probability)} chance of under ${formatPoints(points.bust_threshold)}`
+      return `${position} ${opponent} · ${formatPercent(points.bust_probability)} chance of scoring under ${formatPoints(points.bust_threshold)}`
     case 'injury': {
       const injury = entry.projection.context.injury
       return `${position} ${opponent} · listed ${injury?.report_status ?? 'questionable'}${injury?.will_not_play ? ' — not expected to play' : ''}`
@@ -173,31 +173,31 @@ function detailFor(entry: RankedProjection, lens: Lens): React.ReactNode {
 
 const EMPTY: Record<Lens, { title: string; description: string }> = {
   ceiling: {
-    title: 'No ceiling estimates',
-    description: 'The published run stored no P90 for this week, so ceilings cannot be shown.',
+    title: 'No ceilings available',
+    description: "This week's projections do not include ceilings, so there is nothing to show here.",
   },
   bust: {
     title: 'No bust probabilities',
-    description: 'The published run did not store bust probabilities for this week.',
+    description: "This week's projections do not include bust chances.",
   },
   injury: {
-    title: 'No injury designations',
+    title: 'No injury concerns',
     description:
-      'No projected player carries a questionable-or-worse designation on this slate. Injury reports move all week, so check again closer to kickoff.',
+      'No projected player is listed as Questionable or worse this week. Injury reports change all week, so check again closer to kickoff.',
   },
   weather: {
     title: 'No weather concerns',
     description:
-      'No game on this slate is flagged for adverse conditions — that means under 20 mph wind and under 60% precipitation at every outdoor venue.',
+      'No game this week is flagged for bad weather (20+ mph wind or a 60%+ chance of rain or snow at an outdoor stadium).',
   },
 }
 
 const FOOTNOTE: Record<Lens, string> = {
   ceiling:
-    'Ceiling is the published P90 — a 1-in-10 outcome, not a target. Under this run the stored spreads are bucketed, so players in the same band rise and fall together in this list.',
-  bust: 'Bust probability comes from the calibrated outcome distribution and is a model output.',
+    'Ceiling is a strong week the player reaches about 1 time in 10 — an upside case, not an expectation. Similar players share the same range this week, so they tend to appear together here.',
+  bust: 'Bust chance comes from the projection model: how often the player is expected to finish below the listed score.',
   injury:
-    'Injury designations are reported, not applied. The projection beside each player does not adjust for the designation — a player listed Out still shows their full projected distribution.',
+    'The projections here do not account for injuries. A player listed Out still shows a full projection, so check the designation before starting anyone.',
   weather:
-    'Weather is observed context. The frozen model excludes it, so these projections do not account for wind or precipitation.',
+    'The projections here do not account for weather. Wind and rain are shown so you can judge for yourself.',
 }

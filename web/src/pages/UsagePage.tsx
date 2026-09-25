@@ -98,7 +98,7 @@ export default function UsagePage() {
       <div className="mb-4 space-y-3">
         <NoticeList
           notices={[
-            'Each row compares a player’s most recent game with his four-game average — the window the projection is built from. One game is a small sample: a blowout, an in-game injury or a return from a bye all move it.',
+            'Each row compares a player’s most recent game with their four-game average, which is what the projection is built from. One game can be misleading: a blowout, an in-game injury or a return from a bye can all skew it.',
           ]}
         />
         {board.data && <NoticeList notices={boardNotices(board.data.meta)} />}
@@ -141,7 +141,7 @@ export default function UsagePage() {
         <CardHeader
           as="h2"
           title={`${metricLabel}: ${direction === 'up' ? 'rising' : 'falling'}`}
-          description={`Last game against the four-game average, in percentage points. Players under ${Math.round(MIN_SHARE[metric] * 100)}% average share are left out.`}
+          description={`Last game compared with the four-game average, in percentage points. Players averaging under ${Math.round(MIN_SHARE[metric] * 100)}% are left out.`}
           action={<ProvenanceBadge provenance="derived" />}
         />
         {board.isPending ? (
@@ -152,7 +152,7 @@ export default function UsagePage() {
           <EmptyState
             icon={<TrendingUp aria-hidden className="size-5" />}
             title="No movement to show"
-            description="No player has both a four-game window and a previous game at this share — early in a season, or for a week whose usage has not been built."
+            description="No player has enough recent games to compare yet. This is normal early in the season, or before this week's data is in."
           />
         ) : (
           <Refreshing active={board.isPlaceholderData}>
@@ -187,8 +187,8 @@ export default function UsagePage() {
               </table>
             </div>
             <CardBody className="border-line text-ink-muted border-t py-3 text-xs">
-              Usage is the model’s own input window restated for a reader; the change is computed from it
-              and is not a separate adjustment to any projection.
+              These are the same recent games the projection is built from. The change shown here is
+              for your information and does not adjust any projection.
             </CardBody>
           </Refreshing>
         )}

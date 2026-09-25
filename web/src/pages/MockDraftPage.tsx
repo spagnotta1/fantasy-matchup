@@ -204,7 +204,7 @@ export default function MockDraftPage() {
           <Card>
             <EmptyState
               title="No season can be drafted yet"
-              description="A mock draft reads the published week 1 board of the season being drafted, and no season has one. Once a projection run publishes for week 1, that season appears here."
+              description="A mock draft uses a season's week 1 projections, and no season has those yet. A season appears here once its week 1 projections are out."
             />
           </Card>
         )}
@@ -234,8 +234,8 @@ export default function MockDraftPage() {
           <Card>
             <CardBody>
               <p className="text-ink-secondary text-sm" aria-live="polite">
-                Simulating drafts. A few hundred complete drafts take a moment; a
-                comparison of every seat takes longer.
+                Simulating drafts. A few hundred drafts take a moment; comparing every
+                draft position takes longer.
               </p>
               <div className="mt-4 space-y-3">
                 <Skeleton className="h-6 w-full" />
@@ -250,7 +250,7 @@ export default function MockDraftPage() {
           <Card>
             <EmptyState
               title="Nothing simulated yet"
-              description="Set your league up above, then analyse a single draft position or compare all of them. Nothing is saved: the settings and the seed are the entire input, so the same configuration always returns the same draft."
+              description="Set up your league above, then analyse one draft position or compare them all. Nothing is saved, but the same settings and seed always give the same draft."
             />
           </Card>
         )}
@@ -336,13 +336,13 @@ function SeatSummary({
         <StatCard
           label="Draft value"
           value={formatNumber(seat.roster_value.mean)}
-          detail={`Mean roster points above replacement, ±${formatNumber(seat.roster_value.standard_error, 2)}`}
+          detail={`Average points your starters score above easy-to-find replacements, ±${formatNumber(seat.roster_value.standard_error, 2)}`}
         />
         <StatCard
           label="Projected team"
           value={formatNumber(seat.starter_points.mean)}
           unit="pts"
-          detail={`Median ${formatNumber(seat.starter_points.median)}, middle 80% ${formatNumber(seat.starter_points.p10)}–${formatNumber(seat.starter_points.p90)}`}
+          detail={`Typical ${formatNumber(seat.starter_points.median)}; 8 in 10 drafts between ${formatNumber(seat.starter_points.p10)} and ${formatNumber(seat.starter_points.p90)}`}
         />
       </div>
     </section>
@@ -375,28 +375,28 @@ function Methodology({
           </summary>
           <div className="text-ink-secondary mt-3 space-y-3 text-sm leading-relaxed">
             <p>
-              Season value is the published <strong>week {pool.board_week}</strong>{' '}
-              projection for {pool.season} in {formatScoringProfile(scoringProfile)}, read
-              as a points-per-game rate and multiplied by an estimate of games played out
-              of {pool.season_games}. There is no season-long projection in this system;
-              the model projects one week from a trailing four-game usage window, so
-              nothing beyond week 1 of an unplayed season is projectable and none is
-              invented here.
+              Each player&rsquo;s season value starts from their{' '}
+              <strong>week {pool.board_week}</strong> projection for {pool.season} (
+              {formatScoringProfile(scoringProfile)}), treated as points per game and
+              multiplied by how many of the {pool.season_games} games they are expected to
+              play. We do not make full-season projections — the model projects one week at a
+              time from a player&rsquo;s last four games — so nothing past week 1 is guessed
+              at here.
             </p>
             <p>
-              Expected games is estimated from historical availability over{' '}
+              Expected games played is based on how often each player was available in{' '}
               {pool.history_seasons.length > 0
                 ? `${pool.history_seasons[0]}–${pool.history_seasons[pool.history_seasons.length - 1]}`
                 : 'no completed seasons'}
-              , shrunk toward a position prior.{' '}
-              {pool.players_without_history} of {pool.players} players have no completed
-              season in that window and carry the prior alone.
+              , pulled toward the typical figure for their position.{' '}
+              {pool.players_without_history} of {pool.players} players have no full season in
+              that range, so they get their position&rsquo;s typical figure.
             </p>
             <p>
-              Availability was calibrated over {methodology.calibration_drafts.toLocaleString()}{' '}
-              drafts in which every seat used the opponent model, then read during{' '}
-              {methodology.simulations.toLocaleString()} drafts per seat in which yours did
-              not. The opposing managers drafted at the{' '}
+              The chance each player is still available comes from{' '}
+              {methodology.calibration_drafts.toLocaleString()} practice drafts where every
+              team was computer-drafted, then {methodology.simulations.toLocaleString()} drafts
+              per draft position where yours was not. The other managers drafted at the{' '}
               <strong className="text-ink-secondary font-semibold">
                 {methodology.opponent_skill_label.toLowerCase()}
               </strong>{' '}
@@ -407,25 +407,24 @@ function Methodology({
                   {methodology.opponent_overrides.join(' and ').replace(/_/g, ' ')}
                 </>
               )}
-              : value over replacement at{' '}
-              {Math.round((1 - methodology.history_weight) * 100)}% and last completed
-              season&rsquo;s actual points at {Math.round(methodology.history_weight * 100)}%,
-              with randomness added — an assumption, not a measurement: it has not been
-              fitted to or validated against average-draft-position data.
+              . They weigh value over a replacement player at{' '}
+              {Math.round((1 - methodology.history_weight) * 100)}% and last season&rsquo;s
+              actual points at {Math.round(methodology.history_weight * 100)}%, plus some
+              randomness. That behaviour is an assumption, not a measurement — it has not been
+              checked against real average-draft-position (ADP) data.
             </p>
             <p>
-              That randomness was {formatNumber(methodology.board_scatter_ratio, 1)}× the
-              median gap between neighbouring players on the opponents&rsquo; own board.
-              One would mean a manager who misplaces a player by a single board position;
-              the larger this is, the further talent slides for no reason and the closer
-              the draft positions finish to each other. Raise the league skill to tighten
-              it.
+              Their randomness was {formatNumber(methodology.board_scatter_ratio, 1)}× the
+              typical gap between neighbouring players on their board. At 1, a manager
+              misplaces a player by about one spot. Higher means players slide further for no
+              reason, and draft positions end up closer together in value. Raise the league
+              skill to reduce it.
             </p>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1 text-xs sm:grid-cols-4">
               <Detail label="Seed" value={String(methodology.seed)} />
               <Detail label="Pool" value={`${pool.players} players`} />
               <Detail
-                label="Replacement"
+                label="Replacement level"
                 value={pool.replacement
                   .map((entry) => `${entry.position} ${formatNumber(entry.value, 0)}`)
                   .join(' · ')}
@@ -468,15 +467,13 @@ function RookieGap({ pool }: { pool: DraftPoolSummary }) {
               No rookies are on this board — it holds {pool.players} veterans and
               nobody else.
             </span>{' '}
-            The projection model reads a trailing four-game usage window, and a player
-            who has never played has none, so the incoming class is absent rather than
-            ranked low.
+            Projections are built from a player&rsquo;s last four games, and rookies have not
+            played any, so they are left out rather than ranked low.
           </p>
           <p>
-            A real draft spends its first five rounds on that class. Every pick below
-            the first round here therefore lands on a player a real draft would have
-            taken earlier, and the late rounds look deeper than they are. Read this as
-            the veteran board: your real draft from this seat will be harder.
+            Real drafts take many rookies in the early rounds, so after round one the
+            players here would usually be gone sooner, and the late rounds look deeper than
+            they really are. Expect your real draft from this spot to be harder.
           </p>
         </div>
       </div>

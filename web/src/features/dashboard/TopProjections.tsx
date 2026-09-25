@@ -25,7 +25,7 @@ export function TopProjections({ count = 8 }: { count?: number }) {
       <CardHeader
         as="h2"
         title="Top projections"
-        description="Ranked by the published model run, with the matchup derived beside it."
+        description="This week's highest projected scorers, with their matchup grade."
       />
 
       {isPending ? (
@@ -37,8 +37,8 @@ export function TopProjections({ count = 8 }: { count?: number }) {
           title="No projections for this week"
           description={
             data.meta.model === null
-              ? 'No model run has been published for this week yet. The board appears once the weekly job runs.'
-              : 'The published run holds no players for this week.'
+              ? 'Projections for this week are not out yet. They appear after the weekly update runs.'
+              : "This week's projections do not include any players."
           }
         />
       ) : (

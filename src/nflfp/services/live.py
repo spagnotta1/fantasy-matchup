@@ -34,9 +34,9 @@ from .dto import SlateWindow
 LIVE_POSITIONS = ("QB", "RB", "WR", "TE")
 
 NOTICE_UNOFFICIAL = (
-    "Live points are ESPN's in-game box score scored with this app's rules. They are "
-    "unofficial: two-point conversions and stat corrections are not included, and "
-    "the official line replaces them when the week is loaded."
+    "Live points come from ESPN's in-game box score, scored with your scoring "
+    "settings. They are unofficial: two-point conversions and stat corrections are "
+    "not included, and official numbers replace them once the week is final."
 )
 
 
@@ -153,9 +153,9 @@ async def get_live(
     notices = [NOTICE_UNOFFICIAL]
     if live.warnings:
         notices.append(
-            "Some live data could not be fetched just now ("
+            "Some live data could not be loaded just now ("
             + "; ".join(live.warnings[:3])
-            + "). The page shows what arrived."
+            + "). Showing what did arrive."
         )
     if live.games and all(game.state == "pre" for game in live.games):
         notices.append("No game this week has kicked off yet.")

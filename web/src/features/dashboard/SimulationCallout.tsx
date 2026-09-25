@@ -30,9 +30,8 @@ export function SimulationCallout() {
         <div className="min-w-0 flex-1">
           <h2 className="text-ink text-sm font-semibold">Does your lineup beat theirs?</h2>
           <p className="text-ink-muted mt-0.5 text-xs leading-relaxed">
-            Build both starting lineups for week {slate.week} and run a Monte Carlo over the
-            published outcome distributions for an estimated win probability — with what it does
-            not account for stated beside it.
+            Enter both starting lineups for week {slate.week}. We play the matchup out thousands of
+            times and give you an estimated chance of winning, plus what the estimate leaves out.
           </p>
         </div>
         <Link

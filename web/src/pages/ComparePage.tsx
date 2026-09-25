@@ -96,7 +96,7 @@ export default function ComparePage() {
             // Directly under the page's h1 with no section between, so h2.
             titleAs="h2"
             title="Pick two players to compare"
-            description={`Search above to add players — two at a minimum, ${MAX_COMPARISON_PLAYERS} at most. Each pair gets a win probability computed from both players' published outcome distributions.`}
+            description={`Search above to add players — two at a minimum, ${MAX_COMPARISON_PLAYERS} at most. For each pair we estimate how often one player outscores the other.`}
           />
         </Card>
       ) : comparison.isPending ? (
@@ -109,7 +109,7 @@ export default function ComparePage() {
         <Card>
           <EmptyState
             title="No projections for these players"
-            description="None of the selected players has a published projection for this week — a bye, an inactive listing, or a run that does not cover them."
+            description="None of the selected players has a projection this week — usually a bye week or an inactive listing."
           />
         </Card>
       ) : (
@@ -125,9 +125,9 @@ export default function ComparePage() {
               Head to head
             </h2>
             <p className="text-ink-secondary mb-4 max-w-2xl text-sm leading-relaxed">
-              Each player against the next one down the list. A probability here is the share of
-              simulated outcomes in which one player outscores the other, not a confidence in the
-              projection.
+              Each player against the next one down the list. The percentage is how often one
+              player outscored the other across many simulated weeks — an estimate, not a
+              guarantee.
             </p>
 
             <div className="grid gap-4 xl:grid-cols-2">
@@ -143,7 +143,7 @@ export default function ComparePage() {
               <Card>
                 <EmptyState
                   title="No head-to-head available"
-                  description="A pairing needs a stored outcome distribution on both sides. One of these players does not have one for this week."
+                  description="Both players need a scoring range to be compared, and one of them does not have one this week."
                 />
               </Card>
             )}
@@ -189,8 +189,8 @@ function ArbitraryPair({ players }: { players: Player[] }) {
         Compare any two
       </h2>
       <p className="text-ink-secondary mb-4 max-w-2xl text-sm leading-relaxed">
-        The pairs above are consecutive. Pick any two of your selected players for a direct
-        head-to-head.
+        The pairs above only compare neighbours in the list. Pick any two of your selected
+        players to compare them directly.
       </p>
 
       <Card className="mb-4">

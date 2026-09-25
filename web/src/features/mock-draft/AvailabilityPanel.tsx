@@ -32,7 +32,7 @@ export function AvailabilityPanel({ seat }: { seat: SeatAnalysis }) {
     <Card>
       <CardHeader
         title="Player availability"
-        description="How often each player is still on the board when this seat picks, across the simulated drafts."
+        description="How often each player is still available when you pick, across all the simulated drafts."
         as="h2"
         action={
           <SegmentedControl
@@ -53,8 +53,8 @@ export function AvailabilityPanel({ seat }: { seat: SeatAnalysis }) {
       <CardBody className="p-0">
         {rows.length === 0 ? (
           <p className="text-ink-secondary px-4 py-8 text-center text-sm">
-            No players at this position are near enough to the top of the board for
-            availability to be a decision.
+            No players at this position are ranked high enough for their availability to
+            matter yet.
           </p>
         ) : (
           // A scroll container with no focusable content inside it is
@@ -70,7 +70,7 @@ export function AvailabilityPanel({ seat }: { seat: SeatAnalysis }) {
           >
             <table className="w-full min-w-[34rem] text-sm">
               <caption className="sr-only">
-                Probability each player is still available at draft position{' '}
+                Chance each player is still available at draft position{' '}
                 {seat.draft_position}&rsquo;s picks
               </caption>
               <thead className="bg-surface sticky top-0 z-10">

@@ -97,7 +97,7 @@ export default function InjuriesPage() {
           showTitle
           notices={[
             reason ??
-              'The frozen model does not read the injury report. Each projection is shown as published; the designation beside it is the caveat.',
+              'The projections do not account for injuries. Each player shows their normal projection, with their injury status beside it as the warning.',
           ]}
         />
         {board.data && <NoticeList notices={boardNotices(board.data.meta)} />}
@@ -144,7 +144,7 @@ export default function InjuriesPage() {
           <EmptyState
             icon={<HeartPulse aria-hidden className="size-5" />}
             title="No one on the report"
-            description="No projected player carries an injury designation or a limited practice line this week — or the report has not been published yet. Reports usually arrive Wednesday to Friday."
+            description="No projected player is on the injury or practice report this week — or the report is not out yet. Reports usually come out Wednesday to Friday."
           />
         </Card>
       ) : (

@@ -407,7 +407,7 @@ class TestRefusals:
         assert payload["code"] == "invalid_request"
         # Not "unknown slot". The reason and the blockers, from the position
         # registry — the same answer /meta/positions gives.
-        assert "distance-bucketed" in payload["message"]
+        assert "field goals" in payload["message"]
         assert "Blocked on" in payload["message"]
 
     async def test_a_defense_slot_is_refused_with_a_reason(self, client):

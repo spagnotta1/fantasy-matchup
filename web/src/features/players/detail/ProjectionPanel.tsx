@@ -1,6 +1,6 @@
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
-import { formatNumber, formatPercent, formatPoints } from '@/utils/format'
+import { formatLabel, formatNumber, formatPercent, formatPoints } from '@/utils/format'
 import type { Components, Points } from '@/api/schemas'
 
 /**
@@ -24,7 +24,7 @@ export function ProjectionPanel({
       <CardHeader
         as="h2"
         title="Projection"
-        description="The published model run's output for this week."
+        description="What the model expects from this player this week."
         action={<ProvenanceBadge provenance="model" />}
       />
       <CardBody className="space-y-6">
@@ -34,18 +34,18 @@ export function ProjectionPanel({
           <Figure
             label="Boom"
             value={formatPercent(points.boom_probability)}
-            detail={`over ${formatPoints(points.boom_threshold)} pts`}
+            detail={`chance of ${formatPoints(points.boom_threshold)}+ pts`}
           />
           <Figure
             label="Bust"
             value={formatPercent(points.bust_probability)}
-            detail={`under ${formatPoints(points.bust_threshold)} pts`}
+            detail={`chance of under ${formatPoints(points.bust_threshold)} pts`}
           />
-          <Figure label="Shape" value={points.shape === 'unknown' ? '—' : points.shape} detail="outcome pattern" />
+          <Figure label="Consistency" value={points.shape === 'unknown' ? '—' : formatLabel(points.shape)} detail="steady or boom-or-bust" />
           <Figure
-            label="Sample"
+            label="Based on"
             value={points.samples === null || points.samples === undefined ? '—' : String(points.samples)}
-            detail="held-out residuals"
+            detail="past projections used to size the range"
           />
         </div>
 
@@ -53,8 +53,8 @@ export function ProjectionPanel({
 
         {points.extrapolated && (
           <p className="bg-caution-soft text-caution-text rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
-            This projection is higher than anything seen while fitting the outcome distribution, so
-            its range is an extrapolation rather than a measured interval.
+            This projection is higher than anything the model has seen before, so its range is an
+            educated guess rather than something backed by past results.
           </p>
         )}
       </CardBody>
@@ -72,23 +72,23 @@ export function ProjectionPanel({
 function PercentileStrip({ points }: { points: Points }) {
   const { floor, p25, median, p75, ceiling } = points
   if (floor === null || floor === undefined || ceiling === null || ceiling === undefined) {
-    return <p className="text-ink-muted text-sm">No outcome range was stored for this projection.</p>
+    return <p className="text-ink-muted text-sm">No scoring range is available for this projection.</p>
   }
 
   const span = Math.max(ceiling - floor, 0.001)
   const at = (value: number) => ((value - floor) / span) * 100
   const marks = [
-    { label: 'P10', value: floor },
-    p25 !== null && p25 !== undefined ? { label: 'P25', value: p25 } : null,
-    median !== null && median !== undefined ? { label: 'P50', value: median } : null,
-    p75 !== null && p75 !== undefined ? { label: 'P75', value: p75 } : null,
-    { label: 'P90', value: ceiling },
+    { label: 'Floor', value: floor },
+    p25 !== null && p25 !== undefined ? { label: 'Low', value: p25 } : null,
+    median !== null && median !== undefined ? { label: 'Middle', value: median } : null,
+    p75 !== null && p75 !== undefined ? { label: 'High', value: p75 } : null,
+    { label: 'Ceiling', value: ceiling },
   ].filter((mark): mark is { label: string; value: number } => mark !== null)
 
   return (
     <div>
       <div className="text-ink-muted mb-2 flex items-baseline justify-between text-xs">
-        <span>Range of outcomes</span>
+        <span>Likely scoring range (floor and ceiling are roughly 1-in-10 bad and good weeks)</span>
         <span>
           {formatPoints(floor)} – {formatPoints(ceiling)} pts
         </span>
@@ -108,7 +108,7 @@ function PercentileStrip({ points }: { points: Points }) {
           >
             <span
               className={
-                mark.label === 'P50'
+                mark.label === 'Middle'
                   ? 'bg-chart-series ring-surface block h-8 w-1 rounded-full ring-2'
                   : 'bg-chart-series/70 mt-2 block h-4 w-0.5 rounded-full'
               }
@@ -152,8 +152,8 @@ function ComponentBreakdown({ components }: { components: Components }) {
         Projected production
       </h3>
       <p className="text-ink-muted mb-3 text-xs leading-relaxed">
-        What the model predicts before scoring rules are applied. One set of components serves
-        every league format — the points above are these numbers scored.
+        The stats the model expects. The points above are these stats run through your league&apos;s
+        scoring settings.
       </p>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 sm:grid-cols-3">
         {rows.map((row) => (

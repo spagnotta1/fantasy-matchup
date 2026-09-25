@@ -25,15 +25,15 @@ export { DEFAULT_SIMULATION_COUNT } from '@/api/simulations'
 export const CORRELATION_MODES = [
   {
     value: 'independent',
-    label: 'Independent',
+    label: 'Standard',
     description:
-      "Every player drawn from their own distribution. The API's default. Teammates share an offence and opponents share game script, so the joint distribution is correlated — but measured over 2,878 held-out lineups the cost is small: the 80% range covered 79.4% of real outcomes against a target of 80%.",
+      "Each player's score is simulated on its own. This is the default. In real games teammates' scores are linked (most of all a quarterback and their own receivers), but when tested on 2,878 past lineups the 80% range still held the real score 79.4% of the time, against a target of 80%.",
   },
   {
     value: 'game_environment',
-    label: 'Correlated (experimental)',
+    label: 'Linked (experimental)',
     description:
-      'Applies a correlation structure fitted on held-out historical outcomes, leaving every player’s own distribution unchanged. Experimental: it has not been shown to beat the independent baseline on held-out matchups.',
+      'Simulates teammates and opponents as linked, based on how past games played out. Each player’s own range stays the same. Experimental: in tests on past matchups it has not beaten the standard mode.',
   },
 ] as const
 

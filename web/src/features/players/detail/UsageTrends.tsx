@@ -64,7 +64,7 @@ export function UsageTrends({ history }: { history: HistoricalWeek[] }) {
       <CardHeader
         as="h2"
         title="Usage trend"
-        description={`Snap share, targets and carries over the last ${games.length} games, oldest to newest — the role that moves before the points do.`}
+        description={`Snap share, targets and carries over the last ${games.length} games, oldest to newest. Changes in role often show up here before they show up in points.`}
         action={<ProvenanceBadge provenance="actual" />}
       />
       <CardBody className="grid gap-5 md:grid-cols-3">
@@ -114,7 +114,7 @@ export function UsageTrends({ history }: { history: HistoricalWeek[] }) {
         })}
       </CardBody>
       <p className="text-ink-muted px-5 pb-4 text-xs">
-        The last four columns — the window the projection is built from — are drawn at full strength.
+        The last four games, which the projection is built from, are shown in full colour.
       </p>
     </Card>
   )

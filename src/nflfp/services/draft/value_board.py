@@ -90,11 +90,11 @@ class ValueBoard:
 #: Why an ADP entry has no pool entry, in the words a manager needs.
 REASONS = {
     "matched": (
-        "no week 1 projection — a rookie with no usage window, or a player the "
-        "week 1 run did not cover (injured, suspended or unsigned at the time)"
+        "no week 1 projection — a rookie with no past games, or a player who "
+        "was injured, suspended or unsigned at the time"
     ),
-    "ambiguous": "name matched more than one player, so no projection was attached",
-    "unmatched": "name did not match any player in the warehouse",
+    "ambiguous": "name matched more than one player, so we could not tell which one",
+    "unmatched": "name did not match any player we know",
 }
 
 
@@ -182,24 +182,24 @@ def build_value_board(
 def market_notices(board: ValueBoard, season: int) -> list[str]:
     """What a reader must know about the market side before trusting a gap."""
     notices = [
-        "ADP is the market's observed average draft slot. It is shown beside the "
-        "pool's season value and is not an input to any projection or to the mock "
-        "draft's opponents.",
-        "Ranks are compared within position, among players who have both an ADP and "
-        "a projection; the gap is market rank minus value rank.",
+        "ADP (average draft position) is where players are actually being drafted. "
+        "It is shown next to our season value for comparison and is not an input to "
+        "any projection or to the mock draft's opponents.",
+        "Ranks are compared within each position, among players who have both an ADP "
+        "and a projection. The gap is the draft rank minus our rank.",
     ]
     if board.market is None:
-        notices.append(f"No ADP has been loaded for {season}, so there is no market to compare against.")
+        notices.append(f"No ADP data has been loaded for {season}, so there is nothing to compare against.")
         return notices
     drafts = board.market.total_drafts
     if drafts is not None and drafts < THIN_MARKET:
         notices.append(
-            f"The {season} ADP window covers only {drafts} drafts. Treat its ordering "
-            "as a thin sample, not a settled market."
+            f"The {season} ADP data covers only {drafts} drafts, so treat its order "
+            "as a rough guide."
         )
     if board.market.is_preseason is False:
         notices.append(
-            "No pre-kickoff ADP window was captured for this season, so the latest "
-            "window stands in — an in-season market, not the draft-day one."
+            "No preseason ADP data was captured for this season, so the latest data "
+            "is used instead — an in-season market, not draft-day ADP."
         )
     return notices

@@ -39,13 +39,13 @@ export function MatchupPanel({
       <CardHeader
         as="h2"
         title="Matchup"
-        description="Trailing four completed games of defensive form, ranked within position."
+        description="How this week's opponent has defended the position over its last four games."
         action={<ProvenanceBadge provenance="derived" />}
       />
       <CardBody>
         {!matchup ? (
           <p className="text-ink-muted text-sm">
-            No matchup data is available — this player has no scheduled opponent for the week.
+            No matchup this week — this player has no scheduled opponent.
           </p>
         ) : (
           <>
@@ -63,23 +63,23 @@ export function MatchupPanel({
 
             <dl>
               <Row
-                label="Defence rank vs position"
+                label="Defence rank vs this position"
                 hint="1 = toughest"
                 value={matchup.grade.defense_rank ?? '—'}
               />
               <Row
-                label="Points allowed to position"
+                label="Points allowed to this position"
                 hint="per game, last 4"
                 value={formatPoints(matchup.fp_allowed_vs_position_l4)}
               />
               <Row label="Targets allowed" hint="last 4" value={formatPoints(matchup.targets_allowed_l4)} />
               <Row label="Carries allowed" hint="last 4" value={formatPoints(matchup.carries_allowed_l4)} />
               <Row label="Overall defence rank" value={matchup.defense_rank_overall ?? '—'} />
-              <Row label="Opponent pace" hint="plays/game, last 4" value={formatPoints(matchup.opponent_pace_l4)} />
+              <Row label="Opponent pace" hint="their plays per game, last 4" value={formatPoints(matchup.opponent_pace_l4)} />
             </dl>
 
             {!matchup.applied_to_projection && (
-              <NotAppliedNotice reason="The frozen model does not consume a matchup feature. This is analysis presented beside the projection, not an adjustment to it." />
+              <NotAppliedNotice reason="The projection does not adjust for the opponent. This is shown to help you judge the matchup yourself." />
             )}
           </>
         )}
@@ -95,7 +95,7 @@ export function UsagePanel({ usage }: { usage: Usage }) {
       <CardHeader
         as="h2"
         title="Usage"
-        description="Every window ends at the previous week — this is not a forecast of Sunday's snap count."
+        description="How much this player has been used in past games. It describes recent weeks, not a prediction for this one."
         action={<ProvenanceBadge provenance="derived" />}
       />
       <CardBody>
@@ -109,8 +109,8 @@ export function UsagePanel({ usage }: { usage: Usage }) {
           <Row label="Fantasy points" hint="per game, last 4" value={formatPoints(usage.fp_l4)} />
           <Row label="Fantasy points" hint="per game, season" value={formatPoints(usage.fp_season)} />
           <Row
-            label="Volatility"
-            hint="std dev, last 4"
+            label="Week-to-week swing"
+            hint="points, last 4"
             value={formatPoints(usage.fp_volatility_l4)}
           />
           <Row label="Games played" hint="season" value={usage.games_played_season ?? '—'} />
@@ -134,8 +134,8 @@ export function ContextPanel({ context }: { context: PlayerContext }) {
     <Card>
       <CardHeader
         as="h2"
-        title="Context"
-        description="Observed facts the model does not consume. Useful for your judgement; not folded into the number."
+        title="Injury, weather and betting line"
+        description="Useful for your own judgement. None of this is factored into the projection."
         action={<ProvenanceBadge provenance="context" />}
       />
       <CardBody className="space-y-6">
@@ -144,7 +144,7 @@ export function ContextPanel({ context }: { context: PlayerContext }) {
             Injury report
           </h3>
           {!injury ? (
-            <p className="text-ink-muted text-sm">No injury designation is on file for this week.</p>
+            <p className="text-ink-muted text-sm">This player is not on the injury report this week.</p>
           ) : (
             <>
               <dl>
@@ -154,9 +154,9 @@ export function ContextPanel({ context }: { context: PlayerContext }) {
               </dl>
               {injury.will_not_play && (
                 <p className="bg-negative-soft text-negative-text mt-3 rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
-                  This player is designated Out. The projection above still describes a full
-                  workload — it is not zeroed, because &quot;projected zero&quot; and &quot;not
-                  playing&quot; are different statements.
+                  This player is ruled Out. The projection above assumes a normal game — we leave it
+                  in place rather than showing zero, so you can tell &quot;not playing&quot; apart from
+                  &quot;expected to score nothing&quot;.
                 </p>
               )}
               {!injury.applied_to_projection && (
@@ -173,18 +173,18 @@ export function ContextPanel({ context }: { context: PlayerContext }) {
           {!weather ? (
             <p className="text-ink-muted text-sm">No forecast is available for this game.</p>
           ) : weather.is_indoor ? (
-            <p className="text-ink-secondary text-sm">Indoor venue — conditions are not a factor.</p>
+            <p className="text-ink-secondary text-sm">Indoor stadium — weather is not a factor.</p>
           ) : (
             <>
               <dl>
                 <Row label="Temperature" value={weather.temperature_f !== null && weather.temperature_f !== undefined ? `${Math.round(weather.temperature_f)}°F` : '—'} />
                 <Row label="Wind" value={weather.wind_mph !== null && weather.wind_mph !== undefined ? `${Math.round(weather.wind_mph)} mph` : '—'} />
-                <Row label="Precipitation" value={formatPercent(weather.precipitation_probability)} />
+                <Row label="Chance of rain/snow" value={formatPercent(weather.precipitation_probability)} />
                 <Row label="Source" value={weather.source ?? '—'} />
               </dl>
               {weather.is_adverse && (
                 <p className="bg-caution-soft text-caution-text mt-3 rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
-                  Flagged as adverse: 20+ mph wind or 60%+ chance of precipitation, outdoors.
+                  Bad-weather game: 20+ mph wind or a 60%+ chance of rain or snow.
                 </p>
               )}
               {!weather.applied_to_projection && <NotAppliedNotice reason={weather.unapplied_reason} />}
@@ -197,15 +197,15 @@ export function ContextPanel({ context }: { context: PlayerContext }) {
             Betting market
           </h3>
           {!game ? (
-            <p className="text-ink-muted text-sm">No market data is available for this game.</p>
+            <p className="text-ink-muted text-sm">No betting line is available for this game.</p>
           ) : (
             <>
               <dl>
                 <Row label="Kickoff" value={formatGameDay(game.gameday)} />
                 <Row label="Spread" value={formatSpread(game.team_spread)} />
-                <Row label="Game total" value={formatPoints(game.total_line)} />
-                <Row label="Implied team total" value={formatPoints(game.implied_team_total)} />
-                <Row label="Rest" hint="days" value={game.rest_days ?? '—'} />
+                <Row label="Over/under" value={formatPoints(game.total_line)} />
+                <Row label="Expected team points" value={formatPoints(game.implied_team_total)} />
+                <Row label="Rest" hint="days since last game" value={game.rest_days ?? '—'} />
                 {game.spread_source && <Row label="Line source" value={game.spread_source} />}
               </dl>
               {!game.applied_to_projection && <NotAppliedNotice reason={game.unapplied_reason} />}

@@ -43,9 +43,9 @@ NEXT_WEEKS = 4
 PLAYOFF_WEEKS = (15, 16, 17)
 
 NOTICE_CURRENT_FORM = (
-    "Every opponent is graded on its last four completed games before this week, "
-    "and that grade is applied to every remaining meeting. It is current form "
-    "carried forward, not a forecast of how a defence will play later in the season."
+    "Each opponent is graded on its last four games before this week, and that "
+    "grade is used for every remaining matchup. It shows current form, not a "
+    "forecast of how a defence will play later in the season."
 )
 
 
@@ -202,10 +202,9 @@ async def get_schedule_strength(
     notices = [NOTICE_CURRENT_FORM]
     if teams and all(t.graded_games == 0 for t in teams):
         notices.append(
-            f"No defence has {grading.MIN_GAMES_FOR_GRADE} completed games before week "
-            f"{window.week}, so every opponent is ungraded. Grades appear from week "
-            f"{grading.MIN_GAMES_FOR_GRADE + 1}; earlier weeks of a past season show "
-            "the same state."
+            f"No defence has played {grading.MIN_GAMES_FOR_GRADE} games before week "
+            f"{window.week}, so no opponent can be graded yet. Grades start from week "
+            f"{grading.MIN_GAMES_FOR_GRADE + 1}."
         )
     if not remaining:
         notices.append(f"The {window.season} regular season has no weeks left from week {window.week}.")

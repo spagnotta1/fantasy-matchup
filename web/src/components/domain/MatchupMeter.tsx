@@ -37,13 +37,13 @@ export function MatchupMeter({
 
       <div className="flex items-center gap-2">
         {score === null ? (
-          <span className="text-ink-muted text-xs">Not enough history to grade</span>
+          <span className="text-ink-muted text-xs">Too few games to grade</span>
         ) : (
           <>
             <div
               className="bg-surface-sunken relative h-2 min-w-16 flex-1 overflow-hidden rounded-full"
               role="img"
-              aria-label={`${label} against ${defense ?? 'this defence'}: ${grade.letter ?? 'ungraded'}, ${Math.round(score)}th percentile of matchup softness this week, defensive rank ${grade.defense_rank ?? 'unknown'} of 32 where 1 is toughest.`}
+              aria-label={`${label} against ${defense ?? 'this defence'}: grade ${grade.letter ?? 'none'}, easier than ${Math.round(score)}% of matchups this week, defence ranked ${grade.defense_rank ?? 'unknown'} of 32 (1 = toughest).`}
             >
               <div
                 className="bg-chart-series absolute inset-y-0 left-0 rounded-full transition-[width] duration-300"
@@ -51,7 +51,7 @@ export function MatchupMeter({
               />
             </div>
             <span className="text-ink-muted tnum hidden w-24 shrink-0 text-right text-[0.6875rem] sm:block">
-              {formatPoints(matchup.fp_allowed_l4)} allowed
+              {formatPoints(matchup.fp_allowed_l4)} pts/gm allowed
             </span>
           </>
         )}

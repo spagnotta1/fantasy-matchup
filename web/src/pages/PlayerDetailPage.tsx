@@ -91,7 +91,7 @@ export default function PlayerDetailPage() {
           <Card>
             <EmptyState
               title="No projection for this week"
-              description="This player has no published projection for the selected week — a bye, an inactive listing, or a run that does not cover them. Their game history is below."
+              description="This player has no projection for the selected week — usually a bye week or an inactive listing. Their past games are below."
             />
           </Card>
           <GameLog

@@ -48,7 +48,7 @@ export function GameList({ selectedGameId }: { selectedGameId?: string }) {
         <EmptyState
           icon={<CalendarX aria-hidden className="size-5" />}
           title="No games scheduled"
-          description="The schedule holds no games for the selected week. Pick another week from the header."
+          description="There are no games in the selected week. Pick another week at the top of the page."
         />
       </Card>
     )

@@ -63,7 +63,7 @@ export default function DraftBoardPage() {
     <>
       <PageHeader
         title="Draft board"
-        question="Where does the model's season value disagree with the market's ADP?"
+        question="Which players do our projections value more (or less) than where they are being drafted?"
       />
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
@@ -92,8 +92,8 @@ export default function DraftBoardPage() {
           onChange={(value) => setState({ lens: value })}
           options={[
             { value: 'all', label: 'Everyone' },
-            { value: 'value', label: 'Model higher' },
-            { value: 'reach', label: 'Market higher' },
+            { value: 'value', label: 'We rank higher' },
+            { value: 'reach', label: 'Drafters rank higher' },
           ]}
         />
         <Link to="/mock-draft" className="text-accent-text ml-auto pb-1.5 text-xs hover:underline">
@@ -116,7 +116,7 @@ export default function DraftBoardPage() {
           <EmptyState
             icon={<ListOrdered aria-hidden className="size-5" />}
             title="No draftable season"
-            description="A season needs a published week 1 board before its players can be valued."
+            description="Players can only be valued once a season's week 1 projections are out."
           />
         </Card>
       ) : (
@@ -125,7 +125,7 @@ export default function DraftBoardPage() {
             <CardHeader
               as="h2"
               title={`${board.season} value against ADP`}
-              description={`${formatScoringProfile(board.scoring_profile)} scoring. Ordered by ADP; ranks are within position among players with both.`}
+              description={`${formatScoringProfile(board.scoring_profile)} scoring. Ordered by average draft position (ADP). Ranks are within each position.`}
               action={
                 <span className="flex items-center gap-1.5">
                   <ProvenanceBadge provenance="derived" />
@@ -137,7 +137,7 @@ export default function DraftBoardPage() {
               <CardBody className="border-line text-ink-muted border-b py-2.5 text-xs">
                 ADP from {board.market.total_drafts?.toLocaleString() ?? 'an unknown number of'} drafts in{' '}
                 {board.market.teams ?? '—'}-team leagues, {board.market.window_start} to {board.market.window_end}
-                {board.market.is_preseason === false && ' (an in-season window, not draft day)'}.
+                {board.market.is_preseason === false && ' (drafts made during the season, not before it)'}.
               </CardBody>
             )}
             {entries.length === 0 ? (
@@ -155,10 +155,10 @@ export default function DraftBoardPage() {
                       <th scope="col" className="px-3 py-2 text-left">Player</th>
                       <th scope="col" className="px-3 py-2 text-right">
                         <span className="inline-flex items-center gap-1">
-                          Market → model
+                          Drafters → us
                           <InfoTip
                             label="About the ranks"
-                            content="Positional rank by ADP, then by season value, counted only among players who have both. The gap is the first minus the second: positive means the model values him above where the market takes him."
+                            content="The player's rank at their position by draft position, then by our season value (only counting players who have both). A positive gap means we value the player more than drafters do."
                           />
                         </span>
                       </th>
@@ -180,8 +180,8 @@ export default function DraftBoardPage() {
             <Card className="overflow-hidden">
               <CardHeader
                 as="h2"
-                title={`In the market, not on the board (${board.market_only.length})`}
-                description="Drafted players the model cannot value, and why. Before a season these are mostly rookies, who have no usage window and so no projection."
+                title={`Being drafted, but we cannot value them (${board.market_only.length})`}
+                description="Players being drafted that we cannot value, and why. Before the season these are mostly rookies, who have no past games to project from."
               />
               {/* Focusable, because it scrolls and holds nothing else a keyboard
                   can land on — without a tab stop it could not be scrolled at all. */}
@@ -206,8 +206,8 @@ export default function DraftBoardPage() {
             <Card className="overflow-hidden">
               <CardHeader
                 as="h2"
-                title="On the board, not in the market"
-                description="The pool's highest season values that the ADP window did not draft at all."
+                title="We value them, drafters are skipping them"
+                description="Our highest-valued players who were not drafted at all in the ADP data."
               />
               <ul className="divide-line max-h-96 divide-y overflow-y-auto">
                 {board.unpriced.map((p) => (

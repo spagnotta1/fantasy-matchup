@@ -142,8 +142,8 @@ export default function PlayersPage() {
               filtered
                 ? 'Try a different position, team or search term.'
                 : data.meta.model === null
-                  ? 'No model run has been published for this week yet. Projections appear once the weekly job runs.'
-                  : 'The published run holds no players for this week.'
+                  ? 'Projections for this week are not out yet. They appear after the weekly update runs.'
+                  : "This week's projections do not include any players."
             }
             action={
               filtered ? (

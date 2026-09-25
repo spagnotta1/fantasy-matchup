@@ -40,9 +40,9 @@ test('the track record sets live coverage beside its nominal rate and the valida
 
   const headline = page.getByText('Inside the 80% range')
   await expect(headline).toBeVisible()
-  await expect(page.getByText(/Nominal 80%\. The frozen validation measured/)).toBeVisible()
+  await expect(page.getByText(/Target 80%\. When the model was first tested/)).toBeVisible()
   // The two caveats that make the number mean what it says.
-  await expect(page.getByText(/backfilling the frozen model/)).toBeVisible()
+  await expect(page.getByText(/backfilling the model/)).toBeVisible()
   await expect(page.getByText(/did not play is excluded, not counted as zero/)).toBeVisible()
 })
 
@@ -91,7 +91,7 @@ test('the lines tab lists every game on the schedule, and says the model ignores
   await page.goto('/matchups?view=lines')
   await settle(page)
 
-  await expect(page.getByText(/excludes market features/).first()).toBeVisible()
+  await expect(page.getByText(/does not use betting lines|not an input to the projection model/).first()).toBeVisible()
   const rows = page.locator('main table tbody tr')
   await expect(rows.first()).toBeVisible()
 })

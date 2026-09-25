@@ -777,7 +777,7 @@ def explain_pick(pick_position: str, name: str, rationale: object) -> str:
             clauses.append(
                 f"and would still be there at #{rationale.next_pick_overall} in "
                 f"{rationale.survival_at_next_pick:.0%} of simulations, so this "
-                "is a value call rather than a scarcity one"
+                "pick is about value rather than beating others to the player"
             )
         if rationale.next_best_player_name:
             clauses.append(

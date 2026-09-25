@@ -254,22 +254,22 @@ export function presentError(error: unknown): {
       return {
         title: "Can't reach the service",
         description:
-          'Your device is online but the projections service did not respond. This is usually temporary.',
+          'The projections service did not respond. This is usually temporary.',
         canRetry: true,
         operatorDetail,
       }
     case 'timeout':
       return {
         title: 'This is taking longer than expected',
-        description: 'The request timed out before the service answered. Try again.',
+        description: 'The service took too long to answer. Try again.',
         canRetry: true,
         operatorDetail,
       }
     case 'unavailable':
       return {
-        title: 'This data is being rebuilt',
+        title: 'Data is updating',
         description:
-          "The weekly data behind this view hasn't finished publishing yet. It usually returns within a few minutes.",
+          "This week's data is still being updated. It's usually back within a few minutes.",
         canRetry: true,
         operatorDetail,
       }
@@ -293,7 +293,7 @@ export function presentError(error: unknown): {
     case 'contract':
       return {
         title: 'Unexpected response',
-        description: 'The service replied with something this version of the app cannot read.',
+        description: 'The service sent back something this version of the app does not understand. Try refreshing the page.',
         canRetry: true,
         operatorDetail,
       }
