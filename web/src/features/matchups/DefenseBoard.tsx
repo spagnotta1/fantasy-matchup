@@ -7,6 +7,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton'
 import { EmptyState, ErrorState, Refreshing } from '@/components/feedback/States'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
+import { TeamLink } from '@/components/domain/TeamLink'
 import { usePositions } from '@/hooks/useCatalog'
 import { useDefenseRankings } from '@/hooks/useMatchups'
 import { useUrlState } from '@/hooks/useUrlState'
@@ -190,7 +191,7 @@ export function DefenseBoard() {
                       {row.matchup.grade.defense_rank ?? '—'}
                     </td>
                     <th scope="row" className="text-ink px-3 py-2 text-left text-sm font-medium">
-                      {row.team}
+                      <TeamLink team={row.team} />
                     </th>
                     <td className="tnum text-ink px-3 py-2 text-right font-medium">
                       {formatPoints(row.matchup.fp_allowed_l4)}

@@ -159,7 +159,8 @@ test('a large board draws its top rows, reveals the rest on request, and stays i
   expect(links, 'the explorer should carry the whole slate').toBeGreaterThan(300)
 
   // Interaction after a big render must still be prompt.
-  const search = page.getByLabel(/search/i).first()
+  // By role and name: the header's command palette is also labelled "search".
+  const search = page.getByRole('searchbox', { name: /search players/i })
   const started = Date.now()
   await search.fill('Jefferson')
   await expect(page.locator('a[href^="/players/"]')).not.toHaveCount(links)

@@ -537,6 +537,29 @@ before this one" for completed and upcoming weeks alike, keeps the lag rule the
 whole feature layer obeys, and costs an aggregation over ~2,300 rows per
 season. No new materialized view was needed to answer the headline question.
 
+### Usage and injuries for an upcoming week come from where they live
+
+The same trap, twice more. `feat_player_usage` is built from completed games,
+so it has no row for the week being projected either — and the board joined
+usage *and* the injury designation from it alone. On the 2026 week 2 board that
+meant usage for 22 of 639 players and an injury block for none. Worse, "Out"
+could never appear on any board: a player ruled out does not play, so he never
+got the usage row that carried the designation.
+
+An upcoming week now reads usage from `feat_upcoming_slate` — the relation the
+model scores it from, so the window shown is the one the projection used — and
+its injury designation, practice status and the injury itself from the week's
+official report in `raw_injuries` (latest revision per player). Both joins are
+conditional on the relation existing and ride in the same batched existence
+check. The 2026 week 2 board now carries usage for 636 of 639 players and 62
+injury reports, 10 of them Out; row counts are unchanged, and the projection is
+untouched — `injury_multiplier` stays NULL.
+
+`*_trend` is the four-game average **minus** the most recent game, so a positive
+value is a shrinking role; the feature comment said the opposite and has been
+corrected. The model was fitted on this sign, so the feature is kept and the
+usage-trends view negates it for reading.
+
 ### What the grade actually claims
 
 A matchup grade is a **rank percentile**, so by construction about 2.5 defences
@@ -681,6 +704,8 @@ GET /api/v1/weeks/{week}                 a week: schedule + is there a board yet
 GET /api/v1/matchups/{game_id}           one game, both sides, per position
 GET /api/v1/defense-rankings             which defences to attack
 GET /api/v1/teams/{team}/outlook         a team's week
+GET /api/v1/schedule-strength?position=  every team's remaining opponents, graded
+GET /api/v1/track-record                 stored projections graded against outcomes
 GET /api/v1/start-sit?player_a=&player_b= head-to-head call
 GET /api/v1/compare?player_ids=          up to six players
 GET /api/v1/meta/model                   the frozen foundation, audited
@@ -694,6 +719,7 @@ GET /api/v1/health/ready                 dependencies — the load balancer's
 POST /api/v1/mock-draft/analyze          one draft position, simulated
 POST /api/v1/mock-draft/compare          every draft position, ranked
 GET  /api/v1/mock-draft/config           bounds, and which seasons can be drafted
+GET  /api/v1/mock-draft/value-board      the draft pool beside the market's ADP
 ```
 
 Every response is `{"data": ..., "meta": ...}`. `meta` carries the resolved
@@ -711,6 +737,39 @@ missing — a matview needs `jobs run build_features`, a warehouse view needs
 matters most on a fresh deployment: the default week resolves against
 `upcoming_games`, so before the pipeline has ever run *every* endpoint fails at
 once, and "run the pipeline" is the only useful thing to say.
+
+### Track record, schedule strength and the value board
+
+**`/track-record`** grades every published run's stored projections against
+the recorded outcome of the same player-week, in one `GROUPING SETS` pass
+(overall, position, season, season × position, week, projection band).
+Half-PPR, 2018–2026, 45,974 graded player-weeks:
+
+| | all | QB | RB | WR | TE |
+|---|---|---|---|---|---|
+| inside P10–P90 (nominal 0.80) | 0.791 | 0.762 | 0.794 | 0.795 | 0.796 |
+| inside P25–P75 (nominal 0.50) | 0.497 | 0.473 | 0.501 | 0.497 | 0.505 |
+| mean absolute error | 4.34 | 6.54 | 4.50 | 4.20 | 3.22 |
+
+Bias is −0.05 overall, but it is not flat by projection band: +1.05 at 20–25
+projected points and +3.76 above 25 (378 and fewer player-weeks) — the top of
+the board runs high. The frozen validation record rides alongside in the
+response as a *different* measurement, never substituted for this one. A
+projected player with no stat line did not play and is excluded rather than
+scored as zero, and the historical runs are backfills rather than live
+publishes; both are stated in `meta.notices`.
+
+**`/schedule-strength`** applies `grade_matchup` and the trailing four-game
+window to every remaining regular-season opponent. The grade is form as of the
+selected week, carried forward — the notices say it is not a forecast — and
+below three games a defence stays ungraded, so early-season tables are mostly
+withheld.
+
+**`/mock-draft/value-board`** puts the mock draft's own pool (season value,
+`derived`) beside observed ADP (`context`). Ranks are compared within position
+and only among players both lists hold: overall ranks would make every
+quarterback a bargain, and ranking the market over rookies the pool cannot
+value would make every veteran one.
 
 ### Deliberate response behaviours
 
@@ -1358,6 +1417,10 @@ Nothing here is asserted without a check that fails loudly:
 | Spread sign survives features | `corr(team_spread, margin)` | +0.449, matching `game_team` |
 | Implied totals | `home + away == total` | 0 violations |
 | Snapshot change detection | run `refresh_odds` twice | 17 written, then 0 |
+| Whole slate in one page | `total` vs `returned`, 2026 wk 2 | 639 of 639 (was 500 of 639 at the old 500 cap) |
+| Upcoming-week context | usage / injury blocks, 2026 wk 2 | usage 636/639 (was 22), injury reports 62 (was 0) |
+| Track record | `/track-record`, half-PPR, 2018–2026 | P10–P90 coverage 0.791, P25–P75 0.497, 45,974 player-weeks |
+| Board render cost | Playwright, 4× CPU throttle, `/players` | 18,447 → 4,010 DOM nodes; 1,343 → 745 ms blocking |
 | Python ≡ SQL scoring | both renderers, 5 profiles | exact over 20,000 player-weeks |
 | Components ≡ points | score lagged components vs `fp_half_ppr_l4` | **0 mismatches** / 56,518 |
 | Walk-forward has no leakage | re-check every fold's rows | enforced per fold, unit-tested |

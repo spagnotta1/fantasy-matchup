@@ -14,11 +14,12 @@
  * here.
  */
 
-import { request, DRAFT_TIMEOUT_MS } from './client'
+import { request, DRAFT_TIMEOUT_MS, LONG_TIMEOUT_MS } from './client'
 import {
   draftAnalysisSchema,
   draftComparisonSchema,
   draftConfigSchema,
+  valueBoardSchema,
   type DraftAnalysisRequest,
   type DraftRequest,
 } from './schemas'
@@ -42,5 +43,23 @@ export function compareDraftPositions(body: DraftRequest, signal?: AbortSignal) 
     body,
     signal,
     timeoutMs: DRAFT_TIMEOUT_MS,
+  })
+}
+
+/**
+ * The draft pool beside the market's ADP.
+ *
+ * A GET, unlike the simulations: it runs no drafts, only builds the pool the
+ * drafts would run on — which is still a few seconds cold, so it takes the
+ * long budget rather than the default one.
+ */
+export function getValueBoard(
+  params: { season: number; scoringProfile?: string | null },
+  signal?: AbortSignal,
+) {
+  return request('/mock-draft/value-board', valueBoardSchema, {
+    signal,
+    params: { season: params.season, scoring_profile: params.scoringProfile },
+    timeoutMs: LONG_TIMEOUT_MS,
   })
 }

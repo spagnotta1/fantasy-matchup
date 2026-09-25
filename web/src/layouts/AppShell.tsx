@@ -5,6 +5,7 @@ import { RouteChrome } from '@/app/RouteChrome'
 import { SlateProvider } from '@/app/SlateProvider'
 import { SkeletonCards, SkeletonTable } from '@/components/ui/Skeleton'
 
+import { CommandPalette } from './CommandPalette'
 import { MobileNav, Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 
@@ -68,6 +69,7 @@ export function AppShell() {
         </div>
 
         <MobileNav />
+        <CommandPalette />
       </div>
     </SlateProvider>
   )

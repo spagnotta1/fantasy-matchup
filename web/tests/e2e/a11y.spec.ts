@@ -26,6 +26,14 @@ const ROUTES = [
   { path: '/mock-draft', name: 'mock draft' },
   { path: '/compare', name: 'compare' },
   { path: '/settings', name: 'settings' },
+  { path: '/teams', name: 'teams' },
+  { path: '/teams/KC', name: 'team (KC)' },
+  { path: '/injuries', name: 'injury report' },
+  { path: '/usage', name: 'usage trends' },
+  { path: '/track-record', name: 'track record' },
+  { path: '/draft-board', name: 'draft board' },
+  { path: '/matchups?view=lines', name: 'matchups (lines)' },
+  { path: '/matchups?view=schedule', name: 'matchups (schedule)' },
   { path: '/no-such-page', name: '404' },
 ]
 

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { TeamLink } from '@/components/domain/TeamLink'
 import { ArrowLeft } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
@@ -49,7 +50,12 @@ export function PlayerHero({
           <h1 className="text-ink text-2xl font-semibold tracking-tight">{player.name}</h1>
           <p className="text-ink-secondary mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <span>
-              {player.position} — {projection?.team ?? player.team ?? 'Free agent'}
+              {player.position} —{' '}
+              {projection?.team ?? player.team ? (
+                <TeamLink team={projection?.team ?? player.team} />
+              ) : (
+                'Free agent'
+              )}
             </span>
             {projection?.opponent && (
               <>
@@ -57,7 +63,8 @@ export function PlayerHero({
                   ·
                 </span>
                 <span>
-                  Week {projection.week} {projection.is_home ? 'vs' : 'at'} {projection.opponent}
+                  Week {projection.week} {projection.is_home ? 'vs' : 'at'}{' '}
+                  <TeamLink team={projection.opponent} />
                 </span>
               </>
             )}

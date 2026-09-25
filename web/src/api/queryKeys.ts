@@ -7,6 +7,7 @@
  * board without knowing what filters are in flight.
  */
 
+import type { TrackRecordParams } from './insights'
 import type { BoardParams, SlateParams } from './projections'
 import type { PlayerListParams } from './players'
 import type { DraftAnalysisRequest, DraftRequest, SimulationRequest } from './schemas'
@@ -60,6 +61,14 @@ export const queryKeys = {
       [...queryKeys.matchups.all, 'team-outlook', team, params] as const,
   },
 
+  insights: {
+    all: ['insights'] as const,
+    trackRecord: (params: TrackRecordParams) =>
+      [...queryKeys.insights.all, 'track-record', params] as const,
+    scheduleStrength: (position: string, season: number | null, week: number | null) =>
+      [...queryKeys.insights.all, 'schedule-strength', position, season, week] as const,
+  },
+
   advice: {
     all: ['advice'] as const,
     startSit: (a: string, b: string, params: SlateParams) =>
@@ -82,6 +91,8 @@ export const queryKeys = {
   draft: {
     all: ['draft'] as const,
     config: () => [...queryKeys.draft.all, 'config'] as const,
+    valueBoard: (season: number, scoringProfile: string | null) =>
+      [...queryKeys.draft.all, 'value-board', season, scoringProfile] as const,
     analyze: (request: DraftAnalysisRequest) =>
       [...queryKeys.draft.all, 'analyze', request] as const,
     compare: (request: DraftRequest) => [...queryKeys.draft.all, 'compare', request] as const,

@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { useHealth } from '@/hooks/useCatalog'
 import { cn } from '@/utils/cn'
 
-import { NAV_ITEMS } from './navigation'
+import { NAV_ITEMS, navGroups } from './navigation'
 
 /** The wordmark. Distinct from any league product, and the same in both themes. */
 function Wordmark() {
@@ -61,35 +61,47 @@ export function Sidebar() {
     >
       <Wordmark />
 
-      <ul className="flex flex-1 flex-col gap-0.5 px-3">
-        {NAV_ITEMS.map((item) => (
-          <li key={item.to}>
-            <NavLink
-              to={item.to}
-              end={item.to === '/'}
-              title={item.description}
-              className={({ isActive }) =>
-                cn(
-                  'group flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-accent-soft text-accent-text'
-                    : 'text-ink-secondary hover:bg-surface-hover hover:text-ink',
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <item.icon
-                    aria-hidden
-                    className={cn('size-4 shrink-0', isActive ? 'text-accent-text' : 'text-ink-muted')}
-                  />
-                  {item.label}
-                </>
-              )}
-            </NavLink>
-          </li>
+      <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-3">
+        {navGroups().map(({ group, label, items }) => (
+          <div key={group}>
+            <p className="text-ink-muted mb-1 px-3 text-[0.6875rem] font-medium tracking-wide uppercase">
+              {label}
+            </p>
+            <ul className="flex flex-col gap-0.5">
+              {items.map((item) => (
+                <li key={item.to}>
+                  <NavLink
+                    to={item.to}
+                    end={item.to === '/'}
+                    title={item.description}
+                    className={({ isActive }) =>
+                      cn(
+                        'group flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'bg-accent-soft text-accent-text'
+                          : 'text-ink-secondary hover:bg-surface-hover hover:text-ink',
+                      )
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <item.icon
+                          aria-hidden
+                          className={cn(
+                            'size-4 shrink-0',
+                            isActive ? 'text-accent-text' : 'text-ink-muted',
+                          )}
+                        />
+                        {item.label}
+                      </>
+                    )}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
         ))}
-      </ul>
+      </div>
 
       <ServiceStatus />
     </nav>
@@ -100,8 +112,8 @@ export function Sidebar() {
  * The mobile bar.
  *
  * Fixed to the bottom, five destinations, generous targets, and padded for the
- * home indicator. Compare and Settings are reachable from the header rather
- * than crammed in here.
+ * home indicator. Everything else is in the header's menu rather than crammed
+ * in here.
  */
 export function MobileNav() {
   const items = NAV_ITEMS.filter((item) => item.primary)

@@ -20,6 +20,11 @@ const ComparePage = lazy(() => import('@/pages/ComparePage'))
 const SimulationPage = lazy(() => import('@/pages/SimulationPage'))
 const MockDraftPage = lazy(() => import('@/pages/MockDraftPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
+const TeamsPage = lazy(() => import('@/pages/TeamsPage'))
+const InjuriesPage = lazy(() => import('@/pages/InjuriesPage'))
+const UsagePage = lazy(() => import('@/pages/UsagePage'))
+const TrackRecordPage = lazy(() => import('@/pages/TrackRecordPage'))
+const DraftBoardPage = lazy(() => import('@/pages/DraftBoardPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 
 export const router = createBrowserRouter([
@@ -42,6 +47,13 @@ export const router = createBrowserRouter([
       { path: 'compare', element: <ComparePage /> },
       { path: 'simulation', element: <SimulationPage /> },
       { path: 'mock-draft', element: <MockDraftPage /> },
+      // Optional segment, one route: moving between teams is a param change on
+      // a mounted page, not a remount (see the rankings note above).
+      { path: 'teams/:team?', element: <TeamsPage /> },
+      { path: 'injuries', element: <InjuriesPage /> },
+      { path: 'usage', element: <UsagePage /> },
+      { path: 'track-record', element: <TrackRecordPage /> },
+      { path: 'draft-board', element: <DraftBoardPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
