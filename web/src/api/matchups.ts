@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { request } from './client'
 import {
+  depthChartSchema,
   gameSchema,
   matchupAnalysisSchema,
   positionMatchupSchema,
@@ -51,5 +52,13 @@ export function getTeamOutlook(team: string, params: SlateParams = {}, signal?: 
   return request(`/teams/${encodeURIComponent(team)}/outlook`, teamOutlookSchema, {
     signal,
     params: slateQuery(params),
+  })
+}
+
+/** A team's offensive depth chart going into the slate's week. Context, not applied. */
+export function getDepthChart(team: string, params: Pick<SlateParams, 'season' | 'week'> = {}, signal?: AbortSignal) {
+  return request(`/teams/${encodeURIComponent(team)}/depth-chart`, depthChartSchema, {
+    signal,
+    params: { season: params.season, week: params.week },
   })
 }

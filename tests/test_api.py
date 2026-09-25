@@ -696,12 +696,35 @@ class TestOperational:
         assert body["database"] is True
         assert body["checks"]["database"] == "ok"
 
-    async def test_readiness_never_fails_on_the_cache(self, client):
+    @pytest.mark.parametrize(
+        ("backend", "state"),
+        [
+            # Declining a cache is a decision: `disabled`.
+            ("null", "disabled"),
+            # Asking for Redis without a URL is a mistake: `misconfigured`. This
+            # test used to read whatever the ambient default was, which became
+            # `redis` when the two states were split — so it asserted
+            # `disabled` against a process that was, correctly, misconfigured.
+            ("redis", "misconfigured"),
+        ],
+    )
+    async def test_readiness_never_fails_on_the_cache(self, client, monkeypatch, backend, state):
         """Taking a working API offline to protect an optimisation is
-        backwards. With no cache configured the state is `disabled`, which is
-        a supported deployment rather than a degraded one."""
-        body = (await client.get(url("/health/ready"))).json()
-        assert body["cache"] == "disabled"
+        backwards. Neither a declined cache nor a missing one fails readiness;
+        the report says which it is."""
+        from nflfp.cache import reset_cache
+        from nflfp.config import get_settings
+
+        monkeypatch.setenv("CACHE_BACKEND", backend)
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        get_settings.cache_clear()
+        reset_cache()
+        try:
+            body = (await client.get(url("/health/ready"))).json()
+        finally:
+            get_settings.cache_clear()
+            reset_cache()
+        assert body["cache"] == state
         assert body["status"] == "ok"
 
     async def test_every_response_is_correlated_and_timed(self, client):
@@ -808,3 +831,354 @@ class TestOperational:
         body = (await client.get("/")).json()
         assert body["api"] == API_PREFIX
         assert body["model"] == "shrinkage_eb"
+
+
+# ---------------------------------------------------------------------------
+# Track record and strength of schedule
+# ---------------------------------------------------------------------------
+
+#: The completed week the track record grades. The stub records a stat line for
+#: every player in weeks 1-9, all scoring ``12.5 + week`` in half-PPR.
+GRADED_WEEK = UPCOMING_WEEK - 1
+GRADED_ACTUAL = 12.5 + GRADED_WEEK
+
+
+async def publish_completed_week(session) -> None:
+    """Store a published run for a week that has already been played.
+
+    Floors and ceilings are the stub's own shape (expected -7 / +9.2), which
+    puts the tight end's 9.6 projection's ceiling at 18.8 — below the 21.5 he
+    scored — and everyone else's range around it.
+    """
+    run_id = (
+        await session.execute(
+            text(
+                "INSERT INTO model_runs (model_name, model_version, algorithm, season,"
+                " week, status, feature_schema_version, published_at, created_at,"
+                " updated_at) VALUES ('shrinkage_eb', '1.0.0', 'baseline', :s, :w,"
+                " 'published', 1, now(), now(), now()) RETURNING id"
+            ),
+            {"s": SEASON, "w": GRADED_WEEK},
+        )
+    ).scalar_one()
+    for player_id, _, position, team, expected in PLAYERS:
+        projection_id = (
+            await session.execute(
+                text(
+                    "INSERT INTO projections (model_run_id, player_id, season, week,"
+                    " game_id, team, opponent, position, is_home, created_at, updated_at)"
+                    " VALUES (:r, :i, :s, :w, :g, :t, :o, :p, false, now(), now())"
+                    " RETURNING id"
+                ),
+                {
+                    "r": run_id,
+                    "i": player_id,
+                    "s": SEASON,
+                    "w": GRADED_WEEK,
+                    "g": f"{SEASON}_{GRADED_WEEK}_BUF_KC",
+                    "t": team,
+                    "o": "BUF" if team == "KC" else "KC",
+                    "p": position,
+                },
+            )
+        ).scalar_one()
+        await session.execute(
+            text(
+                "INSERT INTO projection_points (projection_id, scoring_profile,"
+                " predicted_points, expected_points, floor_points, p25_points,"
+                " median_points, p75_points, ceiling_points, standard_deviation,"
+                " confidence, boom_probability, bust_probability, boom_threshold,"
+                " bust_threshold, calibration_method, distribution_samples, extrapolated)"
+                " VALUES (:p, 'half_ppr', :e, :e, :f, :q1, :e, :q3, :c, 6.4, 0.7, 0.2,"
+                " 0.1, 20.0, 5.0, 'heldout_residual_quantiles_v1', 1200, false)"
+            ),
+            {
+                "p": projection_id,
+                "e": expected,
+                "f": expected - 7.0,
+                "q1": expected - 3.5,
+                "q3": expected + 3.8,
+                "c": expected + 9.2,
+            },
+        )
+    await session.commit()
+
+
+class TestTrackRecord:
+    async def test_only_weeks_with_outcomes_are_graded(self, client, async_db_session):
+        await publish_completed_week(async_db_session)
+        response = await client.get(url("/track-record"), params={"scoring_profile": "half_ppr"})
+        assert response.status_code == 200
+        data = response.json()["data"]
+        # The week 10 run has no stat lines yet and must contribute nothing.
+        assert data["overall"]["graded"] == len(PLAYERS)
+        assert data["seasons"] == [SEASON]
+        assert [(w["season"], w["week"]) for w in data["weekly"]] == [(SEASON, GRADED_WEEK)]
+
+    async def test_coverage_counts_outcomes_inside_the_stored_range(self, client, async_db_session):
+        await publish_completed_week(async_db_session)
+        overall = (
+            await client.get(url("/track-record"), params={"scoring_profile": "half_ppr"})
+        ).json()["data"]["overall"]
+        assert overall["coverage_80"] == pytest.approx(0.75)
+        expected_bias = sum(p[4] - GRADED_ACTUAL for p in PLAYERS) / len(PLAYERS)
+        assert overall["bias"] == pytest.approx(expected_bias)
+        assert overall["provenance"] == Provenance.DERIVED.value
+
+    async def test_the_scorecard_orders_beats_by_size_and_labels_both_sides(
+        self, client, async_db_session
+    ):
+        await publish_completed_week(async_db_session)
+        card = (
+            await client.get(url("/track-record"), params={"scoring_profile": "half_ppr"})
+        ).json()["data"]["scorecard"]
+        assert (card["season"], card["week"]) == (SEASON, GRADED_WEEK)
+        assert [o["name"] for o in card["beats"]][0] == "Charlie End"
+        assert card["beats"][0]["inside_range"] is False
+        assert all(o["actual"] == pytest.approx(GRADED_ACTUAL) for o in card["beats"])
+
+    async def test_it_carries_the_validation_record_beside_the_live_one(self, client):
+        response = await client.get(url("/track-record"))
+        payload = response.json()
+        assert payload["data"]["validation"]["nominal_80"] == pytest.approx(0.80)
+        assert any("backfilling" in n for n in payload["meta"]["notices"])
+        assert any("did not play" in n for n in payload["meta"]["notices"])
+
+
+class TestScheduleStrength:
+    async def test_every_remaining_week_is_laid_out_per_team(self, client):
+        response = await client.get(
+            url("/schedule-strength"),
+            params={"season": SEASON, "week": UPCOMING_WEEK, "position": "WR"},
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["weeks"] == [UPCOMING_WEEK]
+        assert {t["team"] for t in data["teams"]} == {"KC", "BUF"}
+        kc = next(t for t in data["teams"] if t["team"] == "KC")
+        # BUF has nine games of WR history, so KC's receivers get a real grade.
+        assert kc["cells"][0]["opponent"] == "BUF"
+        assert kc["cells"][0]["grade"]["graded"] is True
+
+    async def test_a_defence_with_no_history_at_the_position_is_not_graded(self, client):
+        data = (
+            await client.get(
+                url("/schedule-strength"),
+                params={"season": SEASON, "week": UPCOMING_WEEK, "position": "WR"},
+            )
+        ).json()["data"]
+        buf = next(t for t in data["teams"] if t["team"] == "BUF")
+        grade = buf["cells"][0]["grade"]
+        assert grade["graded"] is False and grade["reason"]
+        assert buf["mean_score"] is None
+
+    async def test_it_says_the_grade_is_carried_forward(self, client):
+        payload = (
+            await client.get(
+                url("/schedule-strength"), params={"season": SEASON, "position": "RB"}
+            )
+        ).json()
+        assert any("not a forecast" in n for n in payload["meta"]["notices"])
+
+    async def test_an_unprojected_position_is_refused(self, client):
+        response = await client.get(
+            url("/schedule-strength"), params={"season": SEASON, "position": "K"}
+        )
+        assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# The upcoming week's usage and injury report
+# ---------------------------------------------------------------------------
+
+
+class TestUpcomingWeekContext:
+    """An upcoming week reads usage and injuries from where they actually live.
+
+    ``feat_player_usage`` has no row for a week not yet played, so a board read
+    only from it came back with empty usage and — because a player ruled out
+    never plays — with no "Out" designation ever. These stage the two sources an
+    upcoming week really has and check the board carries them.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _fresh_relation_cache(self):
+        # Existence checks are cached process-wide for a minute. These tests
+        # create relations mid-test, so the cache must not carry "exists" into
+        # a later test whose throwaway schema never had them.
+        from nflfp.services.repository import clear_relation_cache
+
+        clear_relation_cache()
+        yield
+        clear_relation_cache()
+
+    async def test_the_weeks_injury_report_reaches_the_board(self, client, async_db_session):
+        from nflfp.services.repository import clear_relation_cache
+
+        await async_db_session.execute(
+            text(
+                "CREATE TABLE raw_injuries (season int, week int, gsis_id text,"
+                " report_status text, practice_status text, report_primary_injury text,"
+                " date_modified timestamptz)"
+            )
+        )
+        # Two revisions: the later one is the designation that stood.
+        for status, modified in (("Questionable", "2025-11-05"), ("Out", "2025-11-07")):
+            await async_db_session.execute(
+                text(
+                    "INSERT INTO raw_injuries VALUES (:s, :w, :i, :st,"
+                    " 'Did Not Participate In Practice', 'Hamstring', :m)"
+                ),
+                {"s": SEASON, "w": UPCOMING_WEEK, "i": PLAYERS[3][0], "st": status, "m": modified},
+            )
+        await async_db_session.commit()
+        clear_relation_cache()
+
+        data = (await client.get(url("/projections"), params={"season": SEASON})).json()["data"]
+        by_id = {e["projection"]["player"]["player_id"]: e["projection"] for e in data}
+        injury = by_id[PLAYERS[3][0]]["context"]["injury"]
+        assert injury["report_status"] == "Out"
+        assert injury["detail"] == "Hamstring"
+        assert injury["will_not_play"] is True
+        # A hard caveat, never a zeroed number: the projection is untouched.
+        assert by_id[PLAYERS[3][0]]["prediction"]["points"]["expected"] > 0
+        assert injury["applied_to_projection"] is False
+        assert len(data) == len(PLAYERS)
+
+    async def test_usage_falls_back_to_the_upcoming_slate(self, client, async_db_session):
+        from nflfp.services.repository import clear_relation_cache
+
+        await async_db_session.execute(text("DELETE FROM feat_player_usage"))
+        await async_db_session.execute(
+            text(
+                "CREATE TABLE feat_upcoming_slate (player_id text, season int, week int,"
+                " snap_pct_l4 double precision, target_share_l4 double precision,"
+                " targets_l4 double precision, carries_l4 double precision,"
+                " receptions_l4 double precision, opportunities_l4 double precision,"
+                " air_yards_share_l4 double precision, wopr_l4 double precision,"
+                " snap_pct_season double precision, games_played_season int,"
+                " games_in_window_l4 int, fp_half_ppr_l4 double precision,"
+                " fp_half_ppr_season double precision, fp_volatility_l4 double precision,"
+                " snap_pct_trend double precision, target_share_trend double precision,"
+                " injury_report_status text, injury_practice_status text)"
+            )
+        )
+        await async_db_session.execute(
+            text(
+                "INSERT INTO feat_upcoming_slate (player_id, season, week, snap_pct_l4,"
+                " snap_pct_trend) VALUES (:i, :s, :w, 0.91, -0.05)"
+            ),
+            {"i": PLAYERS[0][0], "s": SEASON, "w": UPCOMING_WEEK},
+        )
+        await async_db_session.commit()
+        clear_relation_cache()
+
+        data = (await client.get(url("/projections"), params={"season": SEASON})).json()["data"]
+        usage = {e["projection"]["player"]["player_id"]: e["projection"]["usage"] for e in data}
+        assert usage[PLAYERS[0][0]]["snap_pct_l4"] == pytest.approx(0.91)
+        assert usage[PLAYERS[0][0]]["snap_pct_trend"] == pytest.approx(-0.05)
+        assert usage[PLAYERS[1][0]]["snap_pct_l4"] is None
+
+
+# ---------------------------------------------------------------------------
+# Depth charts and live scoring
+# ---------------------------------------------------------------------------
+
+
+class TestDepthChart:
+    @pytest.fixture(autouse=True)
+    def _fresh_relation_cache(self):
+        from nflfp.services.repository import clear_relation_cache
+
+        clear_relation_cache()
+        yield
+        clear_relation_cache()
+
+    async def test_no_listing_is_an_empty_chart_with_a_notice(self, client):
+        response = await client.get(url("/teams/KC/depth-chart"), params={"season": SEASON})
+        assert response.status_code == 200
+        payload = response.json()
+        assert all(entries == [] for entries in payload["data"]["positions"].values())
+        assert payload["meta"]["notices"]
+
+    async def test_a_weekly_chart_is_ranked_within_position(self, client, async_db_session):
+        from nflfp.services.repository import clear_relation_cache
+
+        await async_db_session.execute(
+            text(
+                "CREATE TABLE raw_depth_charts (season int, week int, club_code text,"
+                " team text, formation text, game_type text, position text,"
+                " depth_team text, depth_position text, gsis_id text, full_name text,"
+                " football_name text, last_name text, dt text, pos_abb text,"
+                " pos_rank int, pos_grp text, player_name text)"
+            )
+        )
+        for depth, slot, pid, name in (("2", "X", "00-9", "Backup Receiver"), ("1", "X", PLAYERS[0][0], "Alpha Receiver")):
+            await async_db_session.execute(
+                text(
+                    "INSERT INTO raw_depth_charts (season, week, club_code, formation,"
+                    " game_type, position, depth_team, depth_position, gsis_id, full_name)"
+                    " VALUES (:s, :w, 'KC', 'Offense', 'REG', 'WR', :d, :slot, :pid, :n)"
+                ),
+                {"s": SEASON, "w": UPCOMING_WEEK, "d": depth, "slot": slot, "pid": pid, "n": name},
+            )
+        await async_db_session.commit()
+        clear_relation_cache()
+
+        data = (
+            await client.get(url("/teams/KC/depth-chart"), params={"season": SEASON})
+        ).json()["data"]
+        assert data["provenance"] == Provenance.CONTEXT.value
+        assert data["applied_to_projection"] is False
+        assert [(e["depth"], e["name"]) for e in data["positions"]["WR"]] == [
+            (1, "Alpha Receiver"),
+            (2, "Backup Receiver"),
+        ]
+
+
+class TestLiveScoring:
+    async def test_live_points_are_unofficial_and_sit_beside_the_projection(
+        self, client, async_db_session, monkeypatch
+    ):
+        from nflfp.providers.live import EspnLiveProvider, LiveGame, LiveLine, LiveWeek
+
+        # The stub dimension omits the id columns it never needed; the real
+        # nflverse players table carries espn_id.
+        await async_db_session.execute(text("ALTER TABLE raw_players ADD COLUMN espn_id text"))
+        await async_db_session.execute(
+            text("UPDATE raw_players SET espn_id = '555' WHERE gsis_id = :i"), {"i": PLAYERS[0][0]}
+        )
+        await async_db_session.commit()
+
+        def fake_fetch(self, season, week):
+            return LiveWeek(
+                games=[LiveGame("1", "BUF", "KC", "in", "Q3", "4:12", 3, 17, 10, None)],
+                lines=[LiveLine("555", "Alpha Receiver", "KC", "1", {"receptions": 5.0, "receiving_yards": 70.0})],
+            )
+
+        monkeypatch.setattr(EspnLiveProvider, "fetch_week", fake_fetch)
+        response = await client.get(
+            url("/live"), params={"season": SEASON, "week": UPCOMING_WEEK, "scoring_profile": "half_ppr"}
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        (player,) = payload["data"]["players"]
+        assert player["provenance"] == Provenance.ACTUAL.value
+        assert player["official"] is False
+        assert player["live_points"] == pytest.approx(9.5)
+        # The published projection, not a blend with the live number.
+        assert player["projected"] == pytest.approx(PLAYERS[0][4])
+        assert any("unofficial" in n for n in payload["meta"]["notices"])
+
+    async def test_an_unreachable_upstream_is_a_notice_not_an_error(self, client, monkeypatch):
+        from nflfp.providers.live import EspnLiveProvider, LiveWeek
+
+        monkeypatch.setattr(
+            EspnLiveProvider,
+            "fetch_week",
+            lambda self, season, week: LiveWeek(warnings=["scoreboard unavailable: timeout"]),
+        )
+        response = await client.get(url("/live"), params={"season": SEASON, "week": UPCOMING_WEEK})
+        assert response.status_code == 200
+        assert response.json()["data"]["games"] == []
+        assert any("could not be fetched" in n for n in response.json()["meta"]["notices"])

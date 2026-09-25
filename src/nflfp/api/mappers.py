@@ -10,6 +10,10 @@ lost its ``applied_to_projection`` flag.
 from __future__ import annotations
 
 from ..services import dto, simulation
+from ..services import depth as depth_service
+from ..services import live as live_service
+from ..services import schedule as schedule_service
+from ..services import track_record as track_record_service
 from ..services.draft import aggregate as draft_aggregate
 from ..services.draft import engine as draft_engine
 from ..services.draft import pool as draft_pool
@@ -651,4 +655,223 @@ def draft_comparison(
             elapsed_seconds=comparison.elapsed_seconds,
             settings=comparison.settings,
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Track record, strength of schedule, value board
+# ---------------------------------------------------------------------------
+
+
+def accuracy(source: track_record_service.Accuracy) -> schemas.AccuracyOut:
+    return schemas.AccuracyOut(
+        season=source.season,
+        week=source.week,
+        position=source.position,
+        band_low=source.band_low,
+        band_high=source.band_high,
+        graded=source.graded,
+        thin=source.thin,
+        mean_absolute_error=source.mean_absolute_error,
+        bias=source.bias,
+        interval_graded=source.interval_graded,
+        coverage_80=source.coverage_80,
+        coverage_50=source.coverage_50,
+        boom_predicted=source.boom_predicted,
+        boom_observed=source.boom_observed,
+        bust_predicted=source.bust_predicted,
+        bust_observed=source.bust_observed,
+    )
+
+
+def outcome(source: track_record_service.Outcome) -> schemas.OutcomeOut:
+    return schemas.OutcomeOut(
+        player_id=source.player_id,
+        name=source.name,
+        headshot_url=source.headshot_url,
+        position=source.position,
+        team=source.team,
+        opponent=source.opponent,
+        is_home=source.is_home,
+        projected=source.projected,
+        floor=source.floor,
+        ceiling=source.ceiling,
+        actual=source.actual,
+        difference=source.difference,
+        inside_range=source.inside_range,
+    )
+
+
+def track_record(
+    source: track_record_service.TrackRecord, validation: schemas.ValidationRecordOut
+) -> schemas.TrackRecordOut:
+    card = source.scorecard
+    return schemas.TrackRecordOut(
+        scoring_profile=source.scoring_profile,
+        season=source.season,
+        seasons=list(source.seasons),
+        overall=None if source.overall is None else accuracy(source.overall),
+        by_position=[accuracy(a) for a in source.by_position],
+        by_season=[accuracy(a) for a in source.by_season],
+        by_season_position=[accuracy(a) for a in source.by_season_position],
+        by_band=[accuracy(a) for a in source.by_band],
+        weekly=[accuracy(a) for a in source.weekly],
+        scorecard=(
+            None
+            if card is None
+            else schemas.ScorecardOut(
+                season=card.season,
+                week=card.week,
+                summary=None if card.summary is None else accuracy(card.summary),
+                beats=[outcome(o) for o in card.beats],
+                misses=[outcome(o) for o in card.misses],
+                min_projection=card.min_projection,
+            )
+        ),
+        validation=validation,
+    )
+
+
+def schedule_strength(source: schedule_service.ScheduleStrength) -> schemas.ScheduleStrengthOut:
+    return schemas.ScheduleStrengthOut(
+        season=source.season,
+        from_week=source.from_week,
+        position=source.position,
+        weeks=list(source.weeks),
+        teams=[
+            schemas.TeamScheduleOut(
+                team=team.team,
+                cells=[
+                    schemas.ScheduleCellOut(
+                        week=cell.week,
+                        opponent=cell.opponent,
+                        is_home=cell.is_home,
+                        game_id=cell.game_id,
+                        grade=None if cell.grade is None else schemas.matchup_grade_out(cell.grade),
+                        fp_allowed_l4=cell.fp_allowed_l4,
+                    )
+                    for cell in team.cells
+                ],
+                mean_score=team.mean_score,
+                graded_games=team.graded_games,
+                next_score=team.next_score,
+                playoff_score=team.playoff_score,
+            )
+            for team in source.teams
+        ],
+    )
+
+
+def draft_player(source: draft_pool.DraftPlayer) -> schemas.DraftPlayerOut:
+    return schemas.DraftPlayerOut(
+        player_id=source.player.player_id,
+        name=source.player.name,
+        position=source.position,
+        team=source.team,
+        projected_points_per_game=source.projected_points_per_game,
+        expected_games=source.expected_games,
+        season_value=source.season_value,
+        floor_per_game=source.floor_per_game,
+        ceiling_per_game=source.ceiling_per_game,
+        extrapolated=source.extrapolated,
+        historical=historical_evidence(source.historical),
+    )
+
+
+def value_board(source: draft_service.ValueBoardResult) -> schemas.ValueBoardOut:
+    board = source.board
+    market = board.market
+    return schemas.ValueBoardOut(
+        season=source.season,
+        scoring_profile=source.scoring_profile,
+        board_week=source.board_week,
+        season_games=source.season_games,
+        entries=[
+            schemas.ValueEntryOut(
+                player=draft_player(entry.player),
+                adp=entry.adp,
+                adp_formatted=entry.adp_formatted,
+                adp_high=entry.adp_high,
+                adp_low=entry.adp_low,
+                adp_stdev=entry.adp_stdev,
+                market_rank=entry.market_rank,
+                value_rank=entry.value_rank,
+                rank_gap=entry.rank_gap,
+            )
+            for entry in board.entries
+        ],
+        unpriced=[draft_player(p) for p in board.unpriced],
+        market_only=[
+            schemas.MarketOnlyOut(
+                name=m.name, position=m.position, team=m.team, adp=m.adp, reason=m.reason
+            )
+            for m in board.market_only
+        ],
+        market=(
+            None
+            if market is None
+            else schemas.MarketWindowOut(
+                total_drafts=market.total_drafts,
+                teams=market.teams,
+                window_start=market.window_start,
+                window_end=market.window_end,
+                is_preseason=market.is_preseason,
+            )
+        ),
+    )
+
+
+def depth_chart(source: depth_service.DepthChart) -> schemas.DepthChartOut:
+    return schemas.DepthChartOut(
+        unapplied_reason=depth_service.DEPTH_UNAPPLIED_REASON,
+        team=source.team,
+        season=source.season,
+        week=source.week,
+        as_of=source.as_of,
+        positions={
+            position: [
+                schemas.DepthEntryOut(depth=e.depth, player_id=e.player_id, name=e.name)
+                for e in entries
+            ]
+            for position, entries in source.positions.items()
+        },
+    )
+
+
+def live_slate(source: live_service.LiveSlate) -> schemas.LiveSlateOut:
+    return schemas.LiveSlateOut(
+        season=source.season,
+        week=source.week,
+        scoring_profile=source.scoring_profile,
+        games=[
+            schemas.LiveGameOut(
+                event_id=g.event_id,
+                home=g.home,
+                away=g.away,
+                state=g.state,
+                detail=g.detail,
+                clock=g.clock,
+                period=g.period,
+                home_score=g.home_score,
+                away_score=g.away_score,
+                kickoff=g.kickoff,
+            )
+            for g in source.games
+        ],
+        players=[
+            schemas.LivePlayerOut(
+                player_id=p.player_id,
+                name=p.name,
+                position=p.position,
+                team=p.team,
+                headshot_url=p.headshot_url,
+                event_id=p.event_id,
+                live_points=p.live_points,
+                projected=p.projected,
+                floor=p.floor,
+                ceiling=p.ceiling,
+                components=dict(p.components),
+            )
+            for p in source.players
+        ],
     )

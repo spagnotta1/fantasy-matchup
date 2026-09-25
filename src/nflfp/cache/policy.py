@@ -78,6 +78,19 @@ RULES: tuple[CacheRule, ...] = (
     CacheRule("/api/v1/rankings", 300, "same board, filtered"),
     CacheRule("/api/v1/defense-rankings", 300, "aggregate over the same slate"),
     CacheRule("/api/v1/matchups", 300, "reads the slate plus defensive form"),
+    # A ~46,000-row aggregate that changes only when a game completes or a run
+    # publishes; the publish half is covered by the epoch, so the TTL bounds
+    # how long a finished game waits to be graded.
+    CacheRule("/api/v1/track-record", 900, "historical aggregate; grows as games complete"),
+    CacheRule("/api/v1/schedule-strength", 300, "defensive form as of a week, like the matchups"),
+    # One upstream read a minute however many people are watching. Shorter
+    # would be "more live" and would make the public endpoint pay per viewer.
+    CacheRule("/api/v1/live", 60, "in-game box scores; bounds the upstream to one read a minute"),
+    CacheRule(
+        "/api/v1/mock-draft/value-board",
+        900,
+        "the week 1 pool and a draft-day ADP snapshot; both change only on publish or ingest",
+    ),
     # Listed with a TTL of zero so the table answers the question rather than
     # leaving it to the reader. `POST` never reaches the cache anyway — the
     # middleware handles `GET` only — and a simulation's inputs are two whole
@@ -133,3 +146,48 @@ def warmable_paths() -> tuple[str, ...]:
         "/api/v1/meta/model",
         "/api/v1/meta/positions",
     )
+
+
+#: The web client's board size. The warmer must request exactly what the client
+#: does — a cache key covers the whole normalised query string, so a board
+#: warmed at the default page size is a different entry from the one a browser
+#: asks for. Kept in step with ``FULL_SLATE_LIMIT`` in ``web/src/hooks``.
+CLIENT_BOARD_LIMIT = 1000
+
+
+def slate_paths(
+    *,
+    season: int,
+    week: int,
+    scoring_profiles: tuple[str, ...],
+    positions: tuple[str, ...],
+) -> tuple[str, ...]:
+    """The requests the web client makes for its opening slate.
+
+    :func:`warmable_paths` warms bare paths, and a bare path resolves the
+    *API's* default week and the default page size — neither of which is what
+    the client asks for. The client opens on the newest week with a published
+    board and names season, week, scoring profile and limit explicitly, so a
+    warm of the bare path populated a cache entry no browser ever read.
+
+    These are the client's own requests for that slate: every scoring profile's
+    board, position boards and track record, plus the profile-independent
+    schedule, defence and strength-of-schedule reads. Parameter order does not
+    matter — keys are normalised — but every parameter does.
+    """
+    slate = f"season={season}&week={week}"
+    paths: list[str] = [
+        f"/api/v1/weeks/{week}?season={season}",
+        f"/api/v1/games?{slate}",
+        f"/api/v1/defense-rankings?{slate}",
+    ]
+    for position in positions:
+        paths.append(f"/api/v1/defense-rankings?{slate}&position={position}")
+        paths.append(f"/api/v1/schedule-strength?{slate}&position={position}")
+    for profile in scoring_profiles:
+        board = f"{slate}&scoring_profile={profile}&limit={CLIENT_BOARD_LIMIT}"
+        paths.append(f"/api/v1/projections?{board}")
+        for position in positions:
+            paths.append(f"/api/v1/rankings/{position}?{board}")
+        paths.append(f"/api/v1/track-record?scoring_profile={profile}")
+    return tuple(paths)

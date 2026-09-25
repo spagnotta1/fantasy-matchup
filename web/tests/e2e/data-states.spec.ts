@@ -143,15 +143,24 @@ test('a player with no projection for the week does not break the detail view', 
   await expect(page.getByRole('link', { name: 'Rankings', exact: true }).first()).toBeVisible()
 })
 
-test('a large board renders fully and stays interactive', async ({ page }) => {
+test('a large board draws its top rows, reveals the rest on request, and stays interactive', async ({ page }) => {
   await page.goto('/players')
   await settle(page)
 
+  // The first paint is budgeted: a slate is several hundred players, and the
+  // board draws the top hundred until asked for more.
+  const budgeted = await page.locator('main tbody tr').count()
+  expect(budgeted, 'the first paint draws one budget of rows').toBeLessThanOrEqual(100)
+
+  // "Show all" is the escape hatch, and it must reach the whole slate.
+  await page.getByRole('button', { name: /^Show all \d+$/ }).click()
+  await expect(page.getByText(/^Showing all \d+ players\.$/)).toBeVisible()
   const links = await page.locator('a[href^="/players/"]').count()
   expect(links, 'the explorer should carry the whole slate').toBeGreaterThan(300)
 
   // Interaction after a big render must still be prompt.
-  const search = page.getByLabel(/search/i).first()
+  // By role and name: the header's command palette is also labelled "search".
+  const search = page.getByRole('searchbox', { name: /search players/i })
   const started = Date.now()
   await search.fill('Jefferson')
   await expect(page.locator('a[href^="/players/"]')).not.toHaveCount(links)

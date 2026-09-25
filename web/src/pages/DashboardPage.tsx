@@ -1,3 +1,5 @@
+import { useMemo } from 'react'
+
 import { PageHeader } from '@/components/ui/PageHeader'
 import { NoticeList, Refreshing } from '@/components/feedback/States'
 import { CalibrationNotice } from '@/components/domain/CalibrationNotice'
@@ -6,7 +8,7 @@ import { RiskOpportunity } from '@/features/dashboard/RiskOpportunity'
 import { SimulationCallout } from '@/features/dashboard/SimulationCallout'
 import { TopProjections } from '@/features/dashboard/TopProjections'
 import { WeekOverview } from '@/features/dashboard/WeekOverview'
-import { useBoard } from '@/hooks/useProjections'
+import { boardNotices, useBoard } from '@/hooks/useProjections'
 import { useSlate } from '@/app/slate-context'
 
 /**
@@ -25,6 +27,7 @@ import { useSlate } from '@/app/slate-context'
 export default function DashboardPage() {
   const slate = useSlate()
   const { data, isPlaceholderData } = useBoard()
+  const projections = useMemo(() => data?.data.map((entry) => entry.projection), [data])
 
   return (
     <>
@@ -37,8 +40,8 @@ export default function DashboardPage() {
       />
 
       <div className="mb-6 space-y-3">
-        <CalibrationNotice projections={data?.data.map((entry) => entry.projection)} />
-        {data && <NoticeList notices={data.meta.notices} />}
+        <CalibrationNotice projections={projections} />
+        {data && <NoticeList notices={boardNotices(data.meta)} />}
       </div>
 
       {/*

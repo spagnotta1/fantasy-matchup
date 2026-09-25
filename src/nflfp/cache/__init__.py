@@ -31,7 +31,7 @@ from .keys import (
     build_key,
     normalise_query,
 )
-from .policy import RULES, CacheRule, rule_for, ttl_for, warmable_paths
+from .policy import RULES, CacheRule, rule_for, slate_paths, ttl_for, warmable_paths
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,7 @@ __all__ = [
     "reset_cache",
     "rule_for",
     "ttl_for",
+    "slate_paths",
     "warmable_paths",
 ]
 

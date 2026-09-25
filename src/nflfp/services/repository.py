@@ -72,9 +72,15 @@ FEATURE_RELATIONS = (
     "feat_training_dataset",
 )
 
+#: Relations the read path uses when present and does without when absent —
+#: probed with :func:`relation_exists` rather than required. Listed so the probe
+#: rides in the same batched existence check as everything else instead of
+#: costing a cold request a round-trip of its own.
+OPTIONAL_RELATIONS = ("feat_upcoming_slate", "raw_injuries", "player_adp", "raw_depth_charts")
+
 #: Every relation the read path guards on, which is what makes one round-trip
 #: enough. See :func:`_load_relations`.
-KNOWN_RELATIONS = APP_RELATIONS + WAREHOUSE_RELATIONS + FEATURE_RELATIONS
+KNOWN_RELATIONS = APP_RELATIONS + WAREHOUSE_RELATIONS + FEATURE_RELATIONS + OPTIONAL_RELATIONS
 
 #: How long a relation-existence check is trusted, in seconds. Existence changes
 #: only when the pipeline runs, so re-asking on every request would be a
@@ -335,24 +341,7 @@ _PROJECTION_COLUMNS = """
         pl.years_of_experience,
         pl.college_name,
 
-        u.snap_pct_l4,
-        u.target_share_l4,
-        u.targets_l4,
-        u.carries_l4,
-        u.receptions_l4,
-        u.opportunities_l4,
-        u.air_yards_share_l4,
-        u.wopr_l4,
-        u.snap_pct_season,
-        u.games_played_season,
-        u.games_in_window_l4,
-        u.fp_half_ppr_l4,
-        u.fp_half_ppr_season,
-        u.fp_volatility_l4,
-        u.snap_pct_l4 - u.snap_pct_prev           AS snap_pct_trend,
-        u.target_share_l4 - u.target_share_prev   AS target_share_trend,
-        u.injury_report_status,
-        u.injury_practice_status,
+{usage_columns}
 
         d.fp_allowed_rank        AS opp_defense_rank_vs_position,
         d.fp_allowed_l4          AS opp_fp_allowed_vs_position_l4,
@@ -389,6 +378,89 @@ _PROJECTION_COLUMNS = """
         pw.{points_column} AS actual_points
 """
 
+#: Usage columns every projection row carries, read from the in-season usage
+#: view. See :func:`_usage_columns` for where an upcoming week reads them from.
+_USAGE_FIELDS = (
+    "snap_pct_l4",
+    "target_share_l4",
+    "targets_l4",
+    "carries_l4",
+    "receptions_l4",
+    "opportunities_l4",
+    "air_yards_share_l4",
+    "wopr_l4",
+    "snap_pct_season",
+    "games_played_season",
+    "games_in_window_l4",
+    "fp_half_ppr_l4",
+    "fp_half_ppr_season",
+    "fp_volatility_l4",
+)
+
+
+def _usage_columns(*, has_upcoming: bool, has_injuries: bool) -> str:
+    """Usage and injury columns, with the upcoming week's sources as fallbacks.
+
+    ``feat_player_usage`` is built from completed games, so — exactly as the
+    module docstring says of defensive form — it has **no row for the week
+    being projected**. Joined alone, an upcoming week's board came back with
+    its usage block empty for all but the handful of players whose game had
+    already been played, and its injury block empty for everyone: the week a
+    manager is actually deciding had neither.
+
+    ``feat_upcoming_slate`` is the relation the model scores an upcoming week
+    from, so its usage window is not a substitute but the very one the
+    projection used. The week's injury report comes from ``raw_injuries``
+    directly — the official designation for that game — which is also the only
+    source of the injury itself (``injury_detail``).
+
+    ``*_trend`` keeps the feature layer's construction in both branches: the
+    4-game average minus the most recent game (see ``features/usage.py``).
+    """
+    def usage(column: str) -> str:
+        return f"COALESCE(u.{column}, us.{column})" if has_upcoming else f"u.{column}"
+
+    lines = [f"        {usage(column)} AS {column}," for column in _USAGE_FIELDS]
+    for trend, (l4, prev) in {
+        "snap_pct_trend": ("snap_pct_l4", "snap_pct_prev"),
+        "target_share_trend": ("target_share_l4", "target_share_prev"),
+    }.items():
+        in_season = f"u.{l4} - u.{prev}"
+        expression = f"COALESCE({in_season}, us.{trend})" if has_upcoming else in_season
+        lines.append(f"        {expression} AS {trend},")
+
+    for column, report in (
+        ("injury_report_status", "report_status"),
+        ("injury_practice_status", "practice_status"),
+    ):
+        sources = [f"u.{column}"]
+        if has_upcoming:
+            sources.append(f"us.{column}")
+        if has_injuries:
+            sources.append(f"inj.{report}")
+        lines.append(f"        COALESCE({', '.join(sources)}) AS {column},")
+    lines.append(
+        "        inj.report_primary_injury AS injury_detail,"
+        if has_injuries
+        else "        CAST(NULL AS text) AS injury_detail,"
+    )
+    return "\n".join(lines)
+
+
+#: The week's official injury report, one row per player: the latest revision
+#: when a report was amended, which is the designation that stood at kickoff.
+_INJURY_REPORT_CTE = """
+    injury_report AS (
+        SELECT gsis_id, report_status, practice_status, report_primary_injury,
+               ROW_NUMBER() OVER (
+                   PARTITION BY gsis_id ORDER BY date_modified DESC NULLS LAST
+               ) AS revision
+        FROM raw_injuries
+        WHERE season = :season AND week = :week
+    )
+"""
+
+
 #: The joins those columns come from. ``do_`` is spelled with a trailing
 #: underscore because ``do`` is a reserved word in SQL.
 _PROJECTION_JOINS = """
@@ -402,7 +474,7 @@ _PROJECTION_JOINS = """
       ON pl.gsis_id = p.player_id
     LEFT JOIN feat_player_usage AS u
       ON u.player_id = p.player_id AND u.season = p.season AND u.week = p.week
-    LEFT JOIN defense_ranked AS d
+{extra_joins}    LEFT JOIN defense_ranked AS d
       ON d.defteam = p.opponent AND d.position = p.position
     LEFT JOIN defense_overall AS do_
       ON do_.defteam = p.opponent
@@ -568,12 +640,29 @@ async def fetch_projections(
         params["limit"] = limit
         params["offset"] = offset
 
+    has_upcoming = await relation_exists(session, "feat_upcoming_slate")
+    has_injuries = await relation_exists(session, "raw_injuries")
+    extra_joins = ""
+    if has_upcoming:
+        extra_joins += """
+    LEFT JOIN feat_upcoming_slate AS us
+      ON us.player_id = p.player_id AND us.season = p.season AND us.week = p.week
+"""
+    if has_injuries:
+        extra_joins += """
+    LEFT JOIN injury_report AS inj
+      ON inj.gsis_id = p.player_id AND inj.revision = 1
+"""
+
     sql = f"""
     WITH {_PUBLISHED_RUN_CTE},
-    {_DEFENSE_FORM_CTE}
+    {_DEFENSE_FORM_CTE}{',' + _INJURY_REPORT_CTE if has_injuries else ''}
     SELECT
-{_PROJECTION_COLUMNS.format(points_column=points_column)}
-{_PROJECTION_JOINS}
+{_PROJECTION_COLUMNS.format(
+    points_column=points_column,
+    usage_columns=_usage_columns(has_upcoming=has_upcoming, has_injuries=has_injuries),
+)}
+{_PROJECTION_JOINS.format(extra_joins=extra_joins)}
     WHERE {' AND '.join(clauses)}
     ORDER BY COALESCE(pp.expected_points, pp.predicted_points) DESC,
              pp.ceiling_points DESC NULLS LAST,
@@ -1199,3 +1288,329 @@ async def fetch_season_game_counts(session: AsyncSession) -> dict[int, int]:
         {},
     )
     return {int(row["season"]): int(row["games"]) for row in rows}
+
+
+# ---------------------------------------------------------------------------
+# Track record — stored projections against what happened
+# ---------------------------------------------------------------------------
+
+#: Stored projections from published runs joined to the recorded outcome of the
+#: same player-week. An inner join on ``player_week``: a projected player with
+#: no stat line did not play, and there is no outcome to grade them against —
+#: counting that as zero points would grade the injury report, not the model.
+_GRADED_CTE = """
+    graded AS (
+        SELECT
+            p.season,
+            p.week,
+            p.position,
+            COALESCE(pp.expected_points, pp.predicted_points) AS projected,
+            pp.floor_points,
+            pp.ceiling_points,
+            pp.p25_points,
+            pp.p75_points,
+            pp.boom_probability,
+            pp.bust_probability,
+            pp.boom_threshold,
+            pp.bust_threshold,
+            pw.{points_column} AS actual
+        FROM projections AS p
+        JOIN model_runs AS r
+          ON r.id = p.model_run_id AND r.status = 'published'
+        JOIN projection_points AS pp
+          ON pp.projection_id = p.id AND pp.scoring_profile = :scoring_profile
+        JOIN player_week AS pw
+          ON pw.player_id = p.player_id AND pw.season = p.season AND pw.week = p.week
+        WHERE pw.{points_column} IS NOT NULL
+          AND COALESCE(pp.expected_points, pp.predicted_points) IS NOT NULL
+          AND (CAST(:season AS integer) IS NULL OR p.season = CAST(:season AS integer))
+    )
+"""
+
+#: Width of the projection bands the conditional-bias check groups by, in
+#: points, and the band everything above is folded into. The frozen foundation
+#: reports its worst band; this is the same check over the stored runs.
+TRACK_RECORD_BAND = 5
+TRACK_RECORD_TOP_BAND = 25
+
+
+async def fetch_track_record(
+    session: AsyncSession, *, scoring_profile: str, season: int | None = None
+) -> list[dict]:
+    """Accuracy of stored projections, aggregated several ways in one pass.
+
+    ``GROUPING SETS`` rather than six queries: every figure is an average over
+    the same joined rows, and scanning ~46,000 graded player-weeks once is the
+    whole cost. Each row carries ``g_*`` flags saying which grouping produced it
+    (1 means "rolled up over this column"), which is how the service tells the
+    overall row from the per-position ones without guessing from nulls.
+    """
+    points_column = _profile_column(scoring_profile)
+    await require_relations(
+        session, "projections", "projection_points", "model_runs", "player_week"
+    )
+    sql = f"""
+    WITH {_GRADED_CTE.format(points_column=points_column)},
+    banded AS (
+        SELECT g.*,
+               LEAST(FLOOR(projected / {TRACK_RECORD_BAND}) * {TRACK_RECORD_BAND},
+                     {TRACK_RECORD_TOP_BAND}) AS band
+        FROM graded AS g
+    )
+    SELECT
+        GROUPING(season)   AS g_season,
+        GROUPING(week)     AS g_week,
+        GROUPING(position) AS g_position,
+        GROUPING(band)     AS g_band,
+        season, week, position, band,
+        count(*)                                   AS graded,
+        avg(abs(projected - actual))               AS mean_absolute_error,
+        avg(projected - actual)                    AS bias,
+        count(*) FILTER (WHERE floor_points IS NOT NULL AND ceiling_points IS NOT NULL)
+                                                   AS interval_graded,
+        avg(CASE WHEN actual BETWEEN floor_points AND ceiling_points THEN 1.0 ELSE 0.0 END)
+            FILTER (WHERE floor_points IS NOT NULL AND ceiling_points IS NOT NULL)
+                                                   AS coverage_80,
+        avg(CASE WHEN actual BETWEEN p25_points AND p75_points THEN 1.0 ELSE 0.0 END)
+            FILTER (WHERE p25_points IS NOT NULL AND p75_points IS NOT NULL)
+                                                   AS coverage_50,
+        avg(boom_probability)
+            FILTER (WHERE boom_probability IS NOT NULL AND boom_threshold IS NOT NULL)
+                                                   AS boom_predicted,
+        avg(CASE WHEN actual >= boom_threshold THEN 1.0 ELSE 0.0 END)
+            FILTER (WHERE boom_probability IS NOT NULL AND boom_threshold IS NOT NULL)
+                                                   AS boom_observed,
+        avg(bust_probability)
+            FILTER (WHERE bust_probability IS NOT NULL AND bust_threshold IS NOT NULL)
+                                                   AS bust_predicted,
+        avg(CASE WHEN actual <= bust_threshold THEN 1.0 ELSE 0.0 END)
+            FILTER (WHERE bust_probability IS NOT NULL AND bust_threshold IS NOT NULL)
+                                                   AS bust_observed
+    FROM banded
+    GROUP BY GROUPING SETS (
+        (), (season), (position), (season, position), (season, week), (band)
+    )
+    """
+    return await _rows(session, sql, {"scoring_profile": scoring_profile, "season": season})
+
+
+async def fetch_week_outcomes(
+    session: AsyncSession, *, season: int, week: int, scoring_profile: str
+) -> list[dict]:
+    """Every graded player-week of one week: what was stored, what happened."""
+    points_column = _profile_column(scoring_profile)
+    await require_relations(
+        session, "projections", "projection_points", "model_runs", "player_week"
+    )
+    return await _rows(
+        session,
+        f"""
+        SELECT
+            p.player_id,
+            COALESCE(pl.display_name, pw.player_name, p.player_id) AS player_name,
+            pl.headshot,
+            p.position,
+            p.team,
+            p.opponent,
+            p.is_home,
+            COALESCE(pp.expected_points, pp.predicted_points) AS projected,
+            pp.floor_points,
+            pp.ceiling_points,
+            pw.{points_column} AS actual
+        FROM projections AS p
+        JOIN model_runs AS r
+          ON r.id = p.model_run_id AND r.status = 'published'
+        JOIN projection_points AS pp
+          ON pp.projection_id = p.id AND pp.scoring_profile = :scoring_profile
+        JOIN player_week AS pw
+          ON pw.player_id = p.player_id AND pw.season = p.season AND pw.week = p.week
+        LEFT JOIN raw_players AS pl
+          ON pl.gsis_id = p.player_id
+        WHERE p.season = :season AND p.week = :week
+          AND pw.{points_column} IS NOT NULL
+          AND COALESCE(pp.expected_points, pp.predicted_points) IS NOT NULL
+        ORDER BY projected DESC, p.player_id
+        """,
+        {"season": season, "week": week, "scoring_profile": scoring_profile},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Schedule and market reads for the planning views
+# ---------------------------------------------------------------------------
+
+
+async def fetch_team_schedule(
+    session: AsyncSession, *, season: int, from_week: int
+) -> list[dict]:
+    """Regular-season games from a week onward, one row per team per game.
+
+    ``game_team`` already holds each game twice, once from each side, which is
+    exactly the shape a team-by-week grid wants.
+    """
+    await require_relations(session, "game_team")
+    return await _rows(
+        session,
+        """
+        SELECT g.team, g.opponent, g.week, g.is_home, g.game_id
+        FROM game_team AS g
+        WHERE g.season = :season AND g.week >= :from_week AND g.game_type = 'REG'
+        ORDER BY g.team, g.week
+        """,
+        {"season": season, "from_week": from_week},
+    )
+
+
+async def fetch_regular_season_weeks(session: AsyncSession, *, season: int) -> list[int]:
+    """Every regular-season week of a season."""
+    await require_relations(session, "game_team")
+    result = await session.execute(
+        text(
+            "SELECT DISTINCT week FROM game_team "
+            "WHERE season = :season AND game_type = 'REG' ORDER BY week"
+        ),
+        {"season": season},
+    )
+    return [int(value) for value in result.scalars()]
+
+
+async def fetch_adp(session: AsyncSession, *, season: int) -> list[dict]:
+    """A season's draft-day ADP for the projected positions, as matched.
+
+    Read from the ``player_adp`` view, which chooses the pre-kickoff window and
+    matches names to ids (see ``transform._player_adp_select``). Unmatched and
+    ambiguous entries are returned too, with no id: they are still part of the
+    market's ordering even when they cannot be joined to a projection.
+
+    Absent view, empty list. The view is built only once ADP has been loaded,
+    and "no market data yet" is a state the value board reports, not an error.
+    """
+    if not await relation_exists(session, "player_adp"):
+        return []
+    return await _rows(
+        session,
+        """
+        SELECT player_id, adp_name, position, team, adp, adp_round, adp_formatted,
+               times_drafted, high, low, stdev, teams, total_drafts,
+               window_start, window_end, is_preseason, match_status
+        FROM player_adp
+        WHERE season = :season AND position IN ('QB', 'RB', 'WR', 'TE')
+        ORDER BY adp
+        """,
+        {"season": season},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Depth charts
+# ---------------------------------------------------------------------------
+
+#: The offensive positions a depth chart is read for. Offensive linemen and the
+#: defence are in the source too; nothing here projects them.
+DEPTH_POSITIONS = ("QB", "RB", "WR", "TE")
+
+
+async def fetch_depth_chart(
+    session: AsyncSession, *, team: str, season: int, week: int
+) -> list[dict]:
+    """A team's offensive depth chart as it stood going into a week.
+
+    nflverse changed the shape of this dataset in 2025, and both shapes are in
+    the warehouse:
+
+    * **Through 2024** — one chart per (season, week), keyed by ``club_code``
+      with a ``depth_team`` level (``'1'``, ``'2'``…). Several receivers share a
+      level (X and Z are both starters), so the rank within a position is
+      ordered by level and then by slot.
+    * **2025 on** — timestamped snapshots (``dt``) with **no season column**
+      (see the README gotcha), keyed by ``team`` with an explicit ``pos_rank``.
+      The chart for a week is the latest snapshot taken before noon UTC on the
+      team's game day — the chart going into the game. For a week not yet
+      played that is simply the latest snapshot.
+      A floor of March of the season keeps a request for a season with no
+      snapshots from silently returning last season's chart.
+
+    Returns rows of ``position, depth, player_id, player_name, as_of`` ordered
+    by position and depth, or an empty list when neither shape has a chart.
+    """
+    if not await relation_exists(session, "raw_depth_charts"):
+        return []
+    params = {"team": team, "season": season, "week": week, "positions": list(DEPTH_POSITIONS)}
+
+    weekly = await _rows(
+        session,
+        """
+        SELECT position, depth, player_id, player_name, as_of
+        FROM (
+            SELECT
+                d.position,
+                ROW_NUMBER() OVER (
+                    PARTITION BY d.position
+                    ORDER BY CAST(d.depth_team AS integer), d.depth_position, d.full_name
+                ) AS depth,
+                d.gsis_id AS player_id,
+                COALESCE(d.full_name, d.football_name || ' ' || d.last_name) AS player_name,
+                'week ' || CAST(d.week AS text) AS as_of
+            FROM raw_depth_charts AS d
+            WHERE d.season = :season AND d.week = :week AND d.club_code = :team
+              AND d.formation = 'Offense' AND d.game_type = 'REG'
+              AND d.position = ANY(:positions)
+        ) AS ranked
+        ORDER BY position, depth
+        """,
+        params,
+    )
+    if weekly:
+        return weekly
+
+    return await _rows(
+        session,
+        """
+        WITH cutoff AS (
+            -- Noon UTC on the team's game day (or the week's first game day on
+            -- a bye): after that morning's snapshot, before the earliest
+            -- kickoff the league plays (London, 13:30 UTC).
+            SELECT CAST(COALESCE(
+                       MIN(CAST(g.gameday AS date)) FILTER (WHERE g.team = :team),
+                       MIN(CAST(g.gameday AS date))
+                   ) AS timestamp) + INTERVAL '12 hours' AS before
+            FROM game_team AS g
+            WHERE g.season = :season AND g.week = :week
+        ),
+        snapshot AS (
+            SELECT MAX(d.dt) AS dt
+            FROM raw_depth_charts AS d, cutoff AS c
+            WHERE d.season IS NULL AND d.team = :team
+              AND CAST(d.dt AS timestamp) >= make_timestamp(:season, 3, 1, 0, 0, 0)
+              AND (c.before IS NULL OR CAST(d.dt AS timestamp) < c.before)
+        )
+        SELECT
+            d.pos_abb AS position,
+            ROW_NUMBER() OVER (PARTITION BY d.pos_abb ORDER BY d.pos_rank, d.player_name) AS depth,
+            d.gsis_id AS player_id,
+            d.player_name,
+            d.dt AS as_of
+        FROM raw_depth_charts AS d
+        JOIN snapshot AS s ON s.dt = d.dt
+        WHERE d.season IS NULL AND d.team = :team AND d.pos_abb = ANY(:positions)
+          AND d.pos_grp <> 'Special Teams'
+        ORDER BY position, depth
+        """,
+        params,
+    )
+
+
+async def fetch_players_by_espn_id(session: AsyncSession, espn_ids: Sequence[str]) -> list[dict]:
+    """Player dimension rows for ESPN athlete ids — the live box score's key."""
+    if not espn_ids:
+        return []
+    await require_relations(session, "raw_players")
+    return await _rows(
+        session,
+        """
+        SELECT espn_id, gsis_id AS player_id, display_name, position, latest_team, headshot
+        FROM raw_players
+        WHERE espn_id = ANY(:ids) AND gsis_id IS NOT NULL
+        """,
+        {"ids": list(espn_ids)},
+    )

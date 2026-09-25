@@ -31,10 +31,14 @@ from .positions import PROJECTED_POSITIONS, validate_positions
 
 logger = logging.getLogger(__name__)
 
-#: Rows a single request may return. High enough that an entire slate
-#: (roughly 400 projected skill players) fits in one page, low enough that a
-#: careless client cannot ask for a season.
-MAX_PAGE_SIZE = 500
+#: Rows a single request may return. High enough that an entire slate fits in
+#: one page, low enough that a careless client cannot ask for a season.
+#:
+#: This was 500 on the belief that a slate is ~400 players; the 2026 week 2
+#: board holds 639. Pages cannot be concatenated by a client, because
+#: ``assemble.rank_board`` ranks and tiers each page from 1, so a slate that
+#: does not fit in one page cannot be ranked correctly by anyone downstream.
+MAX_PAGE_SIZE = 1000
 DEFAULT_PAGE_SIZE = 100
 
 
@@ -136,7 +140,7 @@ async def get_slate(
     # already been read. The count query is then a second full pass over
     # `projections` joined to `projection_points` to be told a number this
     # process is holding — and it is the *usual* case, not an edge one: the web
-    # client asks for 500 and a slate is about 400, so every board on the site
+    # client asks for a page larger than any slate, so every board on the site
     # was paying for it.
     #
     # A full page is genuinely ambiguous — there may or may not be more behind

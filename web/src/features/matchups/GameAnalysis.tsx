@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/fee
 import { useDocumentTitle } from '@/app/page-title'
 import { MatchupMeter } from '@/components/domain/MatchupMeter'
 import { PlayerIdentity } from '@/components/domain/PlayerIdentity'
+import { TeamLink } from '@/components/domain/TeamLink'
 import { ProjectionValue } from '@/components/domain/ProjectionValue'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { NotAppliedNotice, ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
@@ -109,8 +110,8 @@ function GameHeader({ analysis }: { analysis: MatchupAnalysis }) {
   return (
     <div className="mb-6">
       <h1 className="text-ink text-xl font-semibold tracking-tight sm:text-2xl">
-        {analysis.away.abbr} <span className="text-ink-muted font-normal">at</span>{' '}
-        {analysis.home.abbr}
+        <TeamLink team={analysis.away.abbr} /> <span className="text-ink-muted font-normal">at</span>{' '}
+        <TeamLink team={analysis.home.abbr} />
       </h1>
       <p className="text-ink-secondary mt-1 text-sm">
         Week {analysis.week}, {analysis.season}

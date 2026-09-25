@@ -12,6 +12,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
+from ...services import depth as depth_service
 from ...services import matchups as service
 from .. import mappers, schemas
 from ..dependencies import DbSession, SlateQuery
@@ -179,4 +180,38 @@ async def team_outlook(
     return schemas.Envelope[schemas.TeamOutlookOut](
         data=mappers.team_outlook(outlook),
         meta=schemas.MetaOut(scoring_profile=outlook.scoring_profile),
+    )
+
+
+@router.get(
+    "/teams/{team}/depth-chart",
+    response_model=schemas.Envelope[schemas.DepthChartOut],
+    summary="A team's offensive depth chart going into a week",
+    description=(
+        "QB, RB, WR and TE in depth order, as the team listed them going into "
+        "the week — the latest snapshot before the team's game day from 2025 "
+        "on, the weekly chart before that. Provenance `context`: the frozen "
+        "model projects from usage and does not read the depth chart. An empty "
+        "chart means no listing was captured for that week."
+    ),
+)
+async def team_depth_chart(
+    db: DbSession,
+    slate_query: SlateQuery,
+    team: Annotated[str, Path(description="Team abbreviation, e.g. KC.")],
+) -> schemas.Envelope[schemas.DepthChartOut]:
+    chart = await depth_service.get_depth_chart(
+        db, team=team, season=slate_query.season, week=slate_query.week
+    )
+    empty = not any(chart.positions.values())
+    return schemas.Envelope[schemas.DepthChartOut](
+        data=mappers.depth_chart(chart),
+        meta=schemas.MetaOut(
+            window=schemas.slate_window_out(chart.window),
+            notices=(
+                [f"No depth chart was captured for {chart.team} going into week {chart.week}."]
+                if empty
+                else []
+            ),
+        ),
     )

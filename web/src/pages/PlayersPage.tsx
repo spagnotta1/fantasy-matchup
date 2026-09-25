@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useDeferredValue, useMemo } from 'react'
 import { SearchX } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
@@ -10,7 +10,7 @@ import { CalibrationNotice } from '@/components/domain/CalibrationNotice'
 import { ProjectionCards } from '@/components/domain/ProjectionCards'
 import { ProjectionTable } from '@/components/domain/ProjectionTable'
 import { PlayerFilters, type ExplorerFilters, type ViewMode } from '@/features/players/PlayerFilters'
-import { useBoard } from '@/hooks/useProjections'
+import { boardNotices, useBoard } from '@/hooks/useProjections'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useUrlState } from '@/hooks/useUrlState'
 import { matchesQuery, sortBoard, type SortDirection, type SortKey } from '@/utils/board'
@@ -78,11 +78,16 @@ export default function PlayersPage() {
     teams: filters.team ? [filters.team] : undefined,
   })
 
+  // The input shows every keystroke at once; the board catches up on the
+  // deferred copy. Filtering is cheap — re-rendering the board is not — and
+  // without this each character waited for the previous one's table.
+  const deferredQuery = useDeferredValue(filters.query)
   const entries = useMemo(() => {
     if (!data) return []
-    const matched = data.data.filter((entry) => matchesQuery(entry, filters.query))
+    const matched = data.data.filter((entry) => matchesQuery(entry, deferredQuery))
     return sortBoard(matched, filters.sort, direction)
-  }, [data, filters.query, filters.sort, direction])
+  }, [data, deferredQuery, filters.sort, direction])
+  const projections = useMemo(() => data?.data.map((entry) => entry.projection), [data])
 
   const onSort = useCallback(
     (key: SortKey) => {
@@ -105,8 +110,8 @@ export default function PlayersPage() {
       <PageHeader title="Players" question="Who is worth a look, and how do they compare?" />
 
       <div className="mb-4 space-y-3">
-        <CalibrationNotice projections={data?.data.map((entry) => entry.projection)} />
-        {data && <NoticeList notices={data.meta.notices} />}
+        <CalibrationNotice projections={projections} />
+        {data && <NoticeList notices={boardNotices(data.meta)} />}
       </div>
 
       <PlayerFilters

@@ -945,3 +945,256 @@ export interface DraftRequest {
 export interface DraftAnalysisRequest extends DraftRequest {
   draft_position: number
 }
+
+// ---------------------------------------------------------------------------
+// Track record — stored projections graded against outcomes (derived)
+// ---------------------------------------------------------------------------
+
+export const accuracySchema = z.object({
+  provenance: provenanceSchema,
+  season: z.number().nullish(),
+  week: z.number().nullish(),
+  position: maybeString,
+  band_low: maybeNumber,
+  band_high: maybeNumber,
+  graded: z.number(),
+  /** Too few graded player-weeks to read the figures as rates. */
+  thin: z.boolean(),
+  mean_absolute_error: maybeNumber,
+  /** Projected minus actual: positive means the projections ran high. */
+  bias: maybeNumber,
+  interval_graded: z.number(),
+  /** Share inside P10–P90. Nominal 0.80. */
+  coverage_80: maybeNumber,
+  /** Share inside P25–P75. Nominal 0.50. */
+  coverage_50: maybeNumber,
+  boom_predicted: maybeNumber,
+  boom_observed: maybeNumber,
+  bust_predicted: maybeNumber,
+  bust_observed: maybeNumber,
+})
+export type Accuracy = z.infer<typeof accuracySchema>
+
+export const outcomeSchema = z.object({
+  player_id: z.string(),
+  name: z.string(),
+  headshot_url: maybeString,
+  position: maybeString,
+  team: maybeString,
+  opponent: maybeString,
+  is_home: maybeBool,
+  /** Provenance `model`: the stored calibrated mean. */
+  projected: z.number(),
+  floor: maybeNumber,
+  ceiling: maybeNumber,
+  /** Provenance `actual`. */
+  actual: z.number(),
+  difference: z.number(),
+  inside_range: maybeBool,
+})
+export type Outcome = z.infer<typeof outcomeSchema>
+
+export const scorecardSchema = z.object({
+  season: z.number(),
+  week: z.number(),
+  summary: accuracySchema.nullish(),
+  beats: z.array(outcomeSchema),
+  misses: z.array(outcomeSchema),
+  min_projection: z.number(),
+})
+export type Scorecard = z.infer<typeof scorecardSchema>
+
+export const validationRecordSchema = z.object({
+  seasons: z.array(z.number()),
+  held_out_distributions: z.number(),
+  coverage_80: z.number(),
+  coverage_50: z.number(),
+  nominal_80: z.number(),
+  nominal_50: z.number(),
+  max_conditional_bias: z.number(),
+})
+export type ValidationRecord = z.infer<typeof validationRecordSchema>
+
+export const trackRecordSchema = z.object({
+  scoring_profile: z.string(),
+  season: z.number().nullish(),
+  seasons: z.array(z.number()),
+  overall: accuracySchema.nullish(),
+  by_position: z.array(accuracySchema),
+  by_season: z.array(accuracySchema),
+  by_season_position: z.array(accuracySchema),
+  by_band: z.array(accuracySchema),
+  weekly: z.array(accuracySchema),
+  scorecard: scorecardSchema.nullish(),
+  /** The frozen validation — a different measurement, shown for comparison only. */
+  validation: validationRecordSchema,
+})
+export type TrackRecord = z.infer<typeof trackRecordSchema>
+
+// ---------------------------------------------------------------------------
+// Strength of schedule (derived)
+// ---------------------------------------------------------------------------
+
+export const scheduleCellSchema = z.object({
+  week: z.number(),
+  /** Null is a bye. */
+  opponent: maybeString,
+  is_home: maybeBool,
+  game_id: maybeString,
+  grade: matchupGradeSchema.nullish(),
+  fp_allowed_l4: maybeNumber,
+})
+export type ScheduleCell = z.infer<typeof scheduleCellSchema>
+
+export const teamScheduleSchema = z.object({
+  provenance: provenanceSchema,
+  team: z.string(),
+  cells: z.array(scheduleCellSchema),
+  mean_score: maybeNumber,
+  graded_games: z.number(),
+  next_score: maybeNumber,
+  playoff_score: maybeNumber,
+})
+export type TeamSchedule = z.infer<typeof teamScheduleSchema>
+
+export const scheduleStrengthSchema = z.object({
+  season: z.number(),
+  from_week: z.number(),
+  position: z.string(),
+  weeks: z.array(z.number()),
+  teams: z.array(teamScheduleSchema),
+})
+export type ScheduleStrength = z.infer<typeof scheduleStrengthSchema>
+
+// ---------------------------------------------------------------------------
+// ADP value board — the draft pool (derived) beside the market (context)
+// ---------------------------------------------------------------------------
+
+export const draftPlayerSchema = z.object({
+  player_id: z.string(),
+  name: z.string(),
+  position: z.string(),
+  team: maybeString,
+  /** Provenance `model`: the published week 1 expected points. */
+  projected_points_per_game: z.number(),
+  expected_games: z.number(),
+  /** Provenance `derived`: points per game times expected games. */
+  season_value: z.number(),
+  value_over_replacement: maybeNumber,
+  floor_per_game: maybeNumber,
+  ceiling_per_game: maybeNumber,
+  extrapolated: z.boolean().default(false),
+  historical: historicalEvidenceSchema.nullish(),
+})
+export type DraftPlayer = z.infer<typeof draftPlayerSchema>
+
+export const valueEntrySchema = z.object({
+  player: draftPlayerSchema,
+  /** Provenance `context`: observed average draft slot. */
+  adp: z.number(),
+  adp_formatted: maybeString,
+  adp_high: maybeNumber,
+  adp_low: maybeNumber,
+  adp_stdev: maybeNumber,
+  market_rank: z.number(),
+  value_rank: z.number(),
+  /** Market rank minus value rank, within position. Positive: pool likes him more. */
+  rank_gap: z.number(),
+})
+export type ValueEntry = z.infer<typeof valueEntrySchema>
+
+export const marketOnlySchema = z.object({
+  name: z.string(),
+  position: z.string(),
+  team: maybeString,
+  adp: z.number(),
+  reason: z.string(),
+})
+export type MarketOnly = z.infer<typeof marketOnlySchema>
+
+export const marketWindowSchema = z.object({
+  provenance: provenanceSchema,
+  total_drafts: z.number().nullish(),
+  teams: z.number().nullish(),
+  window_start: maybeString,
+  window_end: maybeString,
+  is_preseason: maybeBool,
+})
+
+export const valueBoardSchema = z.object({
+  season: z.number(),
+  scoring_profile: z.string(),
+  board_week: z.number(),
+  season_games: z.number(),
+  entries: z.array(valueEntrySchema),
+  unpriced: z.array(draftPlayerSchema),
+  market_only: z.array(marketOnlySchema),
+  market: marketWindowSchema.nullish(),
+})
+export type ValueBoard = z.infer<typeof valueBoardSchema>
+
+// ---------------------------------------------------------------------------
+// Depth chart (context) and live scoring (actual, unofficial)
+// ---------------------------------------------------------------------------
+
+export const depthEntrySchema = z.object({
+  depth: z.number(),
+  player_id: maybeString,
+  name: z.string(),
+})
+export type DepthEntry = z.infer<typeof depthEntrySchema>
+
+export const depthChartSchema = z.object({
+  provenance: provenanceSchema,
+  applied_to_projection: z.boolean(),
+  unapplied_reason: z.string(),
+  team: z.string(),
+  season: z.number(),
+  week: z.number(),
+  as_of: maybeString,
+  positions: z.record(z.string(), z.array(depthEntrySchema)),
+})
+export type DepthChart = z.infer<typeof depthChartSchema>
+
+export const liveGameSchema = z.object({
+  event_id: z.string(),
+  home: z.string(),
+  away: z.string(),
+  /** `pre`, `in` or `post`. */
+  state: z.string(),
+  detail: maybeString,
+  clock: maybeString,
+  period: z.number().nullish(),
+  home_score: z.number().nullish(),
+  away_score: z.number().nullish(),
+  kickoff: maybeString,
+})
+export type LiveGame = z.infer<typeof liveGameSchema>
+
+export const livePlayerSchema = z.object({
+  provenance: provenanceSchema,
+  /** Always false: an in-game box score, replaced by the official line later. */
+  official: z.boolean(),
+  player_id: z.string(),
+  name: z.string(),
+  position: z.string(),
+  team: z.string(),
+  headshot_url: maybeString,
+  event_id: z.string(),
+  live_points: z.number(),
+  /** Provenance `model`: the published projection, unchanged by the live number. */
+  projected: maybeNumber,
+  floor: maybeNumber,
+  ceiling: maybeNumber,
+  components: z.record(z.string(), z.number()),
+})
+export type LivePlayer = z.infer<typeof livePlayerSchema>
+
+export const liveSlateSchema = z.object({
+  season: z.number(),
+  week: z.number(),
+  scoring_profile: z.string(),
+  games: z.array(liveGameSchema),
+  players: z.array(livePlayerSchema),
+})
+export type LiveSlate = z.infer<typeof liveSlateSchema>

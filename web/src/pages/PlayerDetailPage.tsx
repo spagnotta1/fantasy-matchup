@@ -7,6 +7,7 @@ import { ContextPanel, MatchupPanel, UsagePanel } from '@/features/players/detai
 import { GameLog } from '@/features/players/detail/GameLog'
 import { PlayerHero } from '@/features/players/detail/PlayerHero'
 import { ProjectionPanel } from '@/features/players/detail/ProjectionPanel'
+import { UsageTrends } from '@/features/players/detail/UsageTrends'
 import { useDocumentTitle } from '@/app/page-title'
 import { usePlayerProfile } from '@/hooks/useProjections'
 
@@ -72,6 +73,8 @@ export default function PlayerDetailPage() {
             bustThreshold={current.prediction.points.bust_threshold}
           />
 
+          <UsageTrends history={profile.history} />
+
           <div className="grid gap-6 xl:grid-cols-2">
             <UsagePanel usage={current.usage} />
             <MatchupPanel
@@ -97,6 +100,7 @@ export default function PlayerDetailPage() {
             boomThreshold={null}
             bustThreshold={null}
           />
+          <UsageTrends history={profile.history} />
         </div>
       )}
     </>

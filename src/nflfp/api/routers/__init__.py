@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from . import advice, matchups, meta, players, projections
+from . import advice, insights, matchups, meta, players, projections
 
-__all__ = ["advice", "matchups", "meta", "players", "projections"]
+__all__ = ["advice", "insights", "matchups", "meta", "players", "projections"]

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { GitCompareArrows, Monitor, Moon, Settings, SlidersHorizontal, Sun, User } from 'lucide-react'
+import { GitCompareArrows, Menu, Monitor, Moon, Search, Settings, SlidersHorizontal, Sun, User } from 'lucide-react'
 
+import { openCommandPalette } from '@/app/command-palette'
 import { useTheme } from '@/hooks/useTheme'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/utils/cn'
@@ -66,6 +67,30 @@ export function TopBar() {
         </div>
 
         <div className="flex flex-1 items-center justify-end gap-1 md:flex-none">
+          {/*
+            The palette is search and, on a phone, the menu: with nothing typed
+            it lists every page, including the ones beyond the five in the
+            bottom bar. Two faces for one control, labelled for what each does.
+          */}
+          <button
+            type="button"
+            onClick={openCommandPalette}
+            className="border-line text-ink-muted hover:border-line-strong hover:text-ink mr-1 hidden h-8 items-center gap-2 rounded-[var(--radius-control)] border px-2.5 text-xs transition-colors lg:inline-flex"
+          >
+            <Search aria-hidden className="size-3.5" />
+            Search
+            <kbd className="border-line rounded border px-1 text-[0.625rem]">Ctrl K</kbd>
+          </button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-2 lg:hidden"
+            onClick={openCommandPalette}
+            aria-label="Search and all pages"
+          >
+            <Menu aria-hidden className="size-4" />
+          </Button>
+
           <Button
             variant="ghost"
             size="sm"

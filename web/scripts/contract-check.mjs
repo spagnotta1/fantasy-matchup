@@ -36,6 +36,7 @@ const matchups = await load('/src/api/matchups.ts')
 const advice = await load('/src/api/advice.ts')
 const simulations = await load('/src/api/simulations.ts')
 const draft = await load('/src/api/draft.ts')
+const insights = await load('/src/api/insights.ts')
 
 const results = []
 async function check(name, fn) {
@@ -109,10 +110,10 @@ const slate = { season, week, scoringProfile: 'half_ppr' }
 
 // ---- boards --------------------------------------------------------------
 const board = await check('projections board', () =>
-  projections.getBoard({ ...slate, limit: 500 }),
+  projections.getBoard({ ...slate, limit: 1000 }),
 )
 for (const pos of ['QB', 'RB', 'WR', 'TE']) {
-  await check(`rankings/${pos}`, () => projections.getPositionRankings(pos, { ...slate, limit: 500 }))
+  await check(`rankings/${pos}`, () => projections.getPositionRankings(pos, { ...slate, limit: 1000 }))
 }
 
 // K and DST are *expected* to be refused. The API recognises both positions and
@@ -121,7 +122,7 @@ for (const pos of ['QB', 'RB', 'WR', 'TE']) {
 // rather than as an error. A silent success here would be the real failure.
 for (const pos of ['K', 'DST']) {
   await expectRefusal(`rankings/${pos} refused`, () =>
-    projections.getPositionRankings(pos, { ...slate, limit: 500 }),
+    projections.getPositionRankings(pos, { ...slate, limit: 1000 }),
   )
 }
 
@@ -144,12 +145,24 @@ if (gameId) await check('matchup analysis', () => matchups.getMatchup(gameId, sl
 await check('defense rankings RB', () => matchups.getDefenseRankings({ season, week, position: 'RB' }))
 const team = board?.data?.[0]?.projection?.team
 if (team) await check('team outlook', () => matchups.getTeamOutlook(team, slate))
+if (team) await check('team depth chart', () => matchups.getDepthChart(team, { season, week }))
 
 // ---- advice --------------------------------------------------------------
 if (first && second) {
   await check('compare', () => advice.comparePlayers([first, second], slate))
   await check('start-sit', () => advice.getStartSit(first, second, slate))
 }
+
+// ---- track record, schedule strength ---------------------------------------
+await check('track record (all seasons)', () => insights.getTrackRecord({ scoringProfile: 'half_ppr' }))
+await check(`track record (${season})`, () =>
+  insights.getTrackRecord({ season, week, scoringProfile: 'ppr' }),
+)
+await check('schedule strength WR', () => insights.getScheduleStrength('WR', { season, week }))
+await check('live scoring', () => insights.getLive(slate))
+await expectRefusal('schedule strength K refused', () =>
+  insights.getScheduleStrength('K', { season, week }),
+)
 
 // ---- simulation ----------------------------------------------------------
 // The lineup composition is built with the *application's own* parser, not a
@@ -298,6 +311,10 @@ const draftConfig = await check('mock-draft config', () => draft.getDraftConfig(
 const draftSeason = draftConfig?.data?.draftable_seasons?.[0]
 
 if (draftSeason) {
+  await check(`value board (${draftSeason})`, () =>
+    draft.getValueBoard({ season: draftSeason, scoringProfile: 'ppr' }),
+  )
+
   const request = {
     season: draftSeason,
     teams: 12,

@@ -1,4 +1,8 @@
+import { memo, useMemo } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
+
+import { ShowMoreRows } from '@/components/domain/BoardBudget'
+import { useRenderBudget } from '@/hooks/useRenderBudget'
 
 import { ConfidenceChip } from '@/components/domain/ConfidenceChip'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
@@ -74,7 +78,7 @@ export interface ProjectionTableProps {
  * two tables in step by hand is how a product ends up with two subtly different
  * ideas of what a row looks like.
  */
-export function ProjectionTable({
+export const ProjectionTable = memo(function ProjectionTable({
   entries,
   sort,
   direction,
@@ -84,7 +88,19 @@ export function ProjectionTable({
   showTierColumn = false,
   caption,
 }: ProjectionTableProps) {
-  const scaleMax = boardCeiling(entries)
+  // The scale and the tier sizes come from the whole list, not the drawn
+  // slice: range bars must not rescale when more rows are revealed, and a tier
+  // heading states how many players the tier holds, not how many are on screen.
+  const scaleMax = useMemo(() => boardCeiling(entries), [entries])
+  const tierSizes = useMemo(() => {
+    const sizes = new Map<number, number>()
+    for (const entry of entries) sizes.set(entry.tier, (sizes.get(entry.tier) ?? 0) + 1)
+    return sizes
+  }, [entries])
+
+  const budget = useRenderBudget(entries.length)
+  const visible = useMemo(() => entries.slice(0, budget.shown), [entries, budget.shown])
+
   const columns = showTierColumn
     ? [
         ...COLUMNS.slice(0, 2),
@@ -92,140 +108,169 @@ export function ProjectionTable({
         ...COLUMNS.slice(2),
       ]
     : COLUMNS
-  const groups = showTiers ? groupByTier(entries) : [{ tier: 0, entries }]
+  const groups = showTiers ? groupByTier(visible) : [{ tier: 0, entries: visible }]
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
-        <caption className="sr-only">
-          {caption ?? 'Projected players for the selected week'}, sorted by {sort},{' '}
-          {direction}ending.
-        </caption>
-        <thead>
-          <tr className="border-line border-b">
-            {columns.map((column) => {
-              const active = column.key !== null && column.key === sort
-              return (
-                <th
-                  key={column.label}
-                  scope="col"
-                  aria-sort={
-                    active ? (direction === 'asc' ? 'ascending' : 'descending') : undefined
-                  }
-                  className={cn(
-                    'text-ink-muted px-3 py-2 text-xs font-medium tracking-wide uppercase',
-                    column.numeric ? 'text-right' : 'text-left',
-                    column.className,
-                  )}
-                >
-                  {column.key === null ? (
-                    column.label
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onSort(column.key as SortKey)}
-                      className={cn(
-                        'hover:text-ink inline-flex items-center gap-1 rounded-sm transition-colors',
-                        active && 'text-ink',
-                      )}
-                    >
-                      {column.label}
-                      {active &&
-                        (direction === 'asc' ? (
-                          <ArrowUp aria-hidden className="size-3" />
-                        ) : (
-                          <ArrowDown aria-hidden className="size-3" />
-                        ))}
-                    </button>
-                  )}
-                </th>
-              )
-            })}
-          </tr>
-        </thead>
+    <>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <caption className="sr-only">
+            {caption ?? 'Projected players for the selected week'}, sorted by {sort},{' '}
+            {direction}ending.
+          </caption>
+          <thead>
+            <tr className="border-line border-b">
+              {columns.map((column) => {
+                const active = column.key !== null && column.key === sort
+                return (
+                  <th
+                    key={column.label}
+                    scope="col"
+                    aria-sort={
+                      active ? (direction === 'asc' ? 'ascending' : 'descending') : undefined
+                    }
+                    className={cn(
+                      'text-ink-muted px-3 py-2 text-xs font-medium tracking-wide uppercase',
+                      column.numeric ? 'text-right' : 'text-left',
+                      column.className,
+                    )}
+                  >
+                    {column.key === null ? (
+                      column.label
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onSort(column.key as SortKey)}
+                        className={cn(
+                          'hover:text-ink inline-flex items-center gap-1 rounded-sm transition-colors',
+                          active && 'text-ink',
+                        )}
+                      >
+                        {column.label}
+                        {active &&
+                          (direction === 'asc' ? (
+                            <ArrowUp aria-hidden className="size-3" />
+                          ) : (
+                            <ArrowDown aria-hidden className="size-3" />
+                          ))}
+                      </button>
+                    )}
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
 
-        {groups.map((group) => (
-          // One `<tbody>` per tier. Multiple bodies are valid HTML and give the
-          // separator a row group to head, which is what makes "Tier 3" an
-          // announced heading rather than a decorative stripe.
-          <tbody key={showTiers ? group.tier : 'all'}>
-            {showTiers && (
-              <tr className="bg-surface-sunken">
-                <th
-                  scope="rowgroup"
-                  colSpan={columns.length}
-                  className="text-ink-secondary px-3 py-1.5 text-left text-xs font-semibold"
-                >
-                  Tier {group.tier}
-                  <span className="text-ink-muted ml-2 font-normal">
-                    {group.entries.length} {group.entries.length === 1 ? 'player' : 'players'}
-                  </span>
-                </th>
-              </tr>
-            )}
-
-            {group.entries.map((entry) => {
-              const { projection } = entry
-              const { points } = projection.prediction
-              return (
-                <tr
-                  key={projection.player.player_id}
-                  className="border-line hover:bg-surface-hover border-b transition-colors last:border-b-0"
-                >
-                  <td className="text-ink-muted tnum px-3 py-2 text-xs">
-                    {rankMode === 'positional' ? entry.positional_rank : entry.rank}
-                  </td>
-                  <td className="px-3 py-2">
-                    <PlayerIdentity
-                      player={projection.player}
-                      team={projection.team}
-                      size="sm"
-                      subtitle={
-                        <>
-                          {projection.player.position} · {projection.team}{' '}
-                          {projection.is_home ? 'vs' : '@'} {projection.opponent}
-                        </>
-                      }
-                    />
-                  </td>
-                  {showTierColumn && (
-                    <td className="text-ink-secondary tnum hidden px-3 py-2 text-xs sm:table-cell">
-                      {entry.tier}
-                    </td>
-                  )}
-                  <td className="px-3 py-2">
-                    <MatchupGradeChip
-                      grade={projection.matchup?.grade}
-                      opponent={projection.opponent}
-                      fpAllowed={projection.matchup?.fp_allowed_vs_position_l4}
-                    />
-                  </td>
-                  <td className="hidden px-3 py-2 xl:table-cell">
-                    <OutcomeRange
-                      floor={points.floor}
-                      median={points.median}
-                      ceiling={points.ceiling}
-                      scaleMax={scaleMax}
-                    />
-                  </td>
-                  <td className="tnum text-ink-secondary hidden px-3 py-2 text-right lg:table-cell xl:hidden">
-                    {points.floor?.toFixed(1) ?? '—'}
-                  </td>
-                  <td className="tnum text-ink-secondary hidden px-3 py-2 text-right lg:table-cell xl:hidden">
-                    {points.ceiling?.toFixed(1) ?? '—'}
-                  </td>
-                  <td className="hidden px-3 py-2 md:table-cell">
-                    <ConfidenceChip label={points.confidence_label} value={points.confidence} />
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <ProjectionValue points={points} actualPoints={projection.actual_points} />
-                  </td>
+          {groups.map((group) => (
+            // One `<tbody>` per tier. Multiple bodies are valid HTML and give the
+            // separator a row group to head, which is what makes "Tier 3" an
+            // announced heading rather than a decorative stripe.
+            <tbody key={showTiers ? group.tier : 'all'}>
+              {showTiers && (
+                <tr className="bg-surface-sunken">
+                  <th
+                    scope="rowgroup"
+                    colSpan={columns.length}
+                    className="text-ink-secondary px-3 py-1.5 text-left text-xs font-semibold"
+                  >
+                    Tier {group.tier}
+                    <span className="text-ink-muted ml-2 font-normal">
+                      {tierSizes.get(group.tier) ?? group.entries.length}{' '}
+                      {(tierSizes.get(group.tier) ?? group.entries.length) === 1 ? 'player' : 'players'}
+                    </span>
+                  </th>
                 </tr>
-              )
-            })}
-          </tbody>
-        ))}
-      </table>
-    </div>
+              )}
+
+              {group.entries.map((entry) => (
+                <ProjectionRow
+                  key={entry.projection.player.player_id}
+                  entry={entry}
+                  rankMode={rankMode}
+                  showTierColumn={showTierColumn}
+                  scaleMax={scaleMax}
+                />
+              ))}
+            </tbody>
+          ))}
+        </table>
+      </div>
+      <ShowMoreRows budget={budget} />
+    </>
   )
-}
+})
+
+/**
+ * One board row, memoised.
+ *
+ * A re-sort hands every row the same `entry` object it had before, so React can
+ * move the existing `<tr>` rather than re-render three tooltip-bearing chips,
+ * an avatar and a range bar for each of them. `scaleMax` is computed over the
+ * whole board, so it is stable across sorts and reveals too.
+ */
+const ProjectionRow = memo(function ProjectionRow({
+  entry,
+  rankMode,
+  showTierColumn,
+  scaleMax,
+}: {
+  entry: RankedProjection
+  rankMode: 'overall' | 'positional'
+  showTierColumn: boolean
+  scaleMax: number
+}) {
+  const { projection } = entry
+  const { points } = projection.prediction
+  return (
+    <tr className="border-line hover:bg-surface-hover border-b transition-colors last:border-b-0">
+      <td className="text-ink-muted tnum px-3 py-2 text-xs">
+        {rankMode === 'positional' ? entry.positional_rank : entry.rank}
+      </td>
+      <td className="px-3 py-2">
+        <PlayerIdentity
+          player={projection.player}
+          team={projection.team}
+          size="sm"
+          subtitle={
+            <>
+              {projection.player.position} · {projection.team}{' '}
+              {projection.is_home ? 'vs' : '@'} {projection.opponent}
+            </>
+          }
+        />
+      </td>
+      {showTierColumn && (
+        <td className="text-ink-secondary tnum hidden px-3 py-2 text-xs sm:table-cell">
+          {entry.tier}
+        </td>
+      )}
+      <td className="px-3 py-2">
+        <MatchupGradeChip
+          grade={projection.matchup?.grade}
+          opponent={projection.opponent}
+          fpAllowed={projection.matchup?.fp_allowed_vs_position_l4}
+        />
+      </td>
+      <td className="hidden px-3 py-2 xl:table-cell">
+        <OutcomeRange
+          floor={points.floor}
+          median={points.median}
+          ceiling={points.ceiling}
+          scaleMax={scaleMax}
+        />
+      </td>
+      <td className="tnum text-ink-secondary hidden px-3 py-2 text-right lg:table-cell xl:hidden">
+        {points.floor?.toFixed(1) ?? '—'}
+      </td>
+      <td className="tnum text-ink-secondary hidden px-3 py-2 text-right lg:table-cell xl:hidden">
+        {points.ceiling?.toFixed(1) ?? '—'}
+      </td>
+      <td className="hidden px-3 py-2 md:table-cell">
+        <ConfidenceChip label={points.confidence_label} value={points.confidence} />
+      </td>
+      <td className="px-3 py-2 text-right">
+        <ProjectionValue points={points} actualPoints={projection.actual_points} />
+      </td>
+    </tr>
+  )
+})

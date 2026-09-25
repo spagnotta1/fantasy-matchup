@@ -1,10 +1,11 @@
 import { Suspense } from 'react'
-import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
+import { Outlet, ScrollRestoration, useLocation, useMatches } from 'react-router-dom'
 
 import { RouteChrome } from '@/app/RouteChrome'
 import { SlateProvider } from '@/app/SlateProvider'
 import { SkeletonCards, SkeletonTable } from '@/components/ui/Skeleton'
 
+import { CommandPalette } from './CommandPalette'
 import { MobileNav, Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 
@@ -17,6 +18,9 @@ import { TopBar } from './TopBar'
  */
 export function AppShell() {
   const location = useLocation()
+  // The deepest matched route's id: stable across param changes on one route
+  // (`/rankings/QB` -> `/rankings/RB`), different across routes.
+  const routeId = useMatches().at(-1)?.id ?? location.pathname
 
   return (
     // The slate selection lives inside the router because it is held in the
@@ -48,17 +52,24 @@ export function AppShell() {
             className="mx-auto w-full max-w-[1600px] flex-1 px-4 pt-6 pb-24 sm:px-6 lg:pb-10"
           >
             {/*
-              Keyed by pathname so a route change remounts the boundary.
-              Without it, navigating from a loaded page to a lazy one shows the
-              previous page's content frozen while the chunk downloads.
+              Keyed by route so a route change remounts the boundary. Without
+              it, navigating from a loaded page to a lazy one shows the previous
+              page's content frozen while the chunk downloads.
+
+              By route, not by pathname: a pathname key also remounted the page
+              on every *param* change — each position tab and each opened game
+              threw away the mounted board, its hooks and its DOM, and rebuilt
+              them from nothing, when the page was already built to take the
+              new param in place.
             */}
-            <Suspense key={location.pathname} fallback={<RouteFallback pathname={location.pathname} />}>
+            <Suspense key={routeId} fallback={<RouteFallback pathname={location.pathname} />}>
               <Outlet />
             </Suspense>
           </main>
         </div>
 
         <MobileNav />
+        <CommandPalette />
       </div>
     </SlateProvider>
   )

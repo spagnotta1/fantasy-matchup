@@ -37,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..catalog import resolve_scoring_profile
 from ..dto import ModelRef
 from ..errors import InvalidRequest
-from . import aggregate, pool as pool_module
+from . import aggregate, pool as pool_module, value_board as value_board_module
 from .aggregate import DraftComparison, SeatAnalysis
 from .engine import (
     CALIBRATION_DRAFTS,
@@ -567,4 +567,68 @@ def _notices(
         "Kickers and team defences are not draftable here: no validated "
         "projection exists for either. A roster including them would need "
         "values this engine would have to invent. See /meta/positions.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# ADP value board
+# ---------------------------------------------------------------------------
+
+
+#: League shape used only to validate settings for the value board. A player's
+#: season value does not depend on it; these match the mock draft form's opening
+#: configuration.
+VALUE_BOARD_TEAMS = 12
+VALUE_BOARD_ROUNDS = 15
+
+
+@dataclass(frozen=True)
+class ValueBoardResult:
+    """The pool beside the market, with everything a reader must be told."""
+
+    season: int
+    scoring_profile: str
+    board_week: int
+    season_games: int
+    model: ModelRef | None
+    board: value_board_module.ValueBoard
+    notices: tuple[str, ...]
+
+
+async def value_board(
+    session: AsyncSession,
+    *,
+    season: int,
+    scoring_profile: str | None = None,
+) -> ValueBoardResult:
+    """Rank the draft pool against the market's ADP, within position.
+
+    The pool is the same one a mock draft builds — week 1 rate times expected
+    games — so a player's value here is the number the draft engine drafts on.
+    League size and rounds do not change a player's season value, so they are
+    fixed at the defaults purely to pass settings validation.
+
+    Raises:
+        NoProjectionsPublished: when the season has no published week 1 run.
+    """
+    from .. import repository
+
+    profile = resolve_scoring_profile(scoring_profile)
+    settings = validate_settings(
+        teams=VALUE_BOARD_TEAMS,
+        rounds=VALUE_BOARD_ROUNDS,
+        scoring_profile=profile,
+        season=season,
+    )
+    pool = await pool_module.build_pool(session, settings)
+    adp_rows = await repository.fetch_adp(session, season=season)
+    board = value_board_module.build_value_board(pool.players, adp_rows)
+    return ValueBoardResult(
+        season=season,
+        scoring_profile=profile,
+        board_week=pool.board_week,
+        season_games=pool.season_games,
+        model=pool.model,
+        board=board,
+        notices=tuple(value_board_module.market_notices(board, season)) + tuple(pool.notices),
     )

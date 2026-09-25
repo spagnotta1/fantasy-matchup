@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { Layers, SearchX } from 'lucide-react'
 
@@ -17,7 +17,7 @@ import { UnprojectedPosition } from '@/features/rankings/UnprojectedPosition'
 import type { ViewMode } from '@/features/players/PlayerFilters'
 import { usePositions } from '@/hooks/useCatalog'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
-import { useBoard, usePositionRankings } from '@/hooks/useProjections'
+import { boardNotices, useBoard, usePositionRankings } from '@/hooks/useProjections'
 import { useUrlState } from '@/hooks/useUrlState'
 import { useSlate } from '@/app/slate-context'
 import { matchesQuery, sortBoard, type SortDirection, type SortKey } from '@/utils/board'
@@ -79,11 +79,17 @@ export default function RankingsPage() {
   const positionBoard = usePositionRankings(position, projected && positions.isSuccess)
   const active = position === null ? board : positionBoard
 
+  // See `PlayersPage`: the input takes the keystroke, the board follows.
+  const deferredQuery = useDeferredValue(query)
   const entries = useMemo(() => {
     if (!active.data) return []
-    const matched = active.data.data.filter((entry) => matchesQuery(entry, query))
+    const matched = active.data.data.filter((entry) => matchesQuery(entry, deferredQuery))
     return sortBoard(matched, sort, direction)
-  }, [active.data, query, sort, direction])
+  }, [active.data, deferredQuery, sort, direction])
+  const projections = useMemo(
+    () => active.data?.data.map((entry) => entry.projection),
+    [active.data],
+  )
 
   // Both keys land in one `setState` call: two calls in the same tick would
   // each read the same stale search params and the second would clobber the
@@ -108,15 +114,19 @@ export default function RankingsPage() {
 
   // Reset the search when the board changes underneath it: a term that matched
   // four running backs matches nothing on the tight end board, and an empty
-  // screen the user did not ask for reads as a broken page. Skipped on the
-  // first render so a deep link with `?query=` intact — e.g. from Back/Forward
-  // or a shared URL — isn't wiped the instant the page mounts.
-  const isFirstRender = useRef(true)
+  // screen the user did not ask for reads as a broken page. Not on mount, so a
+  // deep link with `?query=` intact — e.g. from Back/Forward or a shared URL —
+  // isn't wiped the instant the page mounts.
+  //
+  // Compared against the last position acted on, not gated by a "first
+  // render" flag. `setQuery` is rebuilt on every URL change (React Router's
+  // `setSearchParams` depends on the current search params), so an effect that
+  // ran whenever its dependencies changed fired on every keystroke and erased
+  // the term being typed: search on this page did not work at all.
+  const lastPosition = useRef(position)
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
-    }
+    if (lastPosition.current === position) return
+    lastPosition.current = position
     setQuery('')
   }, [position, setQuery])
 
@@ -145,8 +155,8 @@ export default function RankingsPage() {
       ) : (
         <>
           <div className="mb-4 space-y-3">
-            <CalibrationNotice projections={active.data?.data.map((entry) => entry.projection)} />
-            {active.data && <NoticeList notices={active.data.meta.notices} />}
+            <CalibrationNotice projections={projections} />
+            {active.data && <NoticeList notices={boardNotices(active.data.meta)} />}
           </div>
 
           <RankingsToolbar

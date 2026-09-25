@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 
 import { Card, CardBody } from '@/components/ui/Card'
+import { Link } from 'react-router-dom'
+
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatCard } from '@/components/ui/StatCard'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -182,6 +184,11 @@ export default function MockDraftPage() {
       <PageHeader
         title="Mock draft"
         question="Which draft position builds the strongest roster, and what does it take there?"
+        action={
+          <Link to="/draft-board" className="text-accent-text text-sm hover:underline">
+            Compare this pool with ADP
+          </Link>
+        }
       />
 
       <div className="space-y-6">

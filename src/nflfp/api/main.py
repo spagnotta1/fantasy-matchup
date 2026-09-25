@@ -29,6 +29,7 @@ from .provenance import PROVENANCE_LEGEND
 from .routers import (
     advice,
     draft,
+    insights,
     matchups,
     meta,
     players,
@@ -236,6 +237,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         players.router,
         matchups.router,
         advice.router,
+        insights.router,
         simulations.router,
         draft.router,
     ):

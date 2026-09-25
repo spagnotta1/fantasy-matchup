@@ -102,7 +102,11 @@ test('the board becomes cards rather than a squeezed table', async ({ page }) =>
   await settle(page)
 
   await expect(page.locator('table')).toHaveCount(0)
-  // And the whole board is still there, not a truncated slice.
+  // And the whole board is still reachable, not a truncated slice: the first
+  // paint is budgeted, the footer names the real total, and "Show all" draws it.
+  await expect(page.getByText(/^Showing the top 100 of \d+ players\./)).toBeVisible()
+  await page.getByRole('button', { name: /^Show all \d+$/ }).click()
+  await expect(page.getByText(/^Showing all \d+ players\.$/)).toBeVisible()
   const links = await page.locator('a[href^="/players/"]').count()
   expect(links).toBeGreaterThan(100)
 })
