@@ -42,7 +42,9 @@ from .build import (  # noqa: E402
     available_relations,
     build_features,
     drop_features,
+    materialised_features,
     refresh_features,
+    restore_features,
 )
 
 __all__ = [
@@ -54,5 +56,7 @@ __all__ = [
     "build_features",
     "drop_features",
     "lagged_window",
+    "materialised_features",
     "refresh_features",
+    "restore_features",
 ]

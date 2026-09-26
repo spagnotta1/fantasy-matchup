@@ -6,7 +6,8 @@ Two phases, deliberately separated:
    Postgres staging tables via ATTACH. Slow, network-bound, and safe to fail:
    nothing user-visible has changed yet.
 2. **Publish** — a single Postgres transaction swaps staging into the live
-   tables, recreates indexes and rebuilds the views. Fast and atomic, so
+   tables, recreates indexes and rebuilds the views and whichever feature
+   matviews existed before it started. Fast and atomic, so
    readers never see a half-updated warehouse.
 
 Modes:
@@ -31,6 +32,7 @@ import traceback
 import duckdb
 
 from . import pg, warehouse
+from .features import materialised_features, restore_features
 from .sources import (
     DATASETS,
     DATASETS_BY_NAME,
@@ -342,6 +344,10 @@ def run(mode: str, start: int, end: int, seasons: list[int], selected: list[Data
         print("\npublishing ...")
         try:
             with pg.connect() as conn, conn.cursor() as cur:
+                # Read before anything is dropped: dropping the views below
+                # cascades into every feature matview, and those have to be back
+                # before this commits or the API 503s until a feature job runs.
+                features = materialised_features(cur)
                 warehouse.drop_views(cur)
                 for ds, rows, _dt, _ in staged:
                     # Append datasets append in both modes: `full` rebuilding
@@ -361,8 +367,20 @@ def run(mode: str, start: int, end: int, seasons: list[int], selected: list[Data
                         (run_id, ds.name, action, rows),
                     )
                 views = warehouse.rebuild_views(cur)
+                restored = restore_features(cur, features)
                 conn.commit()
             print(f"  views rebuilt: {', '.join(views)}")
+            if restored.built:
+                print(
+                    f"  features rebuilt: {', '.join(restored.built)} "
+                    f"({restored.duration_seconds:.1f}s)"
+                )
+            for name, reason in restored.skipped.items():
+                # The publish itself is sound, so it stays committed; but a
+                # feature view that was live and now is not is an API outage,
+                # and the run must not report ok over it.
+                print(f"  feature NOT rebuilt: {name} ({reason})")
+                failures.append((f"features:{name}", f"not rebuilt after publish: {reason}"))
             published = True
         except Exception:
             failures.append(("publish", traceback.format_exc()))

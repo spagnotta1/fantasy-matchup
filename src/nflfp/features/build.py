@@ -12,6 +12,14 @@ Two operations, because the warehouse has two update modes:
     refresh``, which replaces rows in place and leaves the matviews intact but
     stale.
 
+Every publish — a ``refresh`` as much as a ``full`` — drops the warehouse views
+``CASCADE`` to rebuild them, and every feature view reads one of those, so the
+cascade takes the whole feature layer with it. The publish therefore calls
+:func:`restore_features` before it commits, which is what makes "intact" above
+true. Without it the daily injuries reload deleted every feature view and the
+API returned 503 on the projection board until the next hourly
+``refresh_features`` noticed and rebuilt them.
+
 Concurrent refresh is the default and matters: the non-concurrent form takes an
 ``ACCESS EXCLUSIVE`` lock, so every reader blocks until it finishes. On a Sunday
 morning that is an outage. It requires a unique index, which every
@@ -63,6 +71,14 @@ class BuildResult:
         )
 
 
+_RELATIONS_SQL = """
+    SELECT table_name AS name FROM information_schema.tables
+     WHERE table_schema = current_schema()
+    UNION
+    SELECT matviewname FROM pg_matviews WHERE schemaname = current_schema()
+"""
+
+
 def available_relations(session: Session) -> set[str]:
     """Every table, view and matview currently in the schema.
 
@@ -70,17 +86,7 @@ def available_relations(session: Session) -> set[str]:
     detail that silently breaks dependency resolution if missed, since a
     feature depending on another feature would look unbuildable.
     """
-    rows = session.execute(
-        text(
-            """
-            SELECT table_name AS name FROM information_schema.tables
-             WHERE table_schema = current_schema()
-            UNION
-            SELECT matviewname FROM pg_matviews WHERE schemaname = current_schema()
-            """
-        )
-    ).scalars()
-    return set(rows)
+    return set(session.execute(text(_RELATIONS_SQL)).scalars())
 
 
 def build_features(
@@ -185,3 +191,67 @@ def drop_features(session: Session, registry: FeatureRegistry = REGISTRY) -> lis
         session.execute(text(f"DROP MATERIALIZED VIEW IF EXISTS {view.name} CASCADE"))
         dropped.append(view.name)
     return dropped
+
+
+# The two functions below take a DB-API cursor rather than a Session: they run
+# inside the pipeline's psycopg publish transaction, which is not SQLAlchemy's.
+
+
+def materialised_features(cur, registry: FeatureRegistry = REGISTRY) -> set[str]:
+    """Feature views that exist right now.
+
+    Read by the publish *before* it drops anything, so that
+    :func:`restore_features` knows what the cascade took.
+    """
+    cur.execute(
+        "SELECT matviewname FROM pg_matviews WHERE schemaname = current_schema()"
+    )
+    return {row[0] for row in cur.fetchall()} & set(registry.names())
+
+
+def restore_features(
+    cur,
+    previously: set[str],
+    registry: FeatureRegistry = REGISTRY,
+) -> BuildResult:
+    """Rebuild, inside the caller's transaction, the feature views a publish dropped.
+
+    Only views that existed before the publish are rebuilt: a warehouse that
+    never had its features built is not given them as a side effect of loading
+    injuries, which keeps the first build an explicit ``build_features`` job.
+
+    A failure raises, so the publish rolls back and the previous warehouse,
+    features included, stays live. That is the same bargain as a failed swap —
+    better than committing a warehouse with no feature layer on top of it.
+
+    Rows are not counted, unlike :func:`build_features`: this runs while the
+    publish holds its locks, and the counts would add a scan per view to a
+    window in which API reads of these views are waiting.
+    """
+    started = time.monotonic()
+    cur.execute(_RELATIONS_SQL)
+    available = {row[0] for row in cur.fetchall()}
+    ready = [v for v in registry.buildable(available) if v.name in previously]
+
+    built: list[str] = []
+    for view in ready:
+        # A `by_season` publish has already cascaded these away; a view that
+        # only reads `raw_*` directly could survive one, so drop to be sure.
+        cur.execute(f"DROP MATERIALIZED VIEW IF EXISTS {view.name} CASCADE")
+        logger.info("restoring %s", view.name)
+        cur.execute(view.create_sql())
+        for statement in view.index_statements():
+            cur.execute(statement)
+        built.append(view.name)
+
+    skipped = {
+        name: "inputs no longer present after publish"
+        for name in sorted(previously - set(built))
+    }
+    result = BuildResult(built, skipped, {}, time.monotonic() - started)
+    logger.info(
+        "feature restore: %d view(s), %.1fs%s",
+        len(built), result.duration_seconds,
+        f", {len(skipped)} NOT restored" if skipped else "",
+    )
+    return result
