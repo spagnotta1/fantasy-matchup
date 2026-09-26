@@ -41,7 +41,8 @@ The pipeline deliberately separates a slow, fallible phase from a fast, atomic o
    Postgres *staging* tables via `ATTACH`. Network-bound and safe to fail:
    nothing user-visible has changed yet.
 2. **Publish** — one Postgres transaction swaps staging into the live tables,
-   recreates indexes and rebuilds the views. Readers never see a half-updated
+   recreates indexes, rebuilds the views, and rebuilds whichever feature
+   matviews existed before it started. Readers never see a half-updated
    warehouse, and a failure mid-publish rolls back completely.
 
 ### Refresh strategy
@@ -1580,6 +1581,15 @@ disagree around the 4th decimal. That's arithmetic, not a porting bug.
 - psycopg's async driver refuses `ProactorEventLoop`, which is what uvicorn
   picks on Windows outside a reloader. `python -m nflfp.api` handles it; the
   test suite sets the selector policy in `conftest.py`.
+- **Every** publish, not only `full`, deletes the feature matviews: it drops
+  the warehouse views `CASCADE` to rebuild them, and every `feat_*` reads one.
+  Until the publish restored them itself, the daily `refresh_injuries` job
+  (a one-dataset `by_season` reload) took the whole feature layer down and the
+  board returned 503 until the next hourly `refresh_features` noticed — on
+  Railway on 2026-09-26, 11:03 → 11:49 UTC, with `warm_cache` failing 35 paths
+  in between. The restore runs inside the publish transaction (~23 s for all
+  nine views on the local warehouse), so API reads of those views wait on its
+  locks for that long instead of failing for most of an hour.
 
 ## What the data says so far
 

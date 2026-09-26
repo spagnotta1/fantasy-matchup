@@ -78,6 +78,78 @@ class TestRegistry:
         assert len(registry.buildable({"player_week"})) == 2
 
 
+class _RelationsCursor:
+    """A DB-API cursor over a fixed schema: answers the two catalogue reads."""
+
+    def __init__(self, relations: set[str], matviews: set[str]) -> None:
+        self._relations, self._matviews = relations, matviews
+        self._last = ""
+        self.statements: list[str] = []
+
+    def execute(self, sql, params=None):
+        self._last = sql
+        self.statements.append(" ".join(sql.split()))
+
+    def fetchall(self):
+        if "information_schema" in self._last:
+            return [(name,) for name in self._relations]
+        if "pg_matviews" in self._last:
+            return [(name,) for name in self._matviews]
+        return []
+
+
+class TestRestoreAfterPublish:
+    """Every publish drops the warehouse views CASCADE, and every feature view
+    reads one of them. Before the publish rebuilt them itself, the daily
+    injuries reload deleted the whole feature layer and the board 503'd until
+    the next hourly refresh_features (measured on Railway, 2026-09-26: gone
+    11:03 -> 11:49 UTC, warm_cache failed 35 paths in between)."""
+
+    def _registry(self) -> FeatureRegistry:
+        registry = FeatureRegistry()
+        registry.register(FeatureView("feat_a", "SELECT 1", ("player_week",), ("x",)))
+        registry.register(FeatureView("feat_b", "SELECT 1", ("feat_a",), ("x",)))
+        registry.register(FeatureView("feat_pbp", "SELECT 1", ("raw_pbp",), ("x",)))
+        return registry
+
+    def test_only_registered_matviews_are_remembered(self):
+        from nflfp.features import materialised_features
+
+        cur = _RelationsCursor(set(), {"feat_a", "feat_b", "some_other_matview"})
+        assert materialised_features(cur, self._registry()) == {"feat_a", "feat_b"}
+
+    def test_what_existed_is_rebuilt_in_dependency_order_with_its_indexes(self):
+        from nflfp.features import restore_features
+
+        # After the publish: the warehouse view is back, the features are not.
+        cur = _RelationsCursor({"player_week"}, set())
+        result = restore_features(cur, {"feat_a", "feat_b"}, self._registry())
+
+        assert result.built == ["feat_a", "feat_b"]
+        assert result.skipped == {}
+        creates = [s for s in cur.statements if s.startswith("CREATE MATERIALIZED VIEW")]
+        assert [s.split()[3] for s in creates] == ["feat_a", "feat_b"]
+        assert any(s.startswith("CREATE UNIQUE INDEX IF NOT EXISTS feat_b_key_idx")
+                   for s in cur.statements)
+
+    def test_a_view_that_never_existed_is_not_built_as_a_side_effect(self):
+        """First build stays an explicit build_features job."""
+        from nflfp.features import restore_features
+
+        cur = _RelationsCursor({"player_week", "raw_pbp"}, set())
+        result = restore_features(cur, {"feat_a"}, self._registry())
+        assert result.built == ["feat_a"]
+        assert not any("feat_pbp" in s for s in cur.statements)
+
+    def test_a_view_whose_inputs_vanished_is_reported_not_dropped_silently(self):
+        from nflfp.features import restore_features
+
+        cur = _RelationsCursor({"player_week"}, set())
+        result = restore_features(cur, {"feat_a", "feat_pbp"}, self._registry())
+        assert result.built == ["feat_a"]
+        assert set(result.skipped) == {"feat_pbp"}
+
+
 # ---------------------------------------------------------------------------
 # leakage
 # ---------------------------------------------------------------------------
@@ -467,6 +539,28 @@ class TestAgainstRealData:
         assert total > 1000
         assert context / total > 0.95
         assert defense / total > 0.95
+
+    def test_a_publish_leaves_every_feature_view_in_place(self, pg_engine):
+        """The publish's own view drop/rebuild, then the restore, in one
+        transaction that is rolled back — the real warehouse is untouched."""
+        self._skip_without_features(pg_engine)
+        from nflfp import warehouse
+        from nflfp.features import materialised_features, restore_features
+
+        raw = pg_engine.raw_connection()
+        try:
+            cur = raw.cursor()
+            before = materialised_features(cur)
+            warehouse.drop_views(cur)
+            # The failure mode being fixed: the cascade really does take them.
+            assert materialised_features(cur) == set()
+            warehouse.rebuild_views(cur)
+            result = restore_features(cur, before)
+            assert result.skipped == {}
+            assert materialised_features(cur) == before
+        finally:
+            raw.rollback()
+            raw.close()
 
     def test_build_is_deterministic(self, pg_engine):
         """Same warehouse state, same feature values — the property a backtest
