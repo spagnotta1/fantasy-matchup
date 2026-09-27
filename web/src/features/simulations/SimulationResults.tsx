@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { StatCard } from '@/components/ui/StatCard'
 import { InfoTip } from '@/components/ui/Tooltip'
-import { NoticeList } from '@/components/feedback/States'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { AssumptionsPanel } from '@/features/simulations/AssumptionsPanel'
 import { PositionalEdges } from '@/features/simulations/PositionalEdges'
@@ -13,7 +12,8 @@ import { SwingFactors } from '@/features/simulations/SwingFactors'
 import { groupNotices } from '@/features/simulations/notices'
 import { ShareMatchup } from '@/features/simulations/ShareMatchup'
 import { formatPercent, formatPoints, formatScoringProfile } from '@/utils/format'
-import type { MatchupSimulation, ResponseMeta } from '@/api/schemas'
+import type { MatchupSimulation, ResponseMeta, SimulationAssumptions } from '@/api/schemas'
+import type { NoticeGroup } from '@/features/simulations/notices'
 
 /** Below this the two totals disagree enough to be worth explaining. */
 const RECONCILIATION_TOLERANCE = 0.02
@@ -47,6 +47,8 @@ export function SimulationResults({
   onAdjust?: () => void
 }) {
   const { team_a: teamA, team_b: teamB } = result
+  const notices = groupNotices(meta.notices, { a: labelA, b: labelB })
+  const runNotes = notices.find((group) => group.key === 'run')?.notices ?? []
   const leaderLabel = teamA.win_probability >= teamB.win_probability ? labelA : labelB
   const leaderProbability = Math.max(teamA.win_probability, teamB.win_probability)
 
@@ -61,19 +63,18 @@ export function SimulationResults({
         iterations={result.simulation.iterations}
         leaderLabel={leaderLabel}
         leaderProbability={leaderProbability}
+        assumptions={result.assumptions}
       />
 
       {/*
-        Grouped rather than listed. The engine labels the caveats that belong to
-        one lineup — an injury designation, a stack sharing an offence — and a
-        real matchup produces a dozen notices in total. Flat, the two that name
-        your own starters are indistinguishable from the boilerplate.
+        Every notice the engine returns is still shown, each once. The ones
+        that name a lineup's own players — a designation, a stack — sit here,
+        right under the result they qualify. The run-wide ones (independence,
+        no kickers, no injury adjustment) used to be repeated here as a third
+        alert box and again in the assumptions panel; they now live only in
+        the panel, and the headline carries a one-sentence summary of them.
       */}
-      <div className="space-y-3">
-        {groupNotices(meta.notices, { a: labelA, b: labelB }).map((group) => (
-          <NoticeList key={group.key} notices={group.notices} title={group.title} showTitle />
-        ))}
-      </div>
+      <LineupNotes groups={notices.filter((group) => group.key !== 'run')} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -157,7 +158,12 @@ export function SimulationResults({
           </CardBody>
         </Card>
 
-        <AssumptionsPanel assumptions={result.assumptions} simulation={result.simulation} />
+        <AssumptionsPanel
+          id="simulation-assumptions"
+          assumptions={result.assumptions}
+          simulation={result.simulation}
+          notes={runNotes}
+        />
 
         {onAdjust && <AdjustAndRerun onAdjust={onAdjust} />}
       </div>
@@ -218,6 +224,7 @@ function WinProbability({
   iterations,
   leaderLabel,
   leaderProbability,
+  assumptions,
 }: {
   labelA: string
   labelB: string
@@ -227,7 +234,9 @@ function WinProbability({
   iterations: number
   leaderLabel: string
   leaderProbability: number
+  assumptions: SimulationAssumptions
 }) {
+  const limits = headlineLimits(assumptions)
   return (
     <Card className="overflow-hidden">
       <CardBody className="p-5 sm:p-6">
@@ -274,6 +283,14 @@ function WinProbability({
               This is an estimate based on each player&apos;s projected range, not a prediction of
               the result.
             </span>
+            {limits.length > 0 && (
+              <span className="text-ink-muted mt-1.5 block">
+                It {joinClauses(limits)}.{' '}
+                <a href="#simulation-assumptions" className="text-accent-text font-medium hover:underline">
+                  What it assumes
+                </a>
+              </span>
+            )}
           </p>
           <ShareMatchup />
         </div>
@@ -315,19 +332,74 @@ function Reconciliation({
       aria-label="Totals do not reconcile"
     >
       <p className="text-caution-text text-xs leading-relaxed">
-        <span className="font-semibold">
-          The simulated total and the added-up projections do not match.
-        </span>{' '}
-        For {labelA} the simulation averages {formatPoints(simulated)} while the projections add up
-        to {formatPoints(projected)}. Normally these match. This week&apos;s projections skipped the
-        model&apos;s final adjustment step, while the simulation uses each player&apos;s full range,
-        which averages higher. Trust the win chance and the margins — they all come from the same
-        simulation — more than the total points.
+        <span className="font-semibold">Why the two totals above differ.</span> For {labelA}, the
+        simulation averages {formatPoints(simulated)} points; the players&apos; projections add up
+        to {formatPoints(projected)}. This week&apos;s projections were published without the
+        model&apos;s final adjustment, and the simulation draws from each player&apos;s full range,
+        which averages a little higher. The win chance and the margins come from the simulation,
+        so read those rather than the added-up total.
         <InfoTip
           label="About the two totals"
           content="The simulated total is the average team score across every simulated week. The projection total adds up each player's projection. The two match when projections have had their final adjustment."
         />
       </p>
     </aside>
+  )
+}
+
+/**
+ * The limits that qualify the headline number, from the structured flags.
+ *
+ * Read from `assumptions`, never from notice prose, so the sentence changes by
+ * itself the day a kicker model or an injury adjustment ships. Only the limits
+ * that change what the percentage means are here; the rest are in the panel.
+ */
+function headlineLimits(assumptions: SimulationAssumptions): string[] {
+  const limits: string[] = []
+  if (!assumptions.kicker_projection_available || !assumptions.defense_projection_available) {
+    limits.push('covers QB, RB, WR and TE only (no kickers or defences)')
+  }
+  if (assumptions.player_independence) {
+    limits.push("simulates each player's score on its own")
+  }
+  if (!assumptions.injury_adjustment_applied) {
+    limits.push('does not adjust for injury designations')
+  }
+  return limits
+}
+
+function joinClauses(clauses: string[]): string {
+  if (clauses.length <= 1) return clauses.join('')
+  return `${clauses.slice(0, -1).join(', ')} and ${clauses[clauses.length - 1]}`
+}
+
+/**
+ * The notes the engine attached to one lineup: designations, stacks, players
+ * sharing a game. One card with a section per side, rather than an alert box
+ * each — they are things to know about your players, not warnings about the
+ * run. The text is the engine's, untouched.
+ */
+function LineupNotes({ groups }: { groups: NoticeGroup[] }) {
+  if (groups.length === 0) return null
+  return (
+    <Card>
+      <CardHeader
+        as="h2"
+        title="About these lineups"
+        description="What the engine flagged about the players on each side. None of it changes the numbers above."
+      />
+      <CardBody className="grid gap-5 sm:grid-cols-2">
+        {groups.map((group) => (
+          <section key={group.key} className="min-w-0">
+            <h3 className="text-ink text-sm font-semibold">{group.title.replace(/ — what to know$/, '')}</h3>
+            <ul className="text-ink-secondary mt-1.5 list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
+              {group.notices.map((notice) => (
+                <li key={notice}>{notice}</li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </CardBody>
+    </Card>
   )
 }

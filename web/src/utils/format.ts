@@ -64,6 +64,15 @@ export function formatPercent(value: number | null | undefined, digits = 0): str
   return `${(value * 100).toFixed(digits)}%`
 }
 
+/**
+ * A scoring threshold as people say it: "20", not "20.0". Thresholds are round
+ * numbers by construction, and "chance of 20.0+" reads as a measurement.
+ */
+export function formatThreshold(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return EM_DASH
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
 export function formatNumber(value: number | null | undefined, digits = 1): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return EM_DASH
   return value.toLocaleString(undefined, {

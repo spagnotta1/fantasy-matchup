@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { TeamLink } from '@/components/domain/TeamLink'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Check, GitCompareArrows, UserPlus } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
 import { StatCard } from '@/components/ui/StatCard'
@@ -9,6 +9,8 @@ import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { ProjectionValue } from '@/components/domain/ProjectionValue'
+import { Button } from '@/components/ui/Button'
+import { useRosterMembership } from '@/hooks/useRoster'
 import { formatPercent, formatPoints, formatScoringProfile } from '@/utils/format'
 import type { Player, Projection } from '@/api/schemas'
 
@@ -32,15 +34,19 @@ export function PlayerHero({
   scoringProfile: string
 }) {
   const points = projection?.prediction.points
+  const [onRoster, addToRoster] = useRosterMembership(player.player_id)
+  // Only the positions My team and Compare accept. A kicker page offering
+  // "Add to my team" would add a player the lineup can never start.
+  const actionable = ['QB', 'RB', 'WR', 'TE'].includes(player.position ?? '')
 
   return (
     <div className="mb-6">
       <Link
-        to="/players"
+        to="/rankings"
         className="text-ink-muted hover:text-ink mb-4 inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
       >
         <ArrowLeft aria-hidden className="size-3.5" />
-        All players
+        All rankings
       </Link>
 
       <div className="flex flex-wrap items-start gap-4">
@@ -93,6 +99,34 @@ export function PlayerHero({
             )}
           </div>
         </div>
+
+        {actionable && (
+          // Full width below `sm` so the actions take their own row: beside
+          // the name on a phone they squeezed it into a one-word column.
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            {onRoster ? (
+              <Link
+                to="/my-team"
+                className="border-line-input text-ink hover:bg-surface-hover inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-control)] border px-3 text-sm font-medium transition-colors"
+              >
+                <Check aria-hidden className="size-4" />
+                On your team
+              </Link>
+            ) : (
+              <Button variant="primary" size="md" onClick={addToRoster}>
+                <UserPlus aria-hidden className="size-4" />
+                Add to my team
+              </Button>
+            )}
+            <Link
+              to={`/compare?players=${player.player_id}`}
+              className="border-line-input text-ink hover:bg-surface-hover inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-control)] border px-3 text-sm font-medium transition-colors"
+            >
+              <GitCompareArrows aria-hidden className="size-4" />
+              Compare
+            </Link>
+          </div>
+        )}
       </div>
 
       {points && (

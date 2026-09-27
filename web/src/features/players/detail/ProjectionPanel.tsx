@@ -1,6 +1,7 @@
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
-import { formatLabel, formatNumber, formatPercent, formatPoints } from '@/utils/format'
+import { OutcomeRange } from '@/components/domain/ProjectionValue'
+import { formatLabel, formatNumber, formatPercent, formatPoints, formatThreshold } from '@/utils/format'
 import type { Components, Points } from '@/api/schemas'
 
 /**
@@ -34,12 +35,12 @@ export function ProjectionPanel({
           <Figure
             label="Boom"
             value={formatPercent(points.boom_probability)}
-            detail={`chance of ${formatPoints(points.boom_threshold)}+ pts`}
+            detail={`chance of ${formatThreshold(points.boom_threshold)}+ pts`}
           />
           <Figure
             label="Bust"
             value={formatPercent(points.bust_probability)}
-            detail={`chance of under ${formatPoints(points.bust_threshold)} pts`}
+            detail={`chance of under ${formatThreshold(points.bust_threshold)} pts`}
           />
           <Figure label="Consistency" value={points.shape === 'unknown' ? '—' : formatLabel(points.shape)} detail="steady or boom-or-bust" />
           <Figure
@@ -75,8 +76,6 @@ function PercentileStrip({ points }: { points: Points }) {
     return <p className="text-ink-muted text-sm">No scoring range is available for this projection.</p>
   }
 
-  const span = Math.max(ceiling - floor, 0.001)
-  const at = (value: number) => ((value - floor) / span) * 100
   const marks = [
     { label: 'Floor', value: floor },
     p25 !== null && p25 !== undefined ? { label: 'Low', value: p25 } : null,
@@ -94,28 +93,22 @@ function PercentileStrip({ points }: { points: Points }) {
         </span>
       </div>
 
-      <div
-        className="relative h-10"
-        role="img"
-        aria-label={marks.map((mark) => `${mark.label} ${formatPoints(mark.value)} points`).join(', ')}
-      >
-        <div className="bg-chart-series/25 absolute inset-x-0 top-3 h-2 rounded-full" />
-        {marks.map((mark) => (
-          <div
-            key={mark.label}
-            className="absolute top-0 -translate-x-1/2"
-            style={{ left: `${Math.min(Math.max(at(mark.value), 0), 100)}%` }}
-          >
-            <span
-              className={
-                mark.label === 'Middle'
-                  ? 'bg-chart-series ring-surface block h-8 w-1 rounded-full ring-2'
-                  : 'bg-chart-series/70 mt-2 block h-4 w-0.5 rounded-full'
-              }
-            />
-          </div>
-        ))}
-      </div>
+      {/*
+        The same field strip as every board, so a range reads the same way on
+        every screen: box for the middle half, line for 8 in 10, tick for the
+        middle outcome, yellow for the boom threshold. Scaled to at least 40
+        points so it matches the boards rather than stretching to fill.
+      */}
+      <OutcomeRange
+        floor={floor}
+        p25={p25}
+        median={median}
+        p75={p75}
+        ceiling={ceiling}
+        threshold={points.boom_threshold}
+        scaleMax={Math.max(40, ceiling)}
+        size="lg"
+      />
 
       <dl className="text-ink-muted mt-1 flex justify-between text-[0.6875rem]">
         {marks.map((mark) => (

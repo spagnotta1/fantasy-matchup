@@ -5,13 +5,12 @@ import { CloudRain } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { ShowMoreRows } from '@/components/domain/BoardBudget'
 import { useRenderBudget } from '@/hooks/useRenderBudget'
-import { ConfidenceChip } from '@/components/domain/ConfidenceChip'
 import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
 import { boardCeiling, groupByTier } from '@/utils/board'
-import { formatPoints } from '@/utils/format'
+import { formatPercent, formatPoints, formatThreshold } from '@/utils/format'
 import type { RankedProjection } from '@/api/schemas'
 
 /**
@@ -173,12 +172,20 @@ const ProjectionCard = memo(function ProjectionCard({
         <div className="mt-3">
           <OutcomeRange
             floor={points.floor}
+            p25={points.p25}
             median={points.median}
+            p75={points.p75}
             ceiling={points.ceiling}
+            threshold={points.boom_threshold}
             scaleMax={scaleMax}
           />
-          <p className="text-ink-muted mt-1 text-[0.6875rem]">
-            Floor {formatPoints(points.floor)} · Ceiling {formatPoints(points.ceiling)}
+          <p className="text-ink-muted mt-1 flex justify-between text-[0.6875rem]">
+            <span>
+              Floor {formatPoints(points.floor)} · Ceiling {formatPoints(points.ceiling)}
+            </span>
+            <span className="text-ink font-semibold">
+              {formatPercent(points.boom_probability)} chance of {formatThreshold(points.boom_threshold)}+
+            </span>
           </p>
         </div>
 
@@ -188,7 +195,6 @@ const ProjectionCard = memo(function ProjectionCard({
             opponent={projection.opponent}
             fpAllowed={projection.matchup?.fp_allowed_vs_position_l4}
           />
-          <ConfidenceChip label={points.confidence_label} value={points.confidence} />
           <InjuryBadge injury={injury} />
           {weather?.is_adverse && (
             <Badge tone="info" icon={<CloudRain className="size-3" />}>

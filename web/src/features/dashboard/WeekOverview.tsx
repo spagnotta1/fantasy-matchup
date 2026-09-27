@@ -15,6 +15,12 @@ import { formatGameDay, formatSpread } from '@/utils/format'
  * the same empty array. This card is where that distinction surfaces, so no
  * other view has to guess.
  */
+function formatPublished(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
 export function WeekOverview() {
   const { data, isPending, isError, error, refetch } = useWeek()
 
@@ -48,7 +54,10 @@ export function WeekOverview() {
       <CardHeader
         as="h2"
         title={`Week ${week.week} · ${week.season}`}
-        description={`${week.game_count} games — ${week.completed_games} completed, ${week.upcoming_games} still to play.`}
+        // "Recorded", not "completed": the count comes from results the weekly
+        // update has loaded, so a game played last night is not in it yet, and
+        // "0 completed" on a Saturday reads as a claim about the league.
+        description={`${week.game_count} games. Results recorded for ${week.completed_games} so far.`}
         action={
           week.projections_published ? (
             <Badge tone="positive" icon={<CheckCircle2 className="size-3" />}>
@@ -80,7 +89,8 @@ export function WeekOverview() {
         {week.model && (
           <p className="text-ink-muted flex items-center gap-1.5 text-xs">
             <Database aria-hidden className="size-3.5" />
-            {week.model.model_name} v{week.model.model_version} · run {week.model.run_id}
+            Projections from model run {week.model.run_id}
+            {week.model.published_at ? `, published ${formatPublished(week.model.published_at)}` : ''}
           </p>
         )}
 

@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Swords } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton'
 import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/feedback/States'
@@ -208,8 +210,13 @@ function orderPositions(rows: PositionMatchup[]): PositionMatchup[] {
  * across the whole game — who in this game is worth starting — and splitting by
  * team turns that into two short lists nobody compares.
  */
+/** Enough to cover both teams' likely starters before asking to see more. */
+const GAME_LIST_PREVIEW = 12
+
 function TopProjectionsCard({ analysis }: { analysis: MatchupAnalysis }) {
   const entries = analysis.top_projections
+  const [expanded, setExpanded] = useState(false)
+  const shown = expanded ? entries : entries.slice(0, GAME_LIST_PREVIEW)
 
   return (
     <Card>
@@ -225,11 +232,23 @@ function TopProjectionsCard({ analysis }: { analysis: MatchupAnalysis }) {
           description="Projections for this week do not include players from either team."
         />
       ) : (
-        <ul className="divide-line max-h-[28rem] divide-y overflow-y-auto">
-          {entries.map((entry) => (
-            <ProjectionRow key={entry.projection.player.player_id} entry={entry} />
-          ))}
-        </ul>
+        // No inner scroll: a list scrolling inside a card that sits in a
+        // scrolling page clipped the eighth player mid-row and hid the rest
+        // behind a scrollbar most readers never found.
+        <>
+          <ul className="divide-line divide-y">
+            {shown.map((entry) => (
+              <ProjectionRow key={entry.projection.player.player_id} entry={entry} />
+            ))}
+          </ul>
+          {entries.length > GAME_LIST_PREVIEW && (
+            <div className="border-line border-t px-5 py-3">
+              <Button variant="ghost" size="sm" onClick={() => setExpanded((value) => !value)}>
+                {expanded ? 'Show fewer' : `Show all ${entries.length} players`}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </Card>
   )

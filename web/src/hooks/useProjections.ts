@@ -41,11 +41,20 @@ export const FULL_SLATE_LIMIT = 1000
  * counts it, searches it — so a truncation must be said on screen, not
  * discovered by someone looking for a backup running back who is not there.
  */
-export function boardNotices(meta: ResponseMeta): string[] {
+export function boardNotices(
+  meta: ResponseMeta,
+  { showsGrades = true }: { showsGrades?: boolean } = {},
+): string[] {
+  // The board's "N matchups are not graded" notice explains a chip. On a
+  // screen that draws no grade chip it explains nothing, and a banner that
+  // explains nothing teaches readers to skip banners.
+  const notices = showsGrades
+    ? meta.notices
+    : meta.notices.filter((notice) => !/\bnot graded\b/i.test(notice))
   const page = meta.page
-  if (!page || page.total <= page.returned) return meta.notices
+  if (!page || page.total <= page.returned) return notices
   return [
-    ...meta.notices,
+    ...notices,
     `Only the top ${page.returned} of ${page.total} projected players were loaded, so sorting, search and counts on this screen only cover those ${page.returned}.`,
   ]
 }

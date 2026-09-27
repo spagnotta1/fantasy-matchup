@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
-import { formatPoints, formatSigned } from '@/utils/format'
+import { formatPoints, formatSigned, formatThreshold } from '@/utils/format'
 
 export interface GameLogDatum {
   key: string
@@ -209,7 +209,7 @@ export function GameLogChart({
               y={y(boomThreshold)}
               x1={PAD.left}
               x2={width - PAD.right}
-              label={`Boom ${formatPoints(boomThreshold)}`}
+              label={`Boom ${formatThreshold(boomThreshold)}`}
               above
             />
           )}
@@ -218,7 +218,7 @@ export function GameLogChart({
               y={y(bustThreshold)}
               x1={PAD.left}
               x2={width - PAD.right}
-              label={`Bust ${formatPoints(bustThreshold)}`}
+              label={`Bust ${formatThreshold(bustThreshold)}`}
             />
           )}
           {/* No reference line for the player's average. It lands within a

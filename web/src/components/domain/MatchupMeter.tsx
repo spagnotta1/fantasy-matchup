@@ -37,7 +37,23 @@ export function MatchupMeter({
 
       <div className="flex items-center gap-2">
         {score === null ? (
-          <span className="text-ink-muted text-xs">Too few games to grade</span>
+          // Ungraded is not the same as unknown. The defence's recent points
+          // allowed are still a fact worth reading; only the week-relative
+          // grade needs three games. Saying just "too few games" eight times
+          // on one screen hid the number a reader could use.
+          <span className="text-ink-muted text-xs">
+            {matchup.fp_allowed_l4 !== null && matchup.fp_allowed_l4 !== undefined ? (
+              <>
+                <span className="text-ink-secondary tnum font-medium">
+                  {formatPoints(matchup.fp_allowed_l4)} pts/gm allowed
+                </span>
+                {grade.sample_games ? ` over ${grade.sample_games} ${grade.sample_games === 1 ? 'game' : 'games'}` : ''}
+                {' — too few to grade'}
+              </>
+            ) : (
+              'Too few games to grade'
+            )}
+          </span>
         ) : (
           <>
             <div

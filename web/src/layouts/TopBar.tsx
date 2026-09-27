@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { GitCompareArrows, Menu, Monitor, Moon, Search, Settings, SlidersHorizontal, Sun, User } from 'lucide-react'
 
 import { openCommandPalette } from '@/app/command-palette'
@@ -37,6 +37,13 @@ function ThemeToggle() {
  * for the page title, and the selection changes far less often than it is read.
  */
 export function TopBar() {
+  // The draft pages carry their own season, scoring and league settings and
+  // never read the header's. Showing both put two scoring formats on one
+  // screen that could disagree (Half PPR above, PPR below), with no way to
+  // tell which one the numbers used.
+  const { pathname } = useLocation()
+  const ownsSettings = pathname.startsWith('/mock-draft') || pathname.startsWith('/draft-board')
+
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   return (
@@ -63,7 +70,11 @@ export function TopBar() {
           it is a worse trade than a slightly busier header.
         */}
         <div className="hidden flex-1 md:block">
-          <SlateControls />
+          {ownsSettings ? (
+            <p className="text-ink-muted text-xs">This page uses its own season and scoring settings, below.</p>
+          ) : (
+            <SlateControls />
+          )}
         </div>
 
         <div className="flex flex-1 items-center justify-end gap-1 md:flex-none">
@@ -94,7 +105,7 @@ export function TopBar() {
           <Button
             variant="ghost"
             size="sm"
-            className="px-2 md:hidden"
+            className={cn('px-2 md:hidden', ownsSettings && 'hidden')}
             aria-expanded={filtersOpen}
             aria-controls="slate-controls-mobile"
             onClick={() => setFiltersOpen((open) => !open)}

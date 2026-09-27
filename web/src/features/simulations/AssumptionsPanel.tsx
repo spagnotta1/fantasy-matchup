@@ -24,11 +24,22 @@ import type { SimulationAssumptions, SimulationRun } from '@/api/schemas'
  * overstating the number itself.
  */
 export function AssumptionsPanel({
+  id,
   assumptions,
   simulation,
+  notes = [],
 }: {
+  /** Anchor for the headline's "What it assumes" link. */
+  id?: string
   assumptions: SimulationAssumptions
   simulation: SimulationRun
+  /**
+   * The run-wide notices the engine returned, verbatim. They restate the flags
+   * below in the engine's own words, with the measurements behind them, and
+   * sometimes add something specific to this run (players sharing a game).
+   * Shown here, once, rather than repeated above the result.
+   */
+  notes?: string[]
 }) {
   const flags = [
     {
@@ -69,7 +80,7 @@ export function AssumptionsPanel({
   ]
 
   return (
-    <Card>
+    <Card id={id} className="scroll-mt-20">
       <CardHeader
         as="h2"
         title="What this simulation assumes"
@@ -125,10 +136,19 @@ export function AssumptionsPanel({
           ))}
         </dl>
 
+        {notes.length > 0 && (
+          <div className="border-line border-t pt-3">
+            <h3 className="text-ink mb-1.5 text-xs font-semibold">Notes from this run</h3>
+            <ul className="text-ink-muted list-disc space-y-1.5 pl-4 text-xs leading-relaxed">
+              {notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="border-line border-t pt-3">
-          <h3 className="text-ink-muted mb-2 text-xs font-semibold tracking-wide uppercase">
-            How it was run
-          </h3>
+          <h3 className="text-ink mb-2 text-xs font-semibold">How it was run</h3>
           <dl className="text-ink-muted grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
             <Detail label="Simulations" value={simulation.iterations.toLocaleString()} />
             <Detail label="Seed" value={String(simulation.seed)} />

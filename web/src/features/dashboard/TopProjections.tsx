@@ -52,7 +52,7 @@ export function TopProjections({ count = 8 }: { count?: number }) {
           </CardBody>
           <CardFooter>
             <Link
-              to="/players"
+              to="/rankings"
               className="text-accent-text inline-flex items-center gap-1 font-medium hover:underline"
             >
               All {data.meta.page?.total ?? data.data.length} projected players

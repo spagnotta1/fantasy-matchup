@@ -9,7 +9,6 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Skeleton, SkeletonTable } from '@/components/ui/Skeleton'
 import { StatCard } from '@/components/ui/StatCard'
 import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/feedback/States'
-import { ConfidenceChip } from '@/components/domain/ConfidenceChip'
 import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { PlayerIdentity } from '@/components/domain/PlayerIdentity'
@@ -293,8 +292,8 @@ function TeamDetail({ team }: { team: string }) {
                     <tr className="border-line text-ink-muted border-b text-xs font-medium tracking-wide uppercase">
                       <th scope="col" className="px-3 py-2 text-left">Player</th>
                       <th scope="col" className="px-3 py-2 text-left">Matchup</th>
-                      <th scope="col" className="hidden w-48 px-3 py-2 text-left lg:table-cell">Range</th>
-                      <th scope="col" className="hidden px-3 py-2 text-left md:table-cell">Confidence</th>
+                      <th scope="col" className="hidden w-72 px-3 py-2 text-left lg:table-cell">Range</th>
+                      <th scope="col" className="hidden px-3 py-2 text-right md:table-cell">Chance of 20+</th>
                       <th scope="col" className="px-3 py-2 text-right">Projection</th>
                     </tr>
                   </thead>
@@ -327,13 +326,16 @@ function TeamDetail({ team }: { team: string }) {
                           <td className="hidden px-3 py-2 lg:table-cell">
                             <OutcomeRange
                               floor={points.floor}
+                              p25={points.p25}
                               median={points.median}
+                              p75={points.p75}
                               ceiling={points.ceiling}
+                              threshold={points.boom_threshold}
                               scaleMax={scaleMax}
                             />
                           </td>
-                          <td className="hidden px-3 py-2 md:table-cell">
-                            <ConfidenceChip label={points.confidence_label} value={points.confidence} />
+                          <td className="tnum text-ink hidden px-3 py-2 text-right text-sm font-semibold md:table-cell">
+                            {formatPercent(points.boom_probability)}
                           </td>
                           <td className="px-3 py-2 text-right">
                             <ProjectionValue points={points} actualPoints={projection.actual_points} />

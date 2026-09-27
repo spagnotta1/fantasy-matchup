@@ -4,12 +4,12 @@ import { ArrowDown, ArrowUp } from 'lucide-react'
 import { ShowMoreRows } from '@/components/domain/BoardBudget'
 import { useRenderBudget } from '@/hooks/useRenderBudget'
 
-import { ConfidenceChip } from '@/components/domain/ConfidenceChip'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { PlayerIdentity } from '@/components/domain/PlayerIdentity'
 import { InfoTip } from '@/components/ui/Tooltip'
 import { cn } from '@/utils/cn'
+import { formatPercent } from '@/utils/format'
 import { boardCeiling, groupByTier } from '@/utils/board'
 import type { SortDirection, SortKey } from '@/utils/board'
 import type { RankedProjection } from '@/api/schemas'
@@ -28,27 +28,31 @@ const HINTS = {
   matchup:
     'How easy the opponent is for this position, from A (easiest) to F (toughest), compared with every other matchup this week.',
   range:
-    'The likely scoring range. Left: a bad week. Right: a strong week. The tick marks the middle outcome.',
+    'The likely scoring range, ruled every 5 points. The thin line runs from a bad week to a strong week (8 in 10 outcomes), the solid box holds the middle half, and the tick is the middle outcome. The yellow line is 20 points.',
   floor: 'A bad-but-realistic week. The player scores less than this about 1 week in 10.',
   ceiling: 'A strong week. The player scores more than this about 1 week in 10.',
-  confidence:
-    'How much data backs the projection. Not a rating of the player — low just means a wider range.',
+  boom:
+    'How often a week like this one reaches 20 points or more: the share of the range past the yellow line. An estimate, not a promise.',
   projection: 'Expected fantasy points this week under your scoring settings.',
   tier: 'Players in the same tier are close enough that either could outscore the other.',
 }
 
 const COLUMNS: Column[] = [
   { key: 'rank', label: '#', className: 'w-12' },
-  { key: 'name', label: 'Player', className: 'min-w-56' },
+  { key: 'name', label: 'Player', className: 'min-w-52' },
   { key: null, label: 'Matchup', className: 'w-24', hint: HINTS.matchup },
   // Range and the numeric Floor/Ceiling pair are the same information in two
   // forms, so they never appear together: the bar (which carries its own
   // endpoint labels) from `xl`, the bare numbers at `lg` where the bar has no
   // room to be readable. Both remain sortable from the toolbar dropdown.
-  { key: null, label: 'Range', className: 'w-48 hidden xl:table-cell', hint: HINTS.range },
+  { key: null, label: 'Range', className: 'w-[28rem] hidden xl:table-cell', hint: HINTS.range },
   { key: 'floor', label: 'Floor', className: 'w-20 hidden lg:table-cell xl:hidden', numeric: true, hint: HINTS.floor },
   { key: 'ceiling', label: 'Ceiling', className: 'w-20 hidden lg:table-cell xl:hidden', numeric: true, hint: HINTS.ceiling },
-  { key: 'confidence', label: 'Confidence', className: 'w-28 hidden md:table-cell', hint: HINTS.confidence },
+  // Replaced a Confidence column that read "Low" or "Very low" on every row at
+  // the top of an early-season board: a column with one value carries no
+  // information. The width it described is drawn by the range itself, and the
+  // label is still on the player page and in the sort menu.
+  { key: 'boom', label: 'Chance of 20+', className: 'w-28 hidden md:table-cell', numeric: true, hint: HINTS.boom },
   { key: 'projection', label: 'Projection', className: 'w-24', numeric: true, hint: HINTS.projection },
 ]
 
@@ -146,7 +150,7 @@ export const ProjectionTable = memo(function ProjectionTable({
                       active ? (direction === 'asc' ? 'ascending' : 'descending') : undefined
                     }
                     className={cn(
-                      'text-ink-muted px-3 py-2 text-xs font-medium tracking-wide uppercase',
+                      'text-ink-muted px-3 py-2 text-xs font-medium',
                       column.numeric ? 'text-right' : 'text-left',
                       column.className,
                     )}
@@ -275,8 +279,11 @@ const ProjectionRow = memo(function ProjectionRow({
       <td className="hidden px-3 py-2 xl:table-cell">
         <OutcomeRange
           floor={points.floor}
+          p25={points.p25}
           median={points.median}
+          p75={points.p75}
           ceiling={points.ceiling}
+          threshold={points.boom_threshold}
           scaleMax={scaleMax}
         />
       </td>
@@ -286,8 +293,8 @@ const ProjectionRow = memo(function ProjectionRow({
       <td className="tnum text-ink-secondary hidden px-3 py-2 text-right lg:table-cell xl:hidden">
         {points.ceiling?.toFixed(1) ?? '—'}
       </td>
-      <td className="hidden px-3 py-2 md:table-cell">
-        <ConfidenceChip label={points.confidence_label} value={points.confidence} />
+      <td className="tnum text-ink hidden px-3 py-2 text-right text-sm font-semibold md:table-cell">
+        {formatPercent(points.boom_probability)}
       </td>
       <td className="px-3 py-2 text-right">
         <ProjectionValue points={points} actualPoints={projection.actual_points} />

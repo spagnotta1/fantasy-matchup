@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowDownToLine, Copy, RotateCcw, Shuffle, Trash2, UserRound } from 'lucide-react'
 
@@ -16,14 +16,10 @@ import { PlayerSearchField } from '@/components/domain/PlayerSearchField'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { useSlate } from '@/app/slate-context'
-import { autofillLineup, eligiblePositions, emptyLineup, type LineupRow } from '@/features/simulations/lineupFormat'
-import { encodeLineup, TEAM_A_PARAM } from '@/features/simulations/shareLink'
-import { useBoard, usePlayers } from '@/hooks/useProjections'
-import { useLineupChoice, useRoster } from '@/hooks/useRoster'
-import { useLineupCatalog } from '@/hooks/useSimulation'
+import { useMyLineup } from '@/hooks/useMyLineup'
 import { boardCeiling } from '@/utils/board'
-import { formatPoints, headlinePoints } from '@/utils/format'
-import type { LineupSlot, Player, RankedProjection } from '@/api/schemas'
+import { formatPoints } from '@/utils/format'
+import type { RankedProjection } from '@/api/schemas'
 
 const FANTASY_POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
@@ -48,60 +44,28 @@ const FANTASY_POSITIONS = ['QB', 'RB', 'WR', 'TE']
  */
 export default function MyTeamPage() {
   const slate = useSlate()
-  const [ids, setIds] = useRoster()
-  const [choice, setChoice] = useLineupChoice()
-  const board = useBoard()
-  const catalog = useLineupCatalog()
-  const identities = usePlayers(ids)
+  const {
+    ids,
+    setIds,
+    setChoice,
+    board,
+    catalog,
+    byId,
+    projected,
+    ruledOut,
+    unprojected,
+    lineup,
+    bench,
+    customised,
+    total,
+    bestTotal,
+    openSlots,
+    fits,
+    simulateHref,
+    writeLineup,
+  } = useMyLineup()
   const [copied, setCopied] = useState(false)
 
-  const byId = useMemo(() => {
-    const map = new Map<string, RankedProjection>()
-    for (const entry of board.data?.data ?? []) map.set(entry.projection.player.player_id, entry)
-    return map
-  }, [board.data])
-
-  const roster = useMemo(() => {
-    return ids.map((id, index) => {
-      const entry = byId.get(id)
-      const player: Player | undefined = entry?.projection.player ?? identities[index]?.data
-      return { id, entry, player }
-    })
-  }, [ids, byId, identities])
-
-  const projected = roster
-    .filter((r) => r.entry)
-    .map((r) => r.entry as RankedProjection)
-    .sort((a, b) => a.rank - b.rank)
-  const ruledOut = projected.filter((e) => e.projection.context.injury?.will_not_play)
-  const available = projected.filter((e) => !e.projection.context.injury?.will_not_play)
-  const unprojected = roster.filter((r) => !r.entry)
-
-  const best = useMemo(
-    () =>
-      catalog.isPending ? [] : autofillLineup(emptyLineup(catalog.format), available, catalog.slots, []),
-    [catalog.isPending, catalog.format, catalog.slots, available],
-  )
-  const lineup = useMemo(
-    () =>
-      catalog.isPending
-        ? []
-        : (chosenLineup(emptyLineup(catalog.format), choice, available, catalog.slots) ?? best),
-    [catalog.isPending, catalog.format, catalog.slots, choice, available, best],
-  )
-  const customised = !sameLineup(lineup, best)
-  const starters = new Set(lineup.map((row) => row.player?.player_id).filter(Boolean))
-  const bench = available.filter((e) => !starters.has(e.projection.player.player_id))
-  const total = lineupPoints(lineup, byId)
-  const bestTotal = lineupPoints(best, byId)
-  const openSlots = lineup.filter((row) => !row.player).length
-
-  // Every change writes the whole lineup, slot by slot, so the link always
-  // describes exactly what is on screen. Landing back on the default clears it.
-  const writeLineup = (players: (Player | null)[]) => {
-    const next = players.map((player) => player?.player_id ?? '')
-    setChoice(sameIds(next, lineupIds(best)) ? null : next)
-  }
   const benchSlot = (index: number) =>
     writeLineup(lineup.map((row, i) => (i === index ? null : row.player)))
   const startInSlot = (index: number, playerId: string) => {
@@ -113,10 +77,6 @@ export default function MyTeamPage() {
         return row.player?.player_id === playerId ? null : row.player
       }),
     )
-  }
-  const fits = (entry: RankedProjection, slot: string) => {
-    const position = entry.projection.player.position
-    return position ? eligiblePositions(catalog.slots, slot).includes(position) : false
   }
   const slotOptions = (entry: RankedProjection) =>
     lineup.flatMap((row, index) =>
@@ -134,10 +94,6 @@ export default function MyTeamPage() {
       .filter((entry) => fits(entry, slot))
       .map((entry) => ({ value: entry.projection.player.player_id, label: entry.projection.player.name }))
   const scaleMax = boardCeiling(projected)
-
-  const simulateHref = `/simulation?${TEAM_A_PARAM}=${encodeURIComponent(
-    encodeLineup(lineup.filter((r) => r.player).map((r) => ({ slot: r.slot, player_id: r.player?.player_id as string }))),
-  )}`
 
   const copyLink = async () => {
     try {
@@ -273,9 +229,15 @@ export default function MyTeamPage() {
                     </Button>
                   )}
                   {lineup.some((r) => r.player) && (
-                    <Link to={simulateHref} className="text-accent-text inline-flex items-center gap-1 text-sm hover:underline">
-                      <Shuffle aria-hidden className="size-3.5" />
-                      Simulate
+                    // The page's next step, so it looks like one: this is where
+                    // "who do I start" becomes "do I win", with the lineup
+                    // already filled in.
+                    <Link
+                      to={simulateHref}
+                      className="bg-accent text-on-accent hover:bg-accent-hover inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-control)] px-3 text-sm font-medium transition-colors"
+                    >
+                      <Shuffle aria-hidden className="size-4" />
+                      Estimate my chance of winning
                     </Link>
                   )}
                 </div>
@@ -419,8 +381,11 @@ function RosterTable({
                   <td className="hidden px-3 py-2 lg:table-cell">
                     <OutcomeRange
                       floor={entry.projection.prediction.points.floor}
+                      p25={entry.projection.prediction.points.p25}
                       median={entry.projection.prediction.points.median}
+                      p75={entry.projection.prediction.points.p75}
                       ceiling={entry.projection.prediction.points.ceiling}
+                      threshold={entry.projection.prediction.points.boom_threshold}
                       scaleMax={scaleMax}
                     />
                   </td>
@@ -485,49 +450,4 @@ function MoveSelect({
       }}
     />
   )
-}
-
-/**
- * The lineup the manager chose, or null when there is no usable choice.
- *
- * A stored choice is re-checked against this week every time: a player who
- * left the roster, has no projection, is ruled out or no longer fits the slot
- * leaves that slot empty rather than being silently replaced. A choice written
- * for a different lineup format (a different slot count) is ignored outright.
- */
-function chosenLineup(
-  rows: LineupRow[],
-  choice: string[] | null,
-  available: RankedProjection[],
-  slots: LineupSlot[],
-): LineupRow[] | null {
-  if (!choice || choice.length !== rows.length) return null
-  const players = new Map(available.map((entry) => [entry.projection.player.player_id, entry.projection.player]))
-  const used = new Set<string>()
-  return rows.map((row, index) => {
-    const player = players.get(choice[index] ?? '')
-    if (!player || used.has(player.player_id)) return row
-    if (!player.position || !eligiblePositions(slots, row.slot).includes(player.position)) return row
-    used.add(player.player_id)
-    return { ...row, player }
-  })
-}
-
-function lineupPoints(rows: LineupRow[], byId: Map<string, RankedProjection>): number {
-  return rows.reduce((sum, row) => {
-    const entry = row.player ? byId.get(row.player.player_id) : undefined
-    return sum + (headlinePoints(entry?.projection.prediction.points).value ?? 0)
-  }, 0)
-}
-
-function lineupIds(rows: LineupRow[]): string[] {
-  return rows.map((row) => row.player?.player_id ?? '')
-}
-
-function sameIds(a: string[], b: string[]): boolean {
-  return a.length === b.length && a.every((id, index) => id === b[index])
-}
-
-function sameLineup(a: LineupRow[], b: LineupRow[]): boolean {
-  return sameIds(lineupIds(a), lineupIds(b))
 }
