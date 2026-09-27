@@ -19,6 +19,7 @@ import type { ViewMode } from '@/features/rankings/RankingsToolbar'
 import { usePositions } from '@/hooks/useCatalog'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { boardNotices, useBoard, usePositionRankings } from '@/hooks/useProjections'
+import { useUrlDraft } from '@/hooks/useUrlDraft'
 import { useUrlState } from '@/hooks/useUrlState'
 import { useSlate } from '@/app/slate-context'
 import { matchesQuery, sortBoard, type SortDirection, type SortKey } from '@/utils/board'
@@ -87,8 +88,12 @@ export default function RankingsPage() {
   const positionBoard = usePositionRankings(position, projected && positions.isSuccess)
   const active = position === null ? board : positionBoard
 
-  // See `PlayersPage`: the input takes the keystroke, the board follows.
-  const deferredQuery = useDeferredValue(query)
+  // The field owns the text and the URL catches up when typing pauses — see
+  // `useUrlDraft` for why binding the input to the URL dropped keystrokes. The
+  // board filters on a deferred copy, so the input takes the keystroke and the
+  // table follows.
+  const [search, setSearch] = useUrlDraft(query, setQuery)
+  const deferredQuery = useDeferredValue(search)
   const entries = useMemo(() => {
     if (!active.data) return []
     // Team is filtered here, not in the request: the board is already the
@@ -138,16 +143,19 @@ export default function RankingsPage() {
   // `setSearchParams` depends on the current search params), so an effect that
   // ran whenever its dependencies changed fired on every keystroke and erased
   // the term being typed: search on this page did not work at all.
+  //
+  // Immediate, so a term typed just before the tab click cannot be written to
+  // the new board by a debounce that was still pending.
   const lastPosition = useRef(position)
   useEffect(() => {
     if (lastPosition.current === position) return
     lastPosition.current = position
-    setQuery('')
-  }, [position, setQuery])
+    setSearch('', { immediate: true })
+  }, [position, setSearch])
 
   const showTiers = sort === 'rank' && direction === 'asc' && position !== null
   const total = active.data?.data.length ?? 0
-  const filtered = query.trim().length > 0 || team !== ''
+  const filtered = deferredQuery.trim().length > 0 || team !== ''
 
   return (
     <>
@@ -180,8 +188,8 @@ export default function RankingsPage() {
           </div>
 
           <RankingsToolbar
-            query={query}
-            onQueryChange={setQuery}
+            query={search}
+            onQueryChange={setSearch}
             team={team}
             onTeamChange={setTeam}
             sort={sort}
@@ -218,7 +226,10 @@ export default function RankingsPage() {
                 }
                 action={
                   filtered ? (
-                    <Button variant="secondary" size="sm" onClick={() => setState({ query: '', team: '' })}>
+                    <Button variant="secondary" size="sm" onClick={() => {
+                        setSearch('')
+                        setState({ query: '', team: '' })
+                      }}>
                       Clear filters
                     </Button>
                   ) : (
