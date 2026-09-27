@@ -497,6 +497,19 @@ export type TeamOutlook = z.infer<typeof teamOutlookSchema>
 // Simulation
 // ---------------------------------------------------------------------------
 
+/**
+ * What a player scored in a game that is over. Provenance `actual`. The
+ * simulation used it in every draw in place of the projection.
+ */
+export const finalScoreSchema = z.object({
+  provenance: provenanceSchema,
+  points: z.number(),
+  /** False: ESPN's in-game box score, replaced by the official line later. */
+  official: z.boolean(),
+  source: z.string(),
+})
+export type FinalScore = z.infer<typeof finalScoreSchema>
+
 export const simulatedPlayerSchema = z.object({
   provenance: provenanceSchema,
   player_id: z.string(),
@@ -509,6 +522,7 @@ export const simulatedPlayerSchema = z.object({
   floor: maybeNumber,
   ceiling: maybeNumber,
   simulated_mean: z.number(),
+  final: finalScoreSchema.nullish(),
 })
 export type SimulatedPlayer = z.infer<typeof simulatedPlayerSchema>
 
@@ -581,6 +595,8 @@ export interface SimulationRequest {
   simulation_count?: number
   seed?: number | null
   correlation_mode?: string
+  /** Default true: a player whose game is over enters as what they scored. */
+  use_final_scores?: boolean
   team_a: LineupEntry[]
   team_b: LineupEntry[]
 }

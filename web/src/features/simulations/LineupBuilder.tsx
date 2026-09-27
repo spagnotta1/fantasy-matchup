@@ -11,7 +11,9 @@ import { PlayerSearchField } from '@/components/domain/PlayerSearchField'
 import { ProjectionValue } from '@/components/domain/ProjectionValue'
 import { eligiblePositions, type LineupRow } from '@/features/simulations/lineupFormat'
 import { slotStatus, type BoardIndex, type SlotStatus } from '@/features/simulations/availability'
+import { knownFinal, type KnownFinal } from '@/features/simulations/finalScores'
 import { cn } from '@/utils/cn'
+import { formatPoints, headlinePoints } from '@/utils/format'
 import type { LineupSlot, Player } from '@/api/schemas'
 
 /**
@@ -43,6 +45,7 @@ export function LineupBuilder({
   disabled = false,
   side = 'opponent',
   autofill,
+  finals = NO_FINALS,
 }: {
   title: string
   description: string
@@ -81,6 +84,12 @@ export function LineupBuilder({
     /** Extra reasons to wait, beyond the board, e.g. the roster resolving. */
     pending?: boolean
   }
+  /**
+   * Unofficial final scores from the live feed. A starter whose game is over
+   * shows what they scored in place of the projection — the number the
+   * simulation will use for them.
+   */
+  finals?: Map<string, KnownFinal>
 }) {
   const fill = autofill ?? {
     label: `Autofill ${title.toLowerCase()}`,
@@ -187,6 +196,15 @@ export function LineupBuilder({
             status={statuses[index] ?? { kind: 'empty' }}
             excludeIds={usedIds}
             alsoOnOtherSide={row.player ? otherLineupIds.includes(row.player.player_id) : false}
+            final={
+              row.player
+                ? knownFinal(
+                    row.player.player_id,
+                    statuses[index]?.kind === 'ready' ? statuses[index].projection : undefined,
+                    finals,
+                  )
+                : null
+            }
             disabled={disabled}
             note={note}
             onSelect={(player) => setRow(row.key, player)}
@@ -204,6 +222,7 @@ function SlotRow({
   status,
   excludeIds,
   alsoOnOtherSide,
+  final,
   disabled,
   note,
   onSelect,
@@ -214,6 +233,7 @@ function SlotRow({
   status: SlotStatus
   excludeIds: string[]
   alsoOnOtherSide: boolean
+  final: KnownFinal | null
   disabled: boolean
   note?: (player: Player) => string | null
   onSelect: (player: Player) => void
@@ -274,7 +294,9 @@ function SlotRow({
           )}
 
           <span className="shrink-0 text-right">
-            {projection ? (
+            {final && !blocked ? (
+              <FinalValue final={final} projected={headlinePoints(projection?.prediction.points).value} />
+            ) : projection ? (
               <ProjectionValue points={projection.prediction.points} />
             ) : blocked ? (
               <Badge tone="caution" icon={<AlertTriangle className="size-3" />}>
@@ -312,6 +334,34 @@ function SlotRow({
         </div>
       )}
     </div>
+  )
+}
+
+const NO_FINALS = new Map<string, KnownFinal>()
+
+/**
+ * A finished game's score, where the projection would otherwise be.
+ *
+ * The label sits beside the number rather than in a footnote because it
+ * changes what the number is: a result, not a projection — and, until the
+ * official line is loaded, an unofficial one. The projection stays visible
+ * underneath, since it is still what the model said beforehand.
+ */
+function FinalValue({ final, projected }: { final: KnownFinal; projected: number | null }) {
+  return (
+    <span className="flex flex-col items-end leading-tight">
+      <span className="tnum text-ink text-base font-semibold tracking-tight">
+        {formatPoints(final.points)}
+      </span>
+      <span className="text-ink-muted text-[11px] whitespace-nowrap">
+        <span className="text-positive-text font-medium">Final</span>
+        {final.official ? '' : ' · unofficial'}
+        {/* The projection gives way first on a phone, where the name needs the room. */}
+        {projected !== null && (
+          <span className="tnum hidden sm:inline"> · proj {formatPoints(projected)}</span>
+        )}
+      </span>
+    </span>
   )
 }
 

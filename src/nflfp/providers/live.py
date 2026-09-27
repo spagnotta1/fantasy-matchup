@@ -205,24 +205,32 @@ class EspnLiveProvider:
         self._scoreboard_url = scoreboard_url
         self._summary_url = summary_url
 
+    def fetch_scoreboard(self, season: int, week: int) -> list[LiveGame]:
+        """The week's games and their state. Blocking; raises on an upstream failure."""
+        payload = self._client.get_json(
+            self._scoreboard_url, {"dates": season, "seasontype": 2, "week": week}
+        )
+        return parse_scoreboard(payload)
+
+    def fetch_box(self, event_id: str) -> list[LiveLine]:
+        """One game's box score. Blocking; raises on an upstream failure."""
+        summary = self._client.get_json(self._summary_url, {"event": event_id})
+        return parse_boxscore(summary, event_id)
+
     def fetch_week(self, season: int, week: int) -> LiveWeek:
         """Blocking. Call from a worker thread, never from the event loop."""
         result = LiveWeek()
         try:
-            payload = self._client.get_json(
-                self._scoreboard_url, {"dates": season, "seasontype": 2, "week": week}
-            )
+            result.games = self.fetch_scoreboard(season, week)
         except Exception as exc:
             logger.warning("%s: scoreboard %s week %s failed: %s", self.name, season, week, exc)
             result.warnings.append(f"scoreboard unavailable: {exc}")
             return result
 
-        result.games = parse_scoreboard(payload)
         started = [game for game in result.games if game.state in ("in", "post")]
 
         def box(game: LiveGame) -> list[LiveLine]:
-            summary = self._client.get_json(self._summary_url, {"event": game.event_id})
-            return parse_boxscore(summary, game.event_id)
+            return self.fetch_box(game.event_id)
 
         with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as pool:
             futures = {game.event_id: pool.submit(box, game) for game in started}

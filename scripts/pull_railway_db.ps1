@@ -154,6 +154,34 @@ try {
             & "$bin\pg_restore.exe" --no-owner --no-acl --file=$sql $dump
         }
     }
+
+    # pg_restore 18 (and 17.6/16.10/15.14/14.19/13.22) brackets the script in
+    # \restrict <key> ... \unrestrict <key> (CVE-2025-8714). A psql older than
+    # that rejects them as unknown meta-commands. The dump is our own database,
+    # so strip the pair rather than demand a local minor upgrade. COPY data
+    # escapes a leading backslash as \\, so no data line can match.
+    $psqlVersion = [string](& "$bin\psql.exe" --version)
+    if ($psqlVersion -notmatch '(\d+)\.(\d+)') { throw "Could not parse '$psqlVersion'" }
+    $minMinor = @{ 13 = 22; 14 = 19; 15 = 14; 16 = 10; 17 = 6 }[[int]$Matches[1]]
+    if ($minMinor -and [int]$Matches[2] -lt $minMinor) {
+        Log "Local psql $($Matches[0]) predates \restrict; stripping it from the restore script"
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        $filtered = "$sql.filtered"
+        $reader = New-Object System.IO.StreamReader($sql, $utf8)
+        $writer = New-Object System.IO.StreamWriter($filtered, $false, $utf8)
+        $writer.NewLine = "`n"
+        try {
+            while ($null -ne ($line = $reader.ReadLine())) {
+                if ($line.StartsWith('\restrict ') -or $line.StartsWith('\unrestrict ')) { continue }
+                $writer.WriteLine($line)
+            }
+        } finally {
+            $reader.Close()
+            $writer.Close()
+        }
+        Move-Item -Force $filtered $sql
+    }
+
     $prelude = Join-Path $DumpDir "prelude.sql"
     Set-Content -Path $prelude -Encoding ascii -Value @(
         "SET lock_timeout = '30s';",
@@ -167,8 +195,6 @@ try {
         & "$bin\psql.exe" $LocalUrl --single-transaction -v ON_ERROR_STOP=1 -q `
             -f $prelude -f $sql | Out-Null
     }
-    Remove-Item $sql, $prelude -Force
-
     Get-ChildItem $DumpDir -Filter "nflfp-*.dump" | Sort-Object Name -Descending |
         Select-Object -Skip $KeepDumps | Remove-Item -Force
 
@@ -177,4 +203,9 @@ try {
 catch {
     Log "FAILED: $($_.Exception.Message) - local database was left unchanged."
     exit 1
+}
+finally {
+    # The rendered SQL is ~400 MB; don't leave it behind on failure either.
+    Remove-Item (Join-Path $DumpDir "restore.sql*"), (Join-Path $DumpDir "prelude.sql") `
+        -Force -ErrorAction SilentlyContinue
 }

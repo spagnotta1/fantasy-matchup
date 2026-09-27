@@ -13,7 +13,12 @@ import { groupNotices } from '@/features/simulations/notices'
 import { ShareImage, ShareMatchup } from '@/features/simulations/ShareMatchup'
 import { useCountUp } from '@/hooks/useCountUp'
 import { formatPercent, formatPoints, formatScoringProfile } from '@/utils/format'
-import type { MatchupSimulation, ResponseMeta, SimulationAssumptions } from '@/api/schemas'
+import type {
+  MatchupSimulation,
+  ResponseMeta,
+  SimulatedPlayer,
+  SimulationAssumptions,
+} from '@/api/schemas'
 import type { NoticeGroup } from '@/features/simulations/notices'
 
 /** Below this the two totals disagree enough to be worth explaining. */
@@ -107,11 +112,7 @@ export function SimulationResults({
         />
       </div>
 
-      <Reconciliation
-        labelA={labelA}
-        simulated={teamA.expected_score}
-        projected={teamA.projection_sum}
-      />
+      <Reconciliation labelA={labelA} players={teamA.players} />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
@@ -287,10 +288,7 @@ function WinProbability({
             {tieProbability > 0 && (
               <> Both lineups tied in {formatPercent(tieProbability, 2)}.</>
             )}{' '}
-            <span className="text-ink-muted">
-              This is an estimate based on each player&apos;s projected range, not a prediction of
-              the result.
-            </span>
+            <SettledSentence result={result} />
             {limits.length > 0 && (
               <span className="text-ink-muted mt-1.5 block">
                 It {joinClauses(limits)}.{' '}
@@ -324,15 +322,12 @@ function WinProbability({
  * renders nothing when the two agree, which is the state it is built to
  * disappear in.
  */
-function Reconciliation({
-  labelA,
-  simulated,
-  projected,
-}: {
-  labelA: string
-  simulated: number
-  projected: number
-}) {
+function Reconciliation({ labelA, players }: { labelA: string; players: SimulatedPlayer[] }) {
+  // Only the players still being sampled. A finished game's score replaces the
+  // projection by design, and that gap is a result, not a reconciliation issue.
+  const sampled = players.filter((player) => !player.final)
+  const simulated = sampled.reduce((total, player) => total + player.simulated_mean, 0)
+  const projected = sampled.reduce((total, player) => total + (player.expected_points ?? 0), 0)
   if (projected <= 0) return null
   const gap = Math.abs(simulated - projected) / projected
   if (gap <= RECONCILIATION_TOLERANCE) return null
@@ -343,8 +338,8 @@ function Reconciliation({
       aria-label="Totals do not reconcile"
     >
       <p className="text-caution-text text-xs leading-relaxed">
-        <span className="font-semibold">Why the two totals above differ.</span> For {labelA}, the
-        simulation averages {formatPoints(simulated)} points; the players&apos; projections add up
+        <span className="font-semibold">Why the two totals above differ.</span> For {labelA}
+        {sampled.length < players.length ? "'s players still to play" : ''}, the simulation averages {formatPoints(simulated)} points; the players&apos; projections add up
         to {formatPoints(projected)}. This week&apos;s projections were published without the
         model&apos;s final adjustment, and the simulation draws from each player&apos;s full range,
         which averages a little higher. The win chance and the margins come from the simulation,
@@ -355,6 +350,47 @@ function Reconciliation({
         />
       </p>
     </aside>
+  )
+}
+
+/**
+ * What the headline percentage is made of, once some games are over.
+ *
+ * Counted from `players[].final`, never from notice prose. Before any game has
+ * finished it is the sentence the page always carried. After, it says how many
+ * starters entered as a result, and when every one of them did, that there is
+ * nothing left to estimate — without calling an unofficial box score official.
+ */
+function SettledSentence({ result }: { result: MatchupSimulation }) {
+  const players = [...result.team_a.players, ...result.team_b.players]
+  const settled = players.filter((player) => player.final)
+  const unofficial = settled.some((player) => player.final && !player.final.official)
+
+  if (settled.length === 0) {
+    return (
+      <span className="text-ink-muted">
+        This is an estimate based on each player&apos;s projected range, not a prediction of the
+        result.
+      </span>
+    )
+  }
+  if (settled.length === players.length) {
+    return (
+      <span className="text-ink-muted">
+        Every game in both lineups is over, so nothing was estimated: these are the final scores
+        {unofficial ? ', unofficial until the official stat lines are loaded' : ''}.
+      </span>
+    )
+  }
+  return (
+    <span className="text-ink-muted">
+      {settled.length} of {players.length} players{' '}
+      {settled.length === 1 ? 'has finished their game' : 'have finished their games'}, so{' '}
+      {settled.length === 1 ? 'their actual score' : 'their actual scores'}
+      {unofficial ? ' (unofficial until the official stat lines are loaded)' : ''}{' '}
+      {settled.length === 1 ? 'is' : 'are'} used in every simulated week. The rest is an estimate based on each remaining player&apos;s
+      projected range, not a prediction of the result.
+    </span>
   )
 }
 
@@ -397,7 +433,7 @@ function LineupNotes({ groups }: { groups: NoticeGroup[] }) {
       <CardHeader
         as="h2"
         title="About these lineups"
-        description="What the engine flagged about the players on each side. None of it changes the numbers above."
+        description="What the engine flagged about the players on each side. A finished game's score replaces that player's projection; nothing else here changes the numbers above."
       />
       <CardBody className="grid gap-5 sm:grid-cols-2">
         {groups.map((group) => (

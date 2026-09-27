@@ -82,6 +82,13 @@ every group that breaks the assumption.
 :mod:`nflfp.services.positions`. Refused at validation rather than silently
 dropped.
 
+**Final games are not sampled.** A player whose game is over enters as the
+points they scored — the official line when it is loaded, ESPN's unofficial box
+score until then — and only the players still to play are drawn from their
+distributions. Under independence that is exactly the conditional distribution
+of the week given what has happened; a game in progress is *not* settled,
+because a partial score is not a result. See :mod:`~nflfp.services.final_scores`.
+
 **No injury adjustment.** ``injury_multiplier`` is stored and unwritten. A
 player designated Out contributes their full projected distribution, because
 that is what the projection says and this engine does not overrule it. The
@@ -96,7 +103,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -104,11 +111,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .. import correlation
 from ..correlation import CorrelationMode, CorrelationModel, Sampler
 from . import lineup as lineup_module
-from . import positions, rosters
+from . import final_scores, positions, rosters
 from .catalog import resolve_scoring_profile
 from .distributions import OutcomeCurve
 from .dto import ModelRef, PlayerProjection, SlateWindow
 from .errors import InvalidRequest
+from .final_scores import FinalScore, FinalScores, LiveScoreSource
 from .lineup import Lineup, LineupFormat, STANDARD_FORMAT
 
 logger = logging.getLogger(__name__)
@@ -174,8 +182,12 @@ class SimulatedPlayer:
     ceiling: float | None
     #: The mean of this player's own draws. Should sit within sampling error of
     #: ``expected_points``; a gap is the tail assumption in
-    #: :mod:`~nflfp.services.distributions` showing up, not a bug.
+    #: :mod:`~nflfp.services.distributions` showing up, not a bug. For a player
+    #: whose game is final it *is* :attr:`final`'s points.
     simulated_mean: float
+    #: Provenance ``actual``: what the player scored, when their game is over.
+    #: Set, it replaced the distribution in every draw.
+    final: FinalScore | None = None
 
 
 @dataclass(frozen=True)
@@ -387,6 +399,8 @@ class SimulationInput:
     expected_points: float | None
     floor: float | None
     ceiling: float | None
+    #: The player's game is over: every draw is this score, not the curve.
+    final: FinalScore | None = None
 
 
 def build_roster_sampler(
@@ -438,6 +452,11 @@ def simulate(
             so the points sampled for a player still come from the distribution
             Layer 3b published for them.
 
+    A player carrying :attr:`SimulationInput.final` contributes that score to
+    every draw. Their uniform is still drawn and simply not used, so the
+    sampler stays aligned with the roster and a matchup with nothing settled
+    reproduces exactly what it did before settling existed.
+
     Returns:
         ``(team_a_result, team_b_result, mean_margin, median_margin)``.
 
@@ -461,8 +480,8 @@ def simulate(
     # Bound locally: this is the hot loop, and an attribute lookup per player
     # per iteration is 140,000 of them in a default request.
     draw = sampler.draw
-    quantiles_a = [player.curve.quantile for player in team_a]
-    quantiles_b = [player.curve.quantile for player in team_b]
+    quantiles_a = [_outcome(player) for player in team_a]
+    quantiles_b = [_outcome(player) for player in team_b]
     split = len(team_a)
 
     # Checked once, against a *throwaway* generator. Drawing the probe from
@@ -551,6 +570,14 @@ def simulate(
     return result_a, result_b, mean_margin, _percentile(margins, 0.50)
 
 
+def _outcome(player: SimulationInput) -> Callable[[float], float]:
+    """The function from a uniform to this player's points."""
+    if player.final is None:
+        return player.curve.quantile
+    points = player.final.points
+    return lambda _u: points
+
+
 def _summarise(
     *,
     side: str,
@@ -582,6 +609,7 @@ def _summarise(
                 floor=player.floor,
                 ceiling=player.ceiling,
                 simulated_mean=total / iterations,
+                final=player.final,
             )
             for player, total in zip(players, per_player)
         ),
@@ -640,6 +668,8 @@ async def simulate_matchup(
     model_name: str | None = None,
     correlation_mode: CorrelationMode = CorrelationMode.INDEPENDENT,
     correlation_model: CorrelationModel | None = None,
+    use_final_scores: bool = True,
+    final_score_source: LiveScoreSource | None = None,
 ) -> tuple[MatchupSimulation, SlateWindow]:
     """Validate two lineups, fetch their projections, and simulate the matchup.
 
@@ -665,6 +695,11 @@ async def simulate_matchup(
         correlation_model: The fitted structure a correlated mode needs.
             Required for any mode other than independent — see
             :func:`~nflfp.correlation.build_sampler` for why no fallback.
+        use_final_scores: Enter a player whose game is over as what they
+            scored rather than as a draw. ``False`` reproduces the pre-kickoff
+            question — what the projections alone said.
+        final_score_source: Where unofficial final scores come from. Defaults
+            to the process-wide ESPN source; tests hand in their own.
 
     Returns:
         The simulation and the window it resolved to.
@@ -716,8 +751,21 @@ async def simulate_matchup(
     lineup_module.validate_eligibility(lineup_a, positions_by_player)
     lineup_module.validate_eligibility(lineup_b, positions_by_player)
 
-    inputs_a = _prepare(lineup_a, by_id)
-    inputs_b = _prepare(lineup_b, by_id)
+    finals = (
+        await final_scores.resolve(
+            session,
+            roster.entries,
+            season=window.season,
+            week=window.week,
+            scoring_profile=profile,
+            source=final_score_source,
+        )
+        if use_final_scores
+        else FinalScores()
+    )
+
+    inputs_a = _prepare(lineup_a, by_id, finals)
+    inputs_b = _prepare(lineup_b, by_id, finals)
 
     resolved_seed = DEFAULT_SEED if seed is None else int(seed)
     sampler = build_roster_sampler(
@@ -772,7 +820,7 @@ async def simulate_matchup(
             median_differential=median_margin,
             model=_model_of(roster.entries),
             assumptions=SimulationAssumptions.current(sampler),
-            caveats=_caveats(roster, lineup_a, lineup_b, by_id, sampler),
+            caveats=_caveats(roster, lineup_a, lineup_b, by_id, sampler, finals),
         ),
         window,
     )
@@ -811,7 +859,9 @@ def _refuse_gaps(
 
 
 def _prepare(
-    lineup: Lineup, by_id: Mapping[str, PlayerProjection]
+    lineup: Lineup,
+    by_id: Mapping[str, PlayerProjection],
+    finals: FinalScores | None = None,
 ) -> list[SimulationInput]:
     """Resolve each slot to a sampleable curve, in lineup order.
 
@@ -850,6 +900,7 @@ def _prepare(
                 expected_points=projection.points.headline,
                 floor=projection.points.floor,
                 ceiling=projection.points.ceiling,
+                final=None if finals is None else finals.scores.get(entry.player_id),
             )
         )
     return prepared
@@ -875,6 +926,7 @@ def _caveats(
     lineup_b: Lineup,
     by_id: Mapping[str, PlayerProjection],
     sampler: Sampler | None = None,
+    finals: FinalScores | None = None,
 ) -> tuple[str, ...]:
     """Disclosures the result must carry.
 
@@ -918,8 +970,15 @@ def _caveats(
             "win probability accounts for it."
         )
 
+    finals = finals or FinalScores()
+    caveats.extend(_final_score_caveats(finals, lineup_a, lineup_b, by_id, sampler))
+
     for lineup in (lineup_a, lineup_b):
         for player_id in lineup.player_ids:
+            # A settled player was not sampled, so nothing about their
+            # distribution — designation, extrapolation — is in the total.
+            if player_id in finals.scores:
+                continue
             projection = by_id[player_id]
             injury = projection.injury
             if injury is not None and injury.will_not_play:
@@ -944,6 +1003,59 @@ def _caveats(
                 )
 
     return tuple(caveats)
+
+
+def _final_score_caveats(
+    finals: FinalScores,
+    lineup_a: Lineup,
+    lineup_b: Lineup,
+    by_id: Mapping[str, PlayerProjection],
+    sampler: Sampler | None,
+) -> list[str]:
+    """Say which players entered as a result, and which could have but did not."""
+    lines: list[str] = []
+    for lineup in (lineup_a, lineup_b):
+        for player_id in lineup.player_ids:
+            name = by_id[player_id].player.name
+            final = finals.scores.get(player_id)
+            if final is not None:
+                source = (
+                    "the official stat line"
+                    if final.official
+                    else "ESPN's box score, unofficial until the official line "
+                    "is loaded (no two-point conversions or stat corrections)"
+                )
+                lines.append(
+                    f"{lineup.side}: {name}'s game is final. Their {final.points:g} "
+                    f"points, from {source}, are used in every draw in place of "
+                    "the projection."
+                )
+            elif player_id in finals.in_progress:
+                lines.append(
+                    f"{lineup.side}: {name}'s game is in progress. Their full "
+                    "projected distribution is sampled; the partial score is not "
+                    "used, because it is not a result."
+                )
+            elif player_id in finals.no_line:
+                lines.append(
+                    f"{lineup.side}: {name}'s game is final but no box-score line "
+                    "was found for them, so their projection is still sampled "
+                    "rather than recording a score of zero."
+                )
+            elif player_id in finals.unchecked:
+                lines.append(
+                    f"{lineup.side}: live scores could not be reached, so whether "
+                    f"{name}'s game is over is unknown and their projection is "
+                    "sampled."
+                )
+
+    if finals.scores and sampler is not None and sampler.mode is not CorrelationMode.INDEPENDENT:
+        lines.append(
+            "Correlated mode does not condition on the final scores: a settled "
+            "player's result does not update the distributions of the players "
+            "they are correlated with who have not yet played."
+        )
+    return lines
 
 
 def _shared_games(

@@ -283,6 +283,15 @@ def simulated_player(source: simulation.SimulatedPlayer) -> schemas.SimulatedPla
         floor=source.floor,
         ceiling=source.ceiling,
         simulated_mean=source.simulated_mean,
+        final=(
+            None
+            if source.final is None
+            else schemas.FinalScoreOut(
+                points=source.final.points,
+                official=source.final.official,
+                source=source.final.source,
+            )
+        ),
     )
 
 

@@ -101,6 +101,32 @@ async def simulate(client, **overrides):
     return await client.post(URL, json=body(**overrides))
 
 
+class ScriptedLive:
+    """A stand-in for ESPN: the games and box scores a test names, nothing else."""
+
+    def __init__(self, games=(), boxes=None):
+        self.games = list(games)
+        self.boxes = boxes or {}
+
+    def fetch_scoreboard(self, season, week):
+        return self.games
+
+    def fetch_box(self, event_id):
+        return self.boxes.get(event_id, [])
+
+
+@pytest.fixture(autouse=True)
+def live_scores(monkeypatch):
+    """Keep every simulation off the network; a test may script games in."""
+    from nflfp.services import final_scores
+
+    scripted = ScriptedLive()
+    monkeypatch.setattr(
+        final_scores, "_default_source", final_scores.LiveScoreSource(lambda: scripted)
+    )
+    return scripted
+
+
 # ---------------------------------------------------------------------------
 # The happy path
 # ---------------------------------------------------------------------------
@@ -510,3 +536,54 @@ class TestTheSlotCapabilityEndpoint:
     async def test_the_formats_are_listed_in_notices(self, client):
         response = await client.get(f"{API_PREFIX}/meta/lineup-slots")
         assert any("1xQB" in notice for notice in response.json()["meta"]["notices"])
+
+
+# ---------------------------------------------------------------------------
+# Final scores
+# ---------------------------------------------------------------------------
+
+
+class TestFinalScores:
+    async def _final_game_for_bravo_te(self, async_db_session, live_scores):
+        """Bravo TE (LAR, so ESPN's "LAR" -> "LA" fixup is not in play here —
+        the stub team code is used as-is) has finished his game with 11 PPR."""
+        from sqlalchemy import text
+
+        from nflfp.providers.live import LiveGame, LiveLine
+
+        await async_db_session.execute(text("ALTER TABLE raw_players ADD COLUMN espn_id text"))
+        await async_db_session.execute(
+            text("UPDATE raw_players SET espn_id = '9006' WHERE gsis_id = :i"),
+            {"i": SIM_TEAM_B[5][0]},
+        )
+        await async_db_session.commit()
+        team = SIM_TEAM_B[5][3]
+        live_scores.games = [LiveGame("e9", team, "SEA", "post", None, None, None, 24, 20, None)]
+        live_scores.boxes = {
+            "e9": [LiveLine("9006", "Bravo TE", team, "e9", {"receptions": 5.0, "receiving_yards": 60.0})]
+        }
+
+    async def test_a_final_game_enters_as_the_score(self, client, async_db_session, live_scores):
+        await self._final_game_for_bravo_te(async_db_session, live_scores)
+        response = await simulate(client)
+        assert response.status_code == 200
+        payload = response.json()
+        te = payload["data"]["team_b"]["players"][5]
+        assert te["final"]["provenance"] == Provenance.ACTUAL.value
+        assert te["final"]["official"] is False
+        assert te["final"]["points"] == pytest.approx(11.0)
+        assert te["simulated_mean"] == pytest.approx(11.0)
+        # The projection is still the published one, not overwritten.
+        assert te["expected_points"] == pytest.approx(SIM_TEAM_B[5][4])
+        assert any("Bravo TE's game is final" in n for n in payload["meta"]["notices"])
+        # Everyone else is still sampled.
+        assert all(p["final"] is None for p in payload["data"]["team_a"]["players"])
+
+    async def test_opting_out_asks_the_projections_alone(
+        self, client, async_db_session, live_scores
+    ):
+        await self._final_game_for_bravo_te(async_db_session, live_scores)
+        settled = (await simulate(client)).json()["data"]
+        pregame = (await simulate(client, use_final_scores=False)).json()["data"]
+        assert pregame["team_b"]["players"][5]["final"] is None
+        assert pregame["team_b"]["expected_score"] != settled["team_b"]["expected_score"]

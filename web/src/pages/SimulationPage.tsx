@@ -13,6 +13,7 @@ import { LineupBuilder, LineupSkeleton } from '@/features/simulations/LineupBuil
 import { SimulationHistory } from '@/features/simulations/SimulationHistory'
 import { SimulationResults } from '@/features/simulations/SimulationResults'
 import { PreRunExplainer } from '@/features/simulations/PreRunExplainer'
+import { liveFinals } from '@/features/simulations/finalScores'
 import {
   indexBoard,
   lineupReadiness,
@@ -47,6 +48,7 @@ import { CORRELATION_MODES, useLineupCatalog, useSimulationRun } from '@/hooks/u
 import { usePositions } from '@/hooks/useCatalog'
 import { useBoard, usePlayers } from '@/hooks/useProjections'
 import { useMyLineup } from '@/hooks/useMyLineup'
+import { useLive } from '@/hooks/useInsights'
 import { useSlate } from '@/app/slate-context'
 import { formatScoringProfile } from '@/utils/format'
 import { scrollBehavior } from '@/utils/motion'
@@ -99,6 +101,21 @@ export default function SimulationPage() {
   const board = useBoard()
   const positions = usePositions()
   const run = useSimulationRun()
+  // Games already over this week. A starter in one shows what they scored, and
+  // the simulation enters them as that score rather than as a draw.
+  const live = useLive()
+  // Guarded on the week: the live query keeps the previous week's data while a
+  // new one loads, and last week's finals must never label this week's rows.
+  const liveSlate = live.data?.data
+  const finals = useMemo(
+    () =>
+      liveFinals(
+        liveSlate && liveSlate.season === slate.season && liveSlate.week === slate.week
+          ? liveSlate
+          : undefined,
+      ),
+    [liveSlate, slate.season, slate.week],
+  )
   const [searchParams, setSearchParams] = useSearchParams()
 
   // Both lineups in one state object, not two.
@@ -376,6 +393,7 @@ export default function SimulationPage() {
                     }
               }
               disabled={run.isPending}
+              finals={finals}
             />
             <LineupBuilder
               title={LABEL_B}
@@ -389,6 +407,7 @@ export default function SimulationPage() {
               onChange={setTeamB}
               onAutofill={() => onAutofill('b')}
               disabled={run.isPending}
+              finals={finals}
             />
           </div>
 

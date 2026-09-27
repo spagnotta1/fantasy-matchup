@@ -808,8 +808,33 @@ class SimulationIn(Schema):
             "measured."
         ),
     )
+    use_final_scores: bool = Field(
+        default=True,
+        description=(
+            "Enter a player whose game is over as the points they scored "
+            "rather than as a draw from their projection. The official stat "
+            "line is used once loaded, ESPN's unofficial box score before "
+            "that; a game in progress is never settled. `false` asks what the "
+            "projections alone said, before any game was played."
+        ),
+    )
     team_a: list[LineupEntryIn] = Field(min_length=1, max_length=20)
     team_b: list[LineupEntryIn] = Field(min_length=1, max_length=20)
+
+
+class FinalScoreOut(Schema):
+    """What a player scored in a game that is over. Provenance: ``actual``."""
+
+    provenance: Provenance = Provenance.ACTUAL
+    points: float
+    official: bool = Field(
+        description=(
+            "True: the official stat line. False: ESPN's in-game box score, "
+            "scored with these settings — no two-point conversions or stat "
+            "corrections until the official line replaces it."
+        )
+    )
+    source: str = Field(description="`official` or `espn_box_score`.")
 
 
 class SimulatedPlayerOut(Schema):
@@ -836,6 +861,14 @@ class SimulatedPlayerOut(Schema):
     ceiling: float | None = Field(default=None, description="P90")
     simulated_mean: float = Field(
         description="Derived: the mean of this player's sampled outcomes."
+    )
+    final: FinalScoreOut | None = Field(
+        default=None,
+        description=(
+            "Set when this player's game is over: the score used in every draw "
+            "in place of the projection. `expected_points`, `floor` and "
+            "`ceiling` stay the published projection."
+        ),
     )
 
 

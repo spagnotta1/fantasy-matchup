@@ -1717,6 +1717,12 @@ All eight layers are done. What remains is modelling and scale, not structure.
    first), and unquantified injury impact — and all three are refused or
    disclosed rather than papered over. The fourth, player independence, is now
    measured rather than assumed.
+   A starter whose game is **final** enters as what they scored rather than as
+   a draw (`services/final_scores.py`): the official line when loaded, ESPN's
+   unofficial box score before that, reported per player as `final` with
+   provenance `actual`. A game in progress is never settled, and a final game
+   with no box-score line keeps its projection rather than becoming a zero.
+   `use_final_scores: false` asks the pre-kickoff question.
 6. **The Mock Draft** — **built**, stateless, at `POST /api/v1/mock-draft/*`
    and `/mock-draft` in the app. It is the first feature to need a *season*
    number from a week-by-week model, and it gets one by multiplying the
