@@ -140,6 +140,54 @@ export function emptyLineup(format: LineupFormat): LineupRow[] {
  * Pure, so the caller can run it inside a functional state update and never see
  * a stale view of the other lineup.
  */
+/**
+ * Fill the empty slots from a lineup the manager already set — My team's.
+ *
+ * "Autofill your team" means *your* team. Filling it from the whole board put
+ * the week's best players in a manager's lineup and simulated a team they do
+ * not have. This takes the players from `source` instead: each into the same
+ * slot My team starts them in, then — for anyone that slot is already taken
+ * for — into any other empty slot their position fits. Nobody from outside
+ * `source` is ever added; a slot the roster cannot fill stays empty, which the
+ * builder shows, rather than being topped up with a stranger.
+ */
+export function fillFromLineup(
+  rows: LineupRow[],
+  source: LineupRow[],
+  slots: LineupSlot[],
+  taken: Iterable<string>,
+): LineupRow[] {
+  const used = new Set(taken)
+  for (const row of rows) {
+    if (row.player) used.add(row.player.player_id)
+  }
+  const pool = source
+    .map((row) => ({ slot: row.slot, player: row.player }))
+    .filter((row): row is { slot: string; player: Player } => row.player !== null && !used.has(row.player.player_id))
+
+  const take = (row: LineupRow, index: number): LineupRow => {
+    const [picked] = index < 0 ? [] : pool.splice(index, 1)
+    if (!picked) return row
+    used.add(picked.player.player_id)
+    return { ...row, player: picked.player }
+  }
+
+  // Same slot first, so a lineup set on My team comes across as it was set.
+  const first = rows.map((row) => {
+    if (row.player) return row
+    return take(row, pool.findIndex((entry) => entry.slot === row.slot))
+  })
+  // Then anyone left over, into any empty slot their position is eligible for.
+  return first.map((row) => {
+    if (row.player) return row
+    const eligible = eligiblePositions(slots, row.slot)
+    return take(
+      row,
+      pool.findIndex((entry) => entry.player.position && eligible.includes(entry.player.position)),
+    )
+  })
+}
+
 export function autofillLineup(
   rows: LineupRow[],
   board: RankedProjection[],

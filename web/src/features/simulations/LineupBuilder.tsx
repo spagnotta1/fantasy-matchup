@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { AlertTriangle, Sparkles, Trash2, X } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
@@ -41,6 +42,7 @@ export function LineupBuilder({
   onAutofill,
   disabled = false,
   side = 'opponent',
+  autofill,
 }: {
   title: string
   description: string
@@ -67,14 +69,32 @@ export function LineupBuilder({
    * for that meaning (`--app-you`), on the card's edge and nowhere else here.
    */
   side?: 'you' | 'opponent'
+  /**
+   * What autofill does for this side, in words. Your side fills from My team
+   * and the opponent from the best players left, so one fixed label would be
+   * wrong for one of them — the button must say which it is.
+   */
+  autofill?: {
+    label: string
+    short: string
+    description: ReactNode
+    /** Extra reasons to wait, beyond the board, e.g. the roster resolving. */
+    pending?: boolean
+  }
 }) {
+  const fill = autofill ?? {
+    label: `Autofill ${title.toLowerCase()}`,
+    short: 'Autofill',
+    description: 'Fill it with the highest-projected players still available, then swap anyone you like.',
+  }
+  const fillPending = board.pending || Boolean(fill.pending)
   const filled = rows.filter((row) => row.player !== null).length
   const usedIds = rows.map((row) => row.player?.player_id).filter((id): id is string => Boolean(id))
   const statuses = rows.map((row) => slotStatus(row, board, projectedPositions, week))
   const unavailable = statuses.filter((status) => status.kind === 'unavailable').length
   // An empty chart leads with a full-width autofill; the header's small one
   // steps aside while it shows, so a side never offers the same action twice.
-  const emptyChart = filled === 0 && !board.pending
+  const emptyChart = filled === 0 && !fillPending
 
   const setRow = (key: string, player: Player | null) => {
     onChange(rows.map((row) => (row.key === key ? { ...row, player } : row)))
@@ -116,11 +136,11 @@ export function LineupBuilder({
               // truncated board is still ranked, so autofill still picks the
               // best available players from it; only the "no projection"
               // claim needs the whole slate.
-              disabled={disabled || board.pending || filled === rows.length}
-              title="Fill empty slots with the highest-projected available players"
+              disabled={disabled || fillPending || filled === rows.length}
+              title={fill.label}
             >
               <Sparkles aria-hidden className="size-3.5" />
-              Autofill
+              {fill.short}
             </Button>
             )}
             <Button
@@ -151,12 +171,11 @@ export function LineupBuilder({
         {emptyChart && (
           <div className="border-line-strong mb-3 flex flex-col items-start gap-3 rounded-[var(--radius-control)] border border-dashed px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-ink-secondary min-w-0 flex-1 text-sm">
-              An empty depth chart. Fill it with the highest-projected players still available,
-              then swap anyone you like.
+              An empty depth chart. {fill.description}
             </p>
             <Button size="sm" variant="primary" onClick={onAutofill} disabled={disabled}>
               <Sparkles aria-hidden className="size-3.5" />
-              Autofill {title.toLowerCase()}
+              {fill.label}
             </Button>
           </div>
         )}

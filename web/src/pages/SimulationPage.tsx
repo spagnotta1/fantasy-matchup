@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Play, Settings2, ShieldAlert } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
@@ -31,6 +31,7 @@ import {
 import {
   autofillLineup,
   emptyLineup,
+  fillFromLineup,
   expandSlots,
   type LineupRow,
 } from '@/features/simulations/lineupFormat'
@@ -45,6 +46,7 @@ import {
 import { CORRELATION_MODES, useLineupCatalog, useSimulationRun } from '@/hooks/useSimulation'
 import { usePositions } from '@/hooks/useCatalog'
 import { useBoard, usePlayers } from '@/hooks/useProjections'
+import { useMyLineup } from '@/hooks/useMyLineup'
 import { useSlate } from '@/app/slate-context'
 import { formatScoringProfile } from '@/utils/format'
 import { scrollBehavior } from '@/utils/motion'
@@ -267,17 +269,29 @@ export default function SimulationPage() {
     setPendingLoad(null)
   }, [])
 
-  /** Fill one side, treating the other side's players as unavailable. */
+  // The manager's own lineup, exactly as My team fields it: the starters they
+  // set there, or its highest-projected lineup from their roster.
+  const my = useMyLineup()
+  const hasRoster = my.ids.length > 0
+
+  /**
+   * Fill one side, treating the other side's players as unavailable.
+   *
+   * Your side fills from *your* roster whenever there is one — the lineup My
+   * team shows — and never from the rest of the board. Only without a roster
+   * (and always for the opponent, whose players this product cannot know) does
+   * it fall back to the highest-projected players still available, and the
+   * button says so.
+   */
   const onAutofill = (side: 'a' | 'b') => {
-    setLineups((current) => ({
-      ...current,
-      [side]: autofillLineup(
-        current[side],
-        boardEntries,
-        catalog.slots,
-        idsOf(side === 'a' ? current.b : current.a),
-      ),
-    }))
+    setLineups((current) => {
+      const taken = idsOf(side === 'a' ? current.b : current.a)
+      const next =
+        side === 'a' && hasRoster
+          ? fillFromLineup(current.a, my.lineup, catalog.slots, taken)
+          : autofillLineup(current[side], boardEntries, catalog.slots, taken)
+      return { ...current, [side]: next }
+    })
   }
 
   const onLoadHistory = (entry: HistoryEntry) => {
@@ -339,6 +353,28 @@ export default function SimulationPage() {
               otherLineupIds={idsOf(teamB)}
               onChange={setTeamA}
               onAutofill={() => onAutofill('a')}
+              autofill={
+                hasRoster
+                  ? {
+                      label: 'Autofill from My team',
+                      short: 'From My team',
+                      description: 'Fill it with your lineup from My team, then swap anyone you like.',
+                      pending: my.board.isPending || my.catalog.isPending,
+                    }
+                  : {
+                      label: 'Autofill with top players',
+                      short: 'Autofill',
+                      description: (
+                        <>
+                          No roster yet, so this uses the highest-projected players still available.{' '}
+                          <Link to="/my-team" className="text-accent-text font-medium hover:underline">
+                            Add your roster
+                          </Link>{' '}
+                          to fill it with your own players.
+                        </>
+                      ),
+                    }
+              }
               disabled={run.isPending}
             />
             <LineupBuilder
