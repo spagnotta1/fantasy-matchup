@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 
 import { ShowMoreRows } from '@/components/domain/BoardBudget'
+import { useReorderAnimation } from '@/hooks/useReorderAnimation'
 import { useRenderBudget } from '@/hooks/useRenderBudget'
 
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
@@ -10,7 +11,7 @@ import { PlayerIdentity } from '@/components/domain/PlayerIdentity'
 import { InfoTip } from '@/components/ui/Tooltip'
 import { cn } from '@/utils/cn'
 import { formatPercent } from '@/utils/format'
-import { boardCeiling, groupByTier } from '@/utils/board'
+import { boardCeiling, groupByTier, orderSignature } from '@/utils/board'
 import type { SortDirection, SortKey } from '@/utils/board'
 import type { RankedProjection } from '@/api/schemas'
 
@@ -120,6 +121,8 @@ export const ProjectionTable = memo(function ProjectionTable({
 
   const budget = useRenderBudget(entries.length)
   const visible = useMemo(() => entries.slice(0, budget.shown), [entries, budget.shown])
+  const orderKey = useMemo(() => orderSignature(visible), [visible])
+  const tableRef = useReorderAnimation<HTMLTableElement>(orderKey)
 
   const columns = showTierColumn
     ? [
@@ -133,7 +136,7 @@ export const ProjectionTable = memo(function ProjectionTable({
   return (
     <>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
+        <table ref={tableRef} className="w-full border-collapse text-sm">
           <caption className="sr-only">
             {caption ?? 'Projected players for the selected week'}, sorted by {sort},{' '}
             {direction}ending.
@@ -247,7 +250,10 @@ const ProjectionRow = memo(function ProjectionRow({
   const { projection } = entry
   const { points } = projection.prediction
   return (
-    <tr className="border-line hover:bg-surface-hover border-b transition-colors last:border-b-0">
+    <tr
+      data-flip-key={projection.player.player_id}
+      className="border-line hover:bg-surface-hover border-b transition-colors last:border-b-0"
+    >
       <td className="text-ink-muted tnum px-3 py-2 text-xs">
         {rankMode === 'positional' ? entry.positional_rank : entry.rank}
       </td>
@@ -302,3 +308,4 @@ const ProjectionRow = memo(function ProjectionRow({
     </tr>
   )
 })
+

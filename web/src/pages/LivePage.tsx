@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Radio } from 'lucide-react'
 
@@ -11,10 +11,13 @@ import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/fee
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
 import { ShowMoreRows } from '@/components/domain/BoardBudget'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
+import { OutcomeRange } from '@/components/domain/ProjectionValue'
+import { MatchupColorBar, ScoreBugTeam } from '@/components/domain/ScoreBug'
 import { TeamLink } from '@/components/domain/TeamLink'
 import { useSlate } from '@/app/slate-context'
 import { LIVE_REFRESH_MS, useLive } from '@/hooks/useInsights'
 import { useRenderBudget } from '@/hooks/useRenderBudget'
+import { replayAnimation, useCountUp } from '@/hooks/useCountUp'
 import { useRememberedRoster } from '@/hooks/useRoster'
 import { useUrlState } from '@/hooks/useUrlState'
 import { cn } from '@/utils/cn'
@@ -81,6 +84,13 @@ export default function LivePage() {
   // request, like the boards (see `useRenderBudget`).
   const budget = useRenderBudget(players.length)
   const visible = players.slice(0, budget.shown)
+  // One scale for every strip on the page, as on the boards, so a ball
+  // further right is more points — and wide enough that a 34-point day is
+  // drawn where it happened rather than pinned to the end of a 40.
+  const fieldMax = useMemo(
+    () => Math.max(40, ...(data?.players ?? []).flatMap((p) => [p.live_points, p.ceiling ?? 0])),
+    [data],
+  )
 
   return (
     <>
@@ -111,11 +121,23 @@ export default function LivePage() {
         </Card>
       ) : (
         <Refreshing active={live.isPlaceholderData}>
-          <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
-            {(data?.games ?? []).map((game) => (
-              <GameTile key={game.event_id} game={game} />
+          {/*
+            A scoreboard ticker, the way a broadcast runs one: games in
+            progress first, then the ones still to kick off, then the finals.
+            One row that scrolls sideways rather than a grid four rows deep,
+            so the points table — the reason for the page — starts on the
+            first screen.
+          */}
+          <ul
+            aria-label="Games this week"
+            className="-mx-4 mb-6 flex snap-x gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0"
+          >
+            {tickerOrder(data?.games ?? []).map((game) => (
+              <li key={game.event_id} className="w-40 shrink-0 snap-start">
+                <GameTile game={game} />
+              </li>
             ))}
-          </div>
+          </ul>
 
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <SegmentedControl
@@ -155,6 +177,7 @@ export default function LivePage() {
             {players.length === 0 ? (
               <EmptyState
                 icon={<Radio aria-hidden className="size-5" />}
+                eyebrow={data?.games.length ? 'Pre-game warmups' : undefined}
                 title={data?.games.length ? 'No points yet' : 'No games found for this week'}
                 description={
                   data?.games.length
@@ -169,7 +192,10 @@ export default function LivePage() {
                   <thead>
                     <tr className="border-line text-ink-muted border-b text-xs font-medium tracking-wide uppercase">
                       <th scope="col" className="px-3 py-2 text-left">Player</th>
-                      <th scope="col" className="hidden px-3 py-2 text-left md:table-cell">Stat line</th>
+                      <th scope="col" className="hidden px-3 py-2 text-left lg:table-cell">Stat line</th>
+                      <th scope="col" className="hidden w-[30%] px-3 py-2 text-left md:table-cell">
+                        On the field
+                      </th>
                       <th scope="col" className="px-3 py-2 text-right">Live</th>
                       <th scope="col" className="px-3 py-2 text-right">Projected</th>
                       <th scope="col" className="hidden px-3 py-2 text-right sm:table-cell">Final vs proj.</th>
@@ -177,7 +203,13 @@ export default function LivePage() {
                   </thead>
                   <tbody>
                     {visible.map((player) => (
-                      <LiveRow key={player.player_id} player={player} game={games.get(player.event_id)} mine={roster.has(player.player_id)} />
+                      <LiveRow
+                        key={player.player_id}
+                        player={player}
+                        game={games.get(player.event_id)}
+                        mine={roster.has(player.player_id)}
+                        fieldMax={fieldMax}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -191,26 +223,62 @@ export default function LivePage() {
   )
 }
 
+/**
+ * The yellow line: `BOOM_THRESHOLD` in `nflfp/predict/distribution.py`, the
+ * same 20 points every board draws and every "chance of 20+" is measured
+ * against. The live payload does not carry it, so it is named here once.
+ */
+const LINE_TO_GAIN = 20
+
+const STATE_ORDER: Record<string, number> = { in: 0, pre: 1, post: 2 }
+
+function tickerOrder(games: LiveGame[]): LiveGame[] {
+  return [...games].sort(
+    (a, b) =>
+      (STATE_ORDER[a.state] ?? 1) - (STATE_ORDER[b.state] ?? 1) ||
+      (a.kickoff ?? '').localeCompare(b.kickoff ?? ''),
+  )
+}
+
 function GameTile({ game }: { game: LiveGame }) {
   const live = game.state === 'in'
+  const final = game.state === 'post'
+  const awayScore = game.away_score ?? 0
+  const homeScore = game.home_score ?? 0
+  const scored = game.state !== 'pre'
+
   return (
     <div
       className={cn(
-        'bg-surface rounded-[var(--radius-control)] border px-3 py-2 text-xs',
-        live ? 'border-negative/40' : 'border-line',
+        'bg-surface shadow-card relative h-full overflow-hidden rounded-[var(--radius-control)] border px-3 pt-3 pb-2',
+        live ? 'border-negative/50' : 'border-line',
       )}
     >
-      {[
-        { team: game.away, score: game.away_score },
-        { team: game.home, score: game.home_score },
-      ].map(({ team, score }) => (
-        <div key={team} className="flex items-center justify-between">
-          <TeamLink team={team} className="text-ink font-semibold" />
-          <span className="tnum text-ink font-semibold">{game.state === 'pre' ? '' : (score ?? '—')}</span>
-        </div>
-      ))}
-      <p className={cn('mt-0.5 truncate', live ? 'text-negative-text font-medium' : 'text-ink-muted')}>
-        {game.detail ?? game.state}
+      <MatchupColorBar away={game.away} home={game.home} />
+      <div className="space-y-1.5">
+        <ScoreBugTeam
+          team={game.away}
+          score={scored ? game.away_score : undefined}
+          trailing={final && awayScore < homeScore}
+        >
+          <TeamLink team={game.away} />
+        </ScoreBugTeam>
+        <ScoreBugTeam
+          team={game.home}
+          score={scored ? game.home_score : undefined}
+          trailing={final && homeScore < awayScore}
+        >
+          <TeamLink team={game.home} />
+        </ScoreBugTeam>
+      </div>
+      <p
+        className={cn(
+          'mt-2 flex items-center gap-1.5 truncate text-[0.6875rem]',
+          live ? 'text-negative-text font-semibold' : final ? 'text-ink font-semibold' : 'text-ink-muted',
+        )}
+      >
+        {live && <span aria-hidden className="bg-negative animate-live-dot size-1.5 shrink-0 rounded-full" />}
+        {final ? 'Final' : (game.detail ?? game.state)}
       </p>
     </div>
   )
@@ -220,19 +288,52 @@ const LiveRow = memo(function LiveRow({
   player,
   game,
   mine,
+  fieldMax,
 }: {
   player: LivePlayer
   game: LiveGame | undefined
   mine: boolean
+  fieldMax: number
 }) {
   const final = game?.state === 'post'
   const difference = final && player.projected != null ? player.live_points - player.projected : null
+  const shown = useCountUp(player.live_points)
+  const pastTheLine = player.live_points >= LINE_TO_GAIN
+
+  // Plays only when a refetch brings a different number: a score, not a page
+  // load. Crossing the line to gain gets the yellow sweep; any other score
+  // gets the bump on the number.
+  const rowRef = useRef<HTMLTableRowElement>(null)
+  const numberRef = useRef<HTMLSpanElement>(null)
+  const last = useRef(player.live_points)
+  useEffect(() => {
+    const before = last.current
+    last.current = player.live_points
+    if (before === player.live_points) return
+    replayAnimation(numberRef.current, 'animate-score-bump')
+    if (before < LINE_TO_GAIN && player.live_points >= LINE_TO_GAIN) {
+      replayAnimation(rowRef.current, 'animate-chains')
+    }
+  }, [player.live_points])
+
+  const strip = (compact: boolean) => (
+    <OutcomeRange
+      hideEndpoints={compact}
+      floor={player.floor}
+      median={null}
+      ceiling={player.ceiling}
+      threshold={LINE_TO_GAIN}
+      scaleMax={fieldMax}
+      actual={player.live_points}
+    />
+  )
+
   return (
-    <tr className={cn('border-line border-b last:border-b-0', mine && 'bg-accent-soft/40')}>
+    <tr ref={rowRef} className={cn('border-line border-b last:border-b-0', mine && 'bg-accent-soft/40')}>
       <td className="px-3 py-2">
         <span className="flex items-center gap-3">
           <PlayerAvatar player={{ name: player.name, headshot_url: player.headshot_url }} size="sm" />
-          <span className="min-w-0">
+          <span className="min-w-0 flex-1">
             <Link to={`/players/${encodeURIComponent(player.player_id)}`} className="text-ink hover:text-accent-text block truncate font-medium">
               {player.name}
             </Link>
@@ -241,11 +342,24 @@ const LiveRow = memo(function LiveRow({
               {game ? ` · ${game.state === 'in' ? game.detail : final ? 'Final' : 'Not started'}` : ''}
               {mine && ' · My team'}
             </span>
+            {/* The field under the name on a phone, where there is no column for it. */}
+            <span className="mt-1.5 block md:hidden">{strip(true)}</span>
           </span>
         </span>
       </td>
-      <td className="text-ink-secondary hidden px-3 py-2 text-xs md:table-cell">{statLine(player.components)}</td>
-      <td className="tnum text-ink px-3 py-2 text-right text-base font-semibold">{formatPoints(player.live_points)}</td>
+      <td className="text-ink-secondary hidden px-3 py-2 text-xs lg:table-cell">{statLine(player.components)}</td>
+      <td className="hidden px-3 py-2 md:table-cell">{strip(false)}</td>
+      <td className="px-3 py-2 text-right">
+        <span ref={numberRef} className="tnum text-ink inline-block text-base font-semibold">
+          <span aria-hidden>{formatPoints(shown)}</span>
+          <span className="sr-only">{formatPoints(player.live_points)}</span>
+        </span>
+        {pastTheLine && (
+          <span className="bg-line-to-gain text-on-line-to-gain mt-1 block w-fit rounded-sm px-1.5 py-px text-[0.625rem] font-bold tracking-wide whitespace-nowrap uppercase sm:ml-auto">
+            Past the {LINE_TO_GAIN}
+          </span>
+        )}
+      </td>
       <td className="tnum text-ink-secondary px-3 py-2 text-right">
         {formatPoints(player.projected)}
         {player.floor != null && player.ceiling != null && (

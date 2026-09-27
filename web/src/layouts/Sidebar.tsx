@@ -1,6 +1,9 @@
+import { useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { useHealth } from '@/hooks/useCatalog'
+import { replayAnimation } from '@/hooks/useCountUp'
+import { useRosterCount } from '@/hooks/useRoster'
 import { cn } from '@/utils/cn'
 
 import { NAV_ITEMS, navGroups } from './navigation'
@@ -57,7 +60,10 @@ export function Sidebar() {
   return (
     <nav
       aria-label="Main"
-      className="border-line bg-surface hidden w-60 shrink-0 flex-col gap-6 border-r py-5 lg:flex"
+      // Sticky at the height of the screen: on a long page — a finished
+      // simulation is several screens — the navigation used to scroll away
+      // and leave an empty white column beside the content.
+      className="border-line bg-surface sticky top-0 hidden h-dvh w-60 shrink-0 flex-col gap-6 border-r py-5 lg:flex"
     >
       <Wordmark />
 
@@ -74,6 +80,7 @@ export function Sidebar() {
                     to={item.to}
                     end={item.to === '/'}
                     title={item.description}
+                    data-nav={item.to}
                     className={({ isActive }) =>
                       cn(
                         'group flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2 text-sm font-medium transition-colors',
@@ -93,6 +100,7 @@ export function Sidebar() {
                           )}
                         />
                         {item.label}
+                        {item.to === '/my-team' && <RosterBadge className="ml-auto" />}
                       </>
                     )}
                   </NavLink>
@@ -130,16 +138,22 @@ export function MobileNav() {
             <NavLink
               to={item.to}
               end={item.to === '/'}
+              data-nav={item.to}
               className={({ isActive }) =>
                 cn(
-                  'flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[0.625rem] font-medium transition-colors',
+                  'relative flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[0.625rem] font-medium transition-colors',
                   isActive ? 'text-accent-text' : 'text-ink-muted',
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  <item.icon aria-hidden className={cn('size-5', isActive && 'text-accent')} />
+                  <span className="relative">
+                    <item.icon aria-hidden className={cn('size-5', isActive && 'text-accent')} />
+                    {item.to === '/my-team' && (
+                      <RosterBadge className="absolute -top-1.5 left-3.5" />
+                    )}
+                  </span>
                   <span className="truncate">{item.label}</span>
                 </>
               )}
@@ -148,5 +162,36 @@ export function MobileNav() {
         ))}
       </ul>
     </nav>
+  )
+}
+
+/**
+ * How many players are on My team, beside its nav item.
+ *
+ * Absent at zero rather than showing a "0". It bumps when the count goes up,
+ * which is the landing half of the add-to-team flight (`flyTo`); nothing else
+ * moves it.
+ */
+function RosterBadge({ className }: { className?: string }) {
+  const count = useRosterCount()
+  const ref = useRef<HTMLSpanElement>(null)
+  const last = useRef(count)
+  useEffect(() => {
+    if (count > last.current) replayAnimation(ref.current, 'animate-score-bump')
+    last.current = count
+  }, [count])
+
+  if (count === 0) return null
+  return (
+    <span
+      ref={ref}
+      className={cn(
+        'bg-accent text-on-accent tnum inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.625rem] leading-none font-bold',
+        className,
+      )}
+    >
+      {count}
+      <span className="sr-only"> players on your team</span>
+    </span>
   )
 }

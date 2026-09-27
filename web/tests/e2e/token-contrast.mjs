@@ -92,6 +92,7 @@ const PAIRS = [
   ['range-whisker', 'field', 3.0],
   ['range-median', 'range-box', 3.0],
   ['line-to-gain-edge', 'field', 3.0],
+  ['on-line-to-gain', 'line-to-gain', 4.5],
   ['you', 'field', 3.0],
   ['you', 'surface', 3.0],
 ]

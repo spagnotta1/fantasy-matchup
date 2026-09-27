@@ -52,8 +52,14 @@ export function ScoreDistribution({
 
   return (
     <div className="space-y-5">
-      {sides.map((side) => (
-        <div key={side.label}>
+      {sides.map((side, index) => (
+        // Drawn in one after the other, left to right, when a result arrives:
+        // your range, then theirs, then the overlap is there to read.
+        <div
+          key={side.label}
+          className="animate-wipe-in"
+          style={{ animationDelay: `${150 + index * 220}ms` }}
+        >
           <div className="mb-1.5 flex items-baseline justify-between gap-4 text-sm">
             <span className="text-ink truncate font-medium">{side.label}</span>
             <span className="text-ink-muted tnum shrink-0 text-xs">

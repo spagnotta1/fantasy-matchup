@@ -40,6 +40,7 @@ export function LineupBuilder({
   onChange,
   onAutofill,
   disabled = false,
+  side = 'opponent',
 }: {
   title: string
   description: string
@@ -61,11 +62,19 @@ export function LineupBuilder({
    */
   onAutofill: () => void
   disabled?: boolean
+  /**
+   * Whose lineup this is. "You" carries the one warm colour the palette keeps
+   * for that meaning (`--app-you`), on the card's edge and nowhere else here.
+   */
+  side?: 'you' | 'opponent'
 }) {
   const filled = rows.filter((row) => row.player !== null).length
   const usedIds = rows.map((row) => row.player?.player_id).filter((id): id is string => Boolean(id))
   const statuses = rows.map((row) => slotStatus(row, board, projectedPositions, week))
   const unavailable = statuses.filter((status) => status.kind === 'unavailable').length
+  // An empty chart leads with a full-width autofill; the header's small one
+  // steps aside while it shows, so a side never offers the same action twice.
+  const emptyChart = filled === 0 && !board.pending
 
   const setRow = (key: string, player: Player | null) => {
     onChange(rows.map((row) => (row.key === key ? { ...row, player } : row)))
@@ -78,7 +87,11 @@ export function LineupBuilder({
     : undefined
 
   return (
-    <Card>
+    <Card className="relative overflow-hidden">
+      <span
+        aria-hidden
+        className={cn('absolute inset-x-0 top-0 h-1', side === 'you' ? 'bg-you' : 'bg-accent')}
+      />
       <CardHeader
         as="h2"
         title={title}
@@ -94,6 +107,7 @@ export function LineupBuilder({
               {filled}/{rows.length}
               {unavailable > 0 && <span className="sr-only">, {unavailable} cannot be simulated</span>}
             </Badge>
+            {!emptyChart && (
             <Button
               size="sm"
               variant="ghost"
@@ -108,6 +122,7 @@ export function LineupBuilder({
               <Sparkles aria-hidden className="size-3.5" />
               Autofill
             </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -121,7 +136,30 @@ export function LineupBuilder({
         }
       />
 
-      <CardBody className="space-y-2 p-3 sm:p-4">
+      {/*
+        The depth chart: the slots on a strip of field, one yard line to a
+        row. An empty chart leads with the fastest way to fill it — autofill —
+        rather than fourteen empty search boxes and a button in the corner.
+      */}
+      <CardBody
+        className="space-y-2 p-3 sm:p-4"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, color-mix(in oklch, var(--color-field) 70%, transparent), transparent 70%)',
+        }}
+      >
+        {emptyChart && (
+          <div className="border-line-strong mb-3 flex flex-col items-start gap-3 rounded-[var(--radius-control)] border border-dashed px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-ink-secondary min-w-0 flex-1 text-sm">
+              An empty depth chart. Fill it with the highest-projected players still available,
+              then swap anyone you like.
+            </p>
+            <Button size="sm" variant="primary" onClick={onAutofill} disabled={disabled}>
+              <Sparkles aria-hidden className="size-3.5" />
+              Autofill {title.toLowerCase()}
+            </Button>
+          </div>
+        )}
         {rows.map((row, index) => (
           <SlotRow
             key={row.key}
@@ -169,10 +207,12 @@ function SlotRow({
     <div className="flex items-center gap-3">
       <span
         className={cn(
-          'flex h-9 w-14 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-xs font-semibold',
+          'flex h-9 w-14 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-xs font-bold tracking-wide',
           blocked
             ? 'bg-caution-soft text-caution-text'
-            : 'bg-surface-sunken text-ink-secondary',
+            : row.player
+              ? 'bg-accent text-on-accent'
+              : 'border-line-strong text-ink-secondary border border-dashed',
         )}
       >
         {row.slot}

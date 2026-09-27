@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 const PARAM = 'roster'
@@ -16,12 +16,37 @@ function readStored(): string[] {
   }
 }
 
+/** Fired on this window whenever the remembered roster is written. */
+const CHANGED = 'nflfp:roster'
+
 function writeStored(ids: string[]): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ids))
   } catch {
     // A private-mode browser with no storage quota is not a reason to fail.
   }
+  // `storage` events only reach *other* tabs. Views in this one that show the
+  // roster without owning it — the nav's count — listen for this instead.
+  window.dispatchEvent(new Event(CHANGED))
+}
+
+function subscribeRoster(onChange: () => void): () => void {
+  window.addEventListener(CHANGED, onChange)
+  window.addEventListener('storage', onChange)
+  return () => {
+    window.removeEventListener(CHANGED, onChange)
+    window.removeEventListener('storage', onChange)
+  }
+}
+
+/**
+ * How many players are on the remembered roster, kept live.
+ *
+ * For the navigation's badge, which sits outside every page that edits the
+ * roster and so cannot read it from their state.
+ */
+export function useRosterCount(): number {
+  return useSyncExternalStore(subscribeRoster, () => readStored().length, () => 0)
 }
 
 function parse(value: string | null): string[] {

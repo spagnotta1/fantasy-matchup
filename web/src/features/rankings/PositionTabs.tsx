@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { usePositions } from '@/hooks/useCatalog'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { cn } from '@/utils/cn'
 
 /**
@@ -20,6 +21,10 @@ import { cn } from '@/utils/cn'
  */
 export function PositionTabs({ active }: { active: string | null }) {
   const { data, isPending } = usePositions()
+  // One underline that slides between tabs. Changing position is a param
+  // change on a mounted page (see `routes.tsx`), which is what lets it slide
+  // rather than reappear.
+  const [ref, underline] = useSlidingIndicator<HTMLUListElement>(`${active}:${data?.length ?? 0}`)
 
   if (isPending) {
     return (
@@ -33,9 +38,16 @@ export function PositionTabs({ active }: { active: string | null }) {
 
   return (
     <nav aria-label="Position" className="border-line mb-5 -mx-1 overflow-x-auto border-b px-1">
-      <ul className="flex min-w-max items-center gap-1 pb-px">
+      <ul ref={ref} className="relative flex min-w-max items-center gap-1 pb-px">
+        {underline && (
+          <li
+            aria-hidden
+            className="bg-accent pointer-events-none absolute h-0.5 rounded-full"
+            style={{ ...underline, top: undefined, height: undefined, bottom: 1 }}
+          />
+        )}
         <li>
-          <TabLink to="/rankings" active={active === null}>
+          <TabLink to="/rankings" active={active === null} slid={underline !== null}>
             All
           </TabLink>
         </li>
@@ -45,6 +57,7 @@ export function PositionTabs({ active }: { active: string | null }) {
               <TabLink
                 to={`/rankings/${position.position}`}
                 active={active === position.position}
+                slid={underline !== null}
                 title={position.label}
               >
                 {position.position}
@@ -70,10 +83,13 @@ function TabLink({
   to,
   active,
   title,
+  slid,
   children,
 }: {
   to: string
   active: boolean
+  /** The sliding underline is drawn, so the tab should not draw its own. */
+  slid: boolean
   title?: string
   children: React.ReactNode
 }) {
@@ -83,13 +99,14 @@ function TabLink({
       end
       title={title}
       aria-current={active ? 'page' : undefined}
+      data-active={active}
       className={cn(
         'inline-flex h-9 items-center rounded-t-[var(--radius-control)] px-3 text-sm font-medium transition-colors',
         // The underline is drawn as a bottom border on the tab itself so it
         // sits on the nav's border rather than floating above it.
         'border-b-2',
         active
-          ? 'border-accent text-ink'
+          ? cn('text-ink', slid ? 'border-transparent' : 'border-accent')
           : 'text-ink-muted hover:text-ink border-transparent hover:border-line-strong',
       )}
     >

@@ -39,7 +39,12 @@ export function YourWeek() {
   if (my.ids.length === 0) {
     return (
       <Card>
-        <CardBody className="flex flex-wrap items-center gap-4 p-5">
+        {/*
+          A column on a phone, a row from `sm`. As a wrapping row the paragraph
+          (a `flex-1` item with `min-w-0`) shrank to share the line with the
+          button instead of wrapping below it — three words a line at 412px.
+        */}
+        <CardBody className="flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center">
           <span className="bg-accent-soft text-accent-text flex size-10 shrink-0 items-center justify-center rounded-full">
             <UserRound aria-hidden className="size-5" />
           </span>

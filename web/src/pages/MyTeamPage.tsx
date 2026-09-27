@@ -157,6 +157,7 @@ export default function MyTeamPage() {
           <EmptyState
             titleAs="h2"
             icon={<UserRound aria-hidden className="size-5" />}
+            eyebrow="On the sideline"
             title="Add your roster"
             description="Search for your players above. We will show their projections, fill in your highest-projected lineup and flag anyone ruled out."
           />

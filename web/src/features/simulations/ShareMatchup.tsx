@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Check, Link2 } from 'lucide-react'
+import { Check, ImageDown, Link2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
+import { drawShareCard, shareOrDownload } from '@/features/simulations/shareCard'
+import type { MatchupSimulation } from '@/api/schemas'
 
 /**
  * Copy the current matchup's address.
@@ -36,7 +38,7 @@ export function ShareMatchup() {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-start gap-1 sm:items-end">
       <Button size="sm" variant="secondary" onClick={() => void onCopy()}>
         {copied ? (
           <Check aria-hidden className="size-3.5" />
@@ -51,6 +53,47 @@ export function ShareMatchup() {
           : copied
             ? 'The link includes both lineups and your settings.'
             : ''}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Save or share the result as an image (see `shareCard.ts`).
+ *
+ * Beside "Copy link" rather than instead of it: the link reproduces the run,
+ * the picture is what people actually drop into a group chat.
+ */
+export function ShareImage({
+  result,
+  labelA,
+  labelB,
+}: {
+  result: MatchupSimulation
+  labelA: string
+  labelB: string
+}) {
+  const [state, setState] = useState<'idle' | 'working' | 'done' | 'failed'>('idle')
+
+  const onShare = async () => {
+    setState('working')
+    try {
+      const blob = await drawShareCard(result, { a: labelA, b: labelB })
+      await shareOrDownload(blob, `matchup-week-${result.week}.png`, window.location.href)
+      setState('done')
+    } catch {
+      setState('failed')
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-1 sm:items-end">
+      <Button size="sm" variant="secondary" onClick={() => void onShare()} disabled={state === 'working'}>
+        <ImageDown aria-hidden className="size-3.5" />
+        Share image
+      </Button>
+      <span aria-live="polite" className="text-ink-muted text-xs">
+        {state === 'failed' ? 'The image could not be made in this browser — copy the link instead.' : ''}
       </span>
     </div>
   )

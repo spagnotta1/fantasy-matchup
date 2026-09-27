@@ -92,6 +92,8 @@
   --app-field-line: oklch(25.4% 0.051 262 / 0.09);
   --app-line-to-gain: oklch(83.7% 0.168 91);
   --app-line-to-gain-edge: oklch(25.4% 0.051 262);
+  /* Text set on the yellow itself, as in a "past the line" chip. */
+  --app-on-line-to-gain: oklch(25.4% 0.051 262);
   --app-range-box: oklch(33.2% 0.085 262);
   --app-range-whisker: oklch(46.1% 0.049 265);
   --app-range-median: oklch(100% 0 0);
@@ -149,7 +151,9 @@
     --app-caution-text: oklch(89% 0.1 82);
 
     --app-info: oklch(80% 0.1 245);
-    --app-info-soft: oklch(26% 0.05 250);
+    /* Deep teal turf, not navy: a navy banner on the turf ground read as a
+       panel from the light theme left behind. */
+    --app-info-soft: oklch(26.5% 0.045 200);
     --app-info-text: oklch(88% 0.07 245);
 
     --app-focus: oklch(88% 0.12 210);
@@ -164,6 +168,7 @@
     --app-line-to-gain: oklch(87.1% 0.168 96);
     /* The same as the line itself: on turf the yellow is its own edge. */
     --app-line-to-gain-edge: oklch(87.1% 0.168 96);
+    --app-on-line-to-gain: oklch(28% 0.05 163);
     --app-range-box: oklch(96.7% 0.008 122);
     --app-range-whisker: oklch(86% 0.025 155);
     --app-range-median: oklch(31.4% 0.049 163);
@@ -214,7 +219,9 @@
   --app-caution-text: oklch(89% 0.1 82);
 
   --app-info: oklch(80% 0.1 245);
-  --app-info-soft: oklch(26% 0.05 250);
+  /* Deep teal turf, not navy: a navy banner on the turf ground read as a
+       panel from the light theme left behind. */
+    --app-info-soft: oklch(26.5% 0.045 200);
   --app-info-text: oklch(88% 0.07 245);
 
   --app-focus: oklch(88% 0.12 210);
@@ -229,6 +236,7 @@
   --app-line-to-gain: oklch(87.1% 0.168 96);
   /* The same as the line itself: on turf the yellow is its own edge. */
   --app-line-to-gain-edge: oklch(87.1% 0.168 96);
+  --app-on-line-to-gain: oklch(28% 0.05 163);
   --app-range-box: oklch(96.7% 0.008 122);
   --app-range-whisker: oklch(86% 0.025 155);
   --app-range-median: oklch(31.4% 0.049 163);
@@ -287,6 +295,7 @@
   --color-field-line: var(--app-field-line);
   --color-line-to-gain: var(--app-line-to-gain);
   --color-line-to-gain-edge: var(--app-line-to-gain-edge);
+  --color-on-line-to-gain: var(--app-on-line-to-gain);
   --color-range-box: var(--app-range-box);
   --color-range-whisker: var(--app-range-whisker);
   --color-range-median: var(--app-range-median);
@@ -315,6 +324,11 @@
   /* For work whose duration is genuinely unknown — the simulation endpoint
      reports no progress, so a determinate bar would be fiction. */
   --animate-indeterminate: indeterminate 1.3s ease-in-out infinite;
+  --animate-score-bump: score-bump 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-chains: chains 1.6s ease-out;
+  --animate-live-dot: live-dot 1.4s ease-in-out infinite;
+  /* `both`, so a delayed wipe holds its clipped first frame until it starts. */
+  --animate-wipe-in: wipe-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes fade-in {
@@ -356,6 +370,52 @@
   }
 }
 
+/* Event motion. Each plays because something happened — a player scored, a
+   player crossed the line to gain, a lineup was added to — never on a timer
+   and never to dress up a prediction. The reduced-motion rule in the base
+   layer flattens all of them. */
+@keyframes score-bump {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes chains {
+  0% {
+    background-color: color-mix(in oklch, var(--app-line-to-gain) 55%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* A left-to-right reveal by clipping rather than scaling, so labels inside
+   are never squashed on the way in. */
+@keyframes wipe-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes live-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 @layer base {
   * {
     border-color: var(--color-line);
@@ -390,6 +450,12 @@
     border-radius: 0.25rem;
   }
 
+  /* Every search field here draws its own labelled clear button; Chromium's
+     built-in one sat beside it, two ✕s in one box. */
+  input[type='search']::-webkit-search-cancel-button {
+    appearance: none;
+  }
+
   ::selection {
     background-color: var(--color-accent-soft);
     color: var(--color-accent-text);
@@ -402,6 +468,8 @@
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
+      /* A staggered entrance with no motion is just content arriving late. */
+      animation-delay: 0s !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;

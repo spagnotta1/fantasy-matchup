@@ -328,6 +328,7 @@ export default function SimulationPage() {
 
           <div className="grid gap-6 xl:grid-cols-2">
             <LineupBuilder
+              side="you"
               title={LABEL_A}
               description={`Your starting lineup — ${catalog.format.label}.`}
               rows={teamA}

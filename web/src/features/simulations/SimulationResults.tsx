@@ -10,7 +10,8 @@ import { PositionalEdges } from '@/features/simulations/PositionalEdges'
 import { ScoreDistribution } from '@/features/simulations/ScoreDistribution'
 import { SwingFactors } from '@/features/simulations/SwingFactors'
 import { groupNotices } from '@/features/simulations/notices'
-import { ShareMatchup } from '@/features/simulations/ShareMatchup'
+import { ShareImage, ShareMatchup } from '@/features/simulations/ShareMatchup'
+import { useCountUp } from '@/hooks/useCountUp'
 import { formatPercent, formatPoints, formatScoringProfile } from '@/utils/format'
 import type { MatchupSimulation, ResponseMeta, SimulationAssumptions } from '@/api/schemas'
 import type { NoticeGroup } from '@/features/simulations/notices'
@@ -64,6 +65,7 @@ export function SimulationResults({
         leaderLabel={leaderLabel}
         leaderProbability={leaderProbability}
         assumptions={result.assumptions}
+        result={result}
       />
 
       {/*
@@ -225,7 +227,9 @@ function WinProbability({
   leaderLabel,
   leaderProbability,
   assumptions,
+  result,
 }: {
+  result: MatchupSimulation
   labelA: string
   labelB: string
   probabilityA: number
@@ -237,6 +241,12 @@ function WinProbability({
   assumptions: SimulationAssumptions
 }) {
   const limits = headlineLimits(assumptions)
+  // Revealed from even odds — the honest reading before anything was
+  // simulated — to the estimate. A new run counts from the last estimate to
+  // the next. Assistive tech reads the real figures from the label and the
+  // sentence below, never the numbers in flight.
+  const shownA = useCountUp(probabilityA, 900, 0.5)
+  const shownB = useCountUp(probabilityB, 900, 0.5)
   return (
     <Card className="overflow-hidden">
       <CardBody className="p-5 sm:p-6">
@@ -245,14 +255,16 @@ function WinProbability({
             <p className="text-ink-muted text-xs font-medium tracking-wide uppercase">
               {labelA} — estimated win probability
             </p>
-            <p className="text-accent-text tnum mt-1 text-5xl leading-none font-semibold tracking-tight">
-              {formatPercent(probabilityA)}
+            <p className="text-you tnum mt-1 text-5xl leading-none font-bold tracking-tight sm:text-6xl">
+              <span aria-hidden>{formatPercent(shownA)}</span>
+              <span className="sr-only">{formatPercent(probabilityA)}</span>
             </p>
           </div>
           <div className="min-w-0 text-right">
             <p className="text-ink-muted text-xs font-medium tracking-wide uppercase">{labelB}</p>
             <p className="text-ink-secondary tnum mt-1 text-3xl leading-none font-semibold tracking-tight">
-              {formatPercent(probabilityB)}
+              <span aria-hidden>{formatPercent(shownB)}</span>
+              <span className="sr-only">{formatPercent(probabilityB)}</span>
             </p>
           </div>
         </div>
@@ -262,17 +274,13 @@ function WinProbability({
           role="img"
           aria-label={`${labelA} wins ${formatPercent(probabilityA)} of simulated weeks, ${labelB} wins ${formatPercent(probabilityB)}.`}
         >
-          <div
-            className="bg-chart-series transition-[width] duration-500 ease-out"
-            style={{ width: `${probabilityA * 100}%` }}
-          />
-          <div
-            className="bg-chart-series/30 transition-[width] duration-500 ease-out"
-            style={{ width: `${probabilityB * 100}%` }}
-          />
+          <div className="bg-you" style={{ width: `${shownA * 100}%` }} />
+          <div className="bg-chart-series/30" style={{ width: `${shownB * 100}%` }} />
         </div>
 
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+        {/* A column on a phone: as a wrapping row the button kept its line and the
+            sentence beside it shrank to a few words a line. */}
+        <div className="mt-3 flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between">
           <p className="text-ink-secondary min-w-0 flex-1 text-sm leading-relaxed">
             Across {iterations.toLocaleString()} simulated weeks, {leaderLabel} finished ahead in{' '}
             {formatPercent(leaderProbability)} of them.
@@ -292,7 +300,10 @@ function WinProbability({
               </span>
             )}
           </p>
-          <ShareMatchup />
+          <div className="flex flex-wrap items-start gap-2">
+            <ShareImage result={result} labelA={labelA} labelB={labelB} />
+            <ShareMatchup />
+          </div>
         </div>
       </CardBody>
     </Card>
