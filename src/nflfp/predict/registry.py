@@ -27,6 +27,13 @@ MODELS: dict[str, Callable[[], Model]] = {
     "shrinkage_eb": ShrinkageModel,
 }
 
+try:
+    from .models.gbm import LightGBMComponents
+except ImportError:
+    logger.debug("lightgbm not installed; lightgbm_components is not registered")
+else:
+    MODELS["lightgbm_components"] = LightGBMComponents
+
 
 class UnknownModelError(KeyError):
     """The requested model is not registered."""

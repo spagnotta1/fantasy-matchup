@@ -1,0 +1,284 @@
+{
+  "seasons": [
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "profile": "half_ppr",
+  "baseline_l4_mae": {
+    "QB": 6.6366,
+    "RB": 4.5042,
+    "TE": 3.2896,
+    "WR": 4.2372
+  },
+  "shrinkage_eb": {
+    "passed": false,
+    "failures": [
+      "RB MAE 4.520 does not beat baseline_l4's 4.504 (same seasons)"
+    ],
+    "headline": {
+      "coverage_p10_p90": 0.8032,
+      "coverage_p25_p75": 0.5072,
+      "width_p10_p90": 13.224,
+      "crps": 2.9271,
+      "max_calibration_error": 0.1296,
+      "max_conditional_bias": 0.0911,
+      "mae_by_position": {
+        "QB": 6.5074,
+        "RB": 4.5199,
+        "TE": 3.176,
+        "WR": 4.1638
+      }
+    },
+    "metrics": {
+      "profile": "half_ppr",
+      "weeks": 124,
+      "n": 40294,
+      "n_with_distribution": 38061,
+      "by_position": {
+        "QB": {
+          "n": 4490,
+          "mae": 6.5074,
+          "rmse": 8.119,
+          "bias": -1.1152,
+          "pearson": 0.4924,
+          "spearman": 0.4795
+        },
+        "RB": {
+          "n": 10603,
+          "mae": 4.5199,
+          "rmse": 6.239,
+          "bias": -0.5485,
+          "pearson": 0.5825,
+          "spearman": 0.6426
+        },
+        "TE": {
+          "n": 8373,
+          "mae": 3.176,
+          "rmse": 4.5066,
+          "bias": -0.4397,
+          "pearson": 0.4946,
+          "spearman": 0.5157
+        },
+        "WR": {
+          "n": 16828,
+          "mae": 4.1638,
+          "rmse": 5.7607,
+          "bias": -0.4711,
+          "pearson": 0.5306,
+          "spearman": 0.5911
+        }
+      },
+      "calibration_ece": {
+        "boom": 0.0013,
+        "bust": 0.0065
+      },
+      "calibration_max": {
+        "boom": 0.1296,
+        "bust": 0.0137
+      },
+      "calibration_weighted": {
+        "boom": 0.0008,
+        "bust": 0.0062
+      },
+      "coverage": {
+        "P10-P90": {
+          "nominal": 0.8,
+          "observed": 0.8032,
+          "width": 13.224,
+          "n": 38061
+        },
+        "P25-P75": {
+          "nominal": 0.5,
+          "observed": 0.5072,
+          "width": 6.742,
+          "n": 38061
+        }
+      },
+      "projection_ranges": [
+        {
+          "band": "0-5",
+          "n": 17702,
+          "bias": 0.091,
+          "coverage_80": 0.808,
+          "reliable": true
+        },
+        {
+          "band": "5-10",
+          "n": 10866,
+          "bias": -0.084,
+          "coverage_80": 0.798,
+          "reliable": true
+        },
+        {
+          "band": "10-15",
+          "n": 7017,
+          "bias": -0.059,
+          "coverage_80": 0.806,
+          "reliable": true
+        },
+        {
+          "band": "15-20",
+          "n": 2217,
+          "bias": 0.062,
+          "coverage_80": 0.783,
+          "reliable": true
+        },
+        {
+          "band": "20-25",
+          "n": 254,
+          "bias": 0.086,
+          "coverage_80": 0.795,
+          "reliable": true
+        },
+        {
+          "band": "25-30",
+          "n": 5,
+          "bias": 3.934,
+          "coverage_80": 0.8,
+          "reliable": false
+        }
+      ],
+      "mean_crps": 2.9271,
+      "mean_pinball": 1.4404,
+      "duration_seconds": 67.3
+    }
+  },
+  "lightgbm_components": {
+    "passed": false,
+    "failures": [
+      "conditional bias 0.568 exceeds 0.25 points"
+    ],
+    "headline": {
+      "coverage_p10_p90": 0.7991,
+      "coverage_p25_p75": 0.5061,
+      "width_p10_p90": 12.817,
+      "crps": 2.8151,
+      "max_calibration_error": 0.0509,
+      "max_conditional_bias": 0.5679,
+      "mae_by_position": {
+        "QB": 6.1623,
+        "RB": 4.299,
+        "TE": 3.0777,
+        "WR": 4.0163
+      }
+    },
+    "metrics": {
+      "profile": "half_ppr",
+      "weeks": 124,
+      "n": 40294,
+      "n_with_distribution": 38061,
+      "by_position": {
+        "QB": {
+          "n": 4490,
+          "mae": 6.1623,
+          "rmse": 7.725,
+          "bias": 0.033,
+          "pearson": 0.5485,
+          "spearman": 0.5243
+        },
+        "RB": {
+          "n": 10603,
+          "mae": 4.299,
+          "rmse": 5.9374,
+          "bias": 0.0868,
+          "pearson": 0.6148,
+          "spearman": 0.6812
+        },
+        "TE": {
+          "n": 8373,
+          "mae": 3.0777,
+          "rmse": 4.3112,
+          "bias": -0.0186,
+          "pearson": 0.54,
+          "spearman": 0.5715
+        },
+        "WR": {
+          "n": 16828,
+          "mae": 4.0163,
+          "rmse": 5.5292,
+          "bias": 0.023,
+          "pearson": 0.5719,
+          "spearman": 0.6349
+        }
+      },
+      "calibration_ece": {
+        "boom": 0.0032,
+        "bust": 0.0083
+      },
+      "calibration_max": {
+        "boom": 0.0509,
+        "bust": 0.02
+      },
+      "calibration_weighted": {
+        "boom": 0.0025,
+        "bust": 0.0087
+      },
+      "coverage": {
+        "P10-P90": {
+          "nominal": 0.8,
+          "observed": 0.7991,
+          "width": 12.817,
+          "n": 38061
+        },
+        "P25-P75": {
+          "nominal": 0.5,
+          "observed": 0.5061,
+          "width": 6.451,
+          "n": 38061
+        }
+      },
+      "projection_ranges": [
+        {
+          "band": "0-5",
+          "n": 16780,
+          "bias": 0.189,
+          "coverage_80": 0.803,
+          "reliable": true
+        },
+        {
+          "band": "5-10",
+          "n": 11751,
+          "bias": 0.083,
+          "coverage_80": 0.799,
+          "reliable": true
+        },
+        {
+          "band": "10-15",
+          "n": 6823,
+          "bias": 0.04,
+          "coverage_80": 0.799,
+          "reliable": true
+        },
+        {
+          "band": "15-20",
+          "n": 2316,
+          "bias": 0.195,
+          "coverage_80": 0.782,
+          "reliable": true
+        },
+        {
+          "band": "20-25",
+          "n": 368,
+          "bias": 0.568,
+          "coverage_80": 0.774,
+          "reliable": true
+        },
+        {
+          "band": "25-30",
+          "n": 23,
+          "bias": 4.199,
+          "coverage_80": 0.652,
+          "reliable": false
+        }
+      ],
+      "mean_crps": 2.8151,
+      "mean_pinball": 1.387,
+      "duration_seconds": 849.9
+    }
+  }
+}

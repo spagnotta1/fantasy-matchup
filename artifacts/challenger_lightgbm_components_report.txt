@@ -1,0 +1,103 @@
+shrinkage_eb v1.0.0 — half_ppr, 124 week(s), 40,294 prediction(s), 38,061 with held-out distribution, 67.3s
+========================================================================================
+POINT ACCURACY
+  QB  n= 4,490  MAE= 6.51  RMSE= 8.12  bias=-1.12  r=0.492  rho=0.480
+  RB  n=10,603  MAE= 4.52  RMSE= 6.24  bias=-0.55  r=0.583  rho=0.643
+  TE  n= 8,373  MAE= 3.18  RMSE= 4.51  bias=-0.44  r=0.495  rho=0.516
+  WR  n=16,828  MAE= 4.16  RMSE= 5.76  bias=-0.47  r=0.531  rho=0.591
+
+INTERVAL COVERAGE (held out)
+  P10-P90    nominal=0.80 observed=0.803 (calibrated ) width= 13.2 n=38,061
+  P25-P75    nominal=0.50 observed=0.507 (calibrated ) width=  6.7 n=38,061
+  mean CRPS=2.927  mean pinball=1.440
+
+PROBABILITY CALIBRATION
+  boom  ECE=0.001  max=0.130  weighted=0.001
+  bust  ECE=0.006  max=0.014  weighted=0.006
+  (ECE is sample-weighted and hides rare confident errors; read max too)
+
+BY PROJECTION RANGE — the high end evaluated on its own
+  0-5       n=17,702  pred=  3.1 actual=  3.0  bias= +0.09  MAE= 2.86  cov80=0.808  >P90=0.098
+  5-10      n=10,866  pred=  7.3 actual=  7.4  bias= -0.08  MAE= 4.91  cov80=0.798  >P90=0.104
+  10-15     n= 7,017  pred= 12.0 actual= 12.1  bias= -0.06  MAE= 6.15  cov80=0.806  >P90=0.098
+  15-20     n= 2,217  pred= 17.1 actual= 17.1  bias= +0.06  MAE= 6.71  cov80=0.783  >P90=0.101
+  20-25     n=   254  pred= 21.5 actual= 21.4  bias= +0.09  MAE= 6.61  cov80=0.795  >P90=0.098
+  25-30     n=     5  pred= 25.3 actual= 21.4  bias= +3.93  MAE= 5.76  cov80=0.800  >P90=0.000  (!! small sample)
+
+COVERAGE BY POSITION (nominal 0.80)
+  QB         nominal=0.80 observed=0.774 (calibrated ) width= 20.7 n=4,247
+  RB         nominal=0.80 observed=0.807 (calibrated ) width= 13.4 n=10,024
+  TE         nominal=0.80 observed=0.803 (calibrated ) width=  9.9 n=7,904
+  WR         nominal=0.80 observed=0.808 (calibrated ) width= 12.8 n=15,886
+
+COVERAGE BY EVIDENCE (nominal 0.80)
+  1 game(s)  nominal=0.80 observed=0.768 (too narrow ) width= 11.3 n=727
+  2 game(s)  nominal=0.80 observed=0.806 (calibrated ) width= 10.9 n=690
+  3 game(s)  nominal=0.80 observed=0.795 (calibrated ) width= 10.5 n=667
+  4 game(s)  nominal=0.80 observed=0.805 (calibrated ) width= 13.4 n=35,193
+  no history nominal=0.80 observed=0.776 (calibrated ) width= 12.5 n=784
+
+ACCEPTANCE: FAIL
+  - RB MAE 4.520 does not beat baseline_l4's 4.504 (same seasons)
+
+
+lightgbm_components v1.0.0 — half_ppr, 124 week(s), 40,294 prediction(s), 38,061 with held-out distribution, 849.9s
+========================================================================================
+POINT ACCURACY
+  QB  n= 4,490  MAE= 6.16  RMSE= 7.72  bias=+0.03  r=0.549  rho=0.524
+  RB  n=10,603  MAE= 4.30  RMSE= 5.94  bias=+0.09  r=0.615  rho=0.681
+  TE  n= 8,373  MAE= 3.08  RMSE= 4.31  bias=-0.02  r=0.540  rho=0.572
+  WR  n=16,828  MAE= 4.02  RMSE= 5.53  bias=+0.02  r=0.572  rho=0.635
+
+INTERVAL COVERAGE (held out)
+  P10-P90    nominal=0.80 observed=0.799 (calibrated ) width= 12.8 n=38,061
+  P25-P75    nominal=0.50 observed=0.506 (calibrated ) width=  6.5 n=38,061
+  mean CRPS=2.815  mean pinball=1.387
+
+PROBABILITY CALIBRATION
+  boom  ECE=0.003  max=0.051  weighted=0.003
+  bust  ECE=0.008  max=0.020  weighted=0.009
+  (ECE is sample-weighted and hides rare confident errors; read max too)
+
+BY PROJECTION RANGE — the high end evaluated on its own
+  0-5       n=16,780  pred=  2.9 actual=  2.7  bias= +0.19  MAE= 2.60  cov80=0.803  >P90=0.095
+  5-10      n=11,751  pred=  7.3 actual=  7.2  bias= +0.08  MAE= 4.70  cov80=0.799  >P90=0.099
+  10-15     n= 6,823  pred= 12.5 actual= 12.4  bias= +0.04  MAE= 6.06  cov80=0.799  >P90=0.099
+  15-20     n= 2,316  pred= 17.1 actual= 16.9  bias= +0.20  MAE= 6.46  cov80=0.782  >P90=0.102
+  20-25     n=   368  pred= 21.5 actual= 20.9  bias= +0.57  MAE= 6.89  cov80=0.774  >P90=0.090
+  25-30     n=    23  pred= 26.3 actual= 22.1  bias= +4.20  MAE= 8.57  cov80=0.652  >P90=0.043  (!! small sample)
+
+COVERAGE BY POSITION (nominal 0.80)
+  QB         nominal=0.80 observed=0.773 (calibrated ) width= 19.8 n=4,247
+  RB         nominal=0.80 observed=0.801 (calibrated ) width= 13.1 n=10,024
+  TE         nominal=0.80 observed=0.802 (calibrated ) width=  9.6 n=7,904
+  WR         nominal=0.80 observed=0.803 (calibrated ) width= 12.4 n=15,886
+
+COVERAGE BY EVIDENCE (nominal 0.80)
+  1 game(s)  nominal=0.80 observed=0.799 (calibrated ) width=  9.1 n=727
+  2 game(s)  nominal=0.80 observed=0.800 (calibrated ) width=  9.5 n=690
+  3 game(s)  nominal=0.80 observed=0.786 (calibrated ) width= 10.0 n=667
+  4 game(s)  nominal=0.80 observed=0.800 (calibrated ) width= 13.1 n=35,193
+  no history nominal=0.80 observed=0.782 (calibrated ) width=  9.3 n=784
+
+ACCEPTANCE: FAIL
+  - conditional bias 0.568 exceeds 0.25 points
+
+
+HEAD TO HEAD — seasons 2019-2025, half_ppr
+========================================================================================
+                                shrinkage_eb       lightgbm_components
+  crps                                2.9271                    2.8151
+  coverage_p10_p90                    0.8032                    0.7991
+  coverage_p25_p75                    0.5072                    0.5061
+  width_p10_p90                       13.224                    12.817
+  max_calibration_error               0.1296                    0.0509
+  max_conditional_bias                0.0911                    0.5679
+  MAE QB                              6.5074                    6.1623   (baseline_l4 6.6366)
+  MAE RB                              4.5199                     4.299   (baseline_l4 4.5042)
+  MAE TE                               3.176                    3.0777   (baseline_l4 3.2896)
+  MAE WR                              4.1638                    4.0163   (baseline_l4 4.2372)
+
+  frozen record CRPS 2.927; this run reproduced 2.9271 for shrinkage_eb
+
+  total 969s

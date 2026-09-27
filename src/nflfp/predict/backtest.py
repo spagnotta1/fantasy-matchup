@@ -452,6 +452,45 @@ def _evaluate_distributions(result: BacktestResult) -> None:
         result.mean_pinball = mean(losses)
 
 
+def acceptance_inputs(
+    result: BacktestResult, baseline: BacktestResult | None = None
+) -> dict:
+    """The keyword arguments :func:`~nflfp.predict.foundation.meets_acceptance` takes.
+
+    One definition of how a backtest is reduced to the acceptance measurements,
+    shared by the scheduled drift check and the challenger evaluation. Two
+    copies of this reduction could disagree on, say, which projection bands
+    count towards conditional bias, and then an incumbent and a challenger
+    would be held to different bars while appearing to share one.
+
+    Missing measurements are replaced by values that fail, never by ones that
+    pass: no coverage reads as 0.0, no CRPS as infinity.
+
+    ``baseline`` is ``baseline_l4`` backtested on the same rows and seasons.
+    Pass it: without it the MAE criterion falls back to the recorded 2023-25
+    bar, which compares seasons rather than models for any other window.
+    """
+    coverage_80 = next(
+        (entry.observed for entry in result.coverage if entry.nominal == 0.80), None
+    )
+    reliable = [entry for entry in result.ranges if entry.reliable]
+    return {
+        "coverage_p10_p90": coverage_80 if coverage_80 is not None else 0.0,
+        "max_calibration_error": max(result.calibration_max.values(), default=1.0),
+        "max_conditional_bias": max((abs(entry.bias) for entry in reliable), default=0.0),
+        "crps": result.mean_crps if result.mean_crps is not None else float("inf"),
+        "mae_by_position": {
+            position: metrics.mae for position, metrics in result.by_position.items()
+        },
+        "baseline_mae_by_position": (
+            {position: metrics.mae for position, metrics in baseline.by_position.items()}
+            if baseline is not None
+            else None
+        ),
+        "walk_forward": result.walk_forward,
+    }
+
+
 def compare(results: Sequence[BacktestResult]) -> str:
     """Side-by-side MAE and Spearman, so 'did it beat the baseline?' is one read."""
     positions = sorted({p for r in results for p in r.by_position})
