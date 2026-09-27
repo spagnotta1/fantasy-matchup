@@ -6,6 +6,7 @@ import { useSlate } from '@/app/slate-context'
 import { ErrorState } from '@/components/feedback/States'
 import { SlateProvider } from '@/app/SlateProvider'
 import { SkeletonCards, SkeletonTable } from '@/components/ui/Skeleton'
+import { useScrollingFlag } from '@/hooks/useScrollingFlag'
 
 import { CommandPalette } from './CommandPalette'
 import { MobileNav, Sidebar } from './Sidebar'
@@ -33,6 +34,7 @@ function CatalogGate({ pathname, children }: { pathname: string; children: React
 }
 
 export function AppShell() {
+  useScrollingFlag()
   const location = useLocation()
   // The deepest matched route's id: stable across param changes on one route
   // (`/rankings/QB` -> `/rankings/RB`), different across routes.

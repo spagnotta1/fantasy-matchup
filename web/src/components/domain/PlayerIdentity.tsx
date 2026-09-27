@@ -3,6 +3,30 @@ import { Link } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 import type { Player } from '@/api/schemas'
 
+/** Rendered diameter of each avatar size, in CSS pixels. Matches `size-8/10/16`. */
+const AVATAR_PX = { sm: 32, md: 40, lg: 64 } as const
+
+/** The transform segment nflverse's headshot URLs carry: format and quality only. */
+const HEADSHOT_TRANSFORM = /\/image\/(upload|private)\/f_auto,q_auto\//
+
+/**
+ * A headshot URL resized by the image host to `px` square, cropped on the face.
+ *
+ * The URLs arrive asking for the original photograph — 3400×2450, ~760 KB
+ * each — and the board draws them 32 pixels wide. A hundred rows downloaded
+ * ~76 MB, and decoding them starved the raster threads badly enough that
+ * scrolling the board showed blank tiles. The host resizes on request
+ * (`w_,h_,c_fill,g_face`), which brings one avatar to ~1.5 KB with the same
+ * framing `object-cover` drew. A URL in any other shape is passed through
+ * untouched rather than guessed at.
+ */
+function sizedHeadshot(url: string, px: number): string {
+  return url.replace(
+    HEADSHOT_TRANSFORM,
+    (_, access: string) => `/image/${access}/f_auto,q_auto,w_${px},h_${px},c_fill,g_face/`,
+  )
+}
+
 /**
  * A player's headshot, initials fallback and name block.
  *
@@ -17,6 +41,7 @@ export function PlayerAvatar({
   size?: 'sm' | 'md' | 'lg'
 }) {
   const sizes = { sm: 'size-8 text-[0.625rem]', md: 'size-10 text-xs', lg: 'size-16 text-lg' } as const
+  const px = AVATAR_PX[size]
   const initials = player.name
     .split(' ')
     .slice(0, 2)
@@ -36,7 +61,10 @@ export function PlayerAvatar({
       <span aria-hidden>{initials}</span>
       {player.headshot_url && (
         <img
-          src={player.headshot_url}
+          src={sizedHeadshot(player.headshot_url, px * 2)}
+          srcSet={`${sizedHeadshot(player.headshot_url, px)} 1x, ${sizedHeadshot(player.headshot_url, px * 2)} 2x, ${sizedHeadshot(player.headshot_url, px * 3)} 3x`}
+          width={px}
+          height={px}
           alt=""
           loading="lazy"
           decoding="async"
