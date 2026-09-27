@@ -79,6 +79,16 @@ export function BestMatchups({ count = 6 }: { count?: number }) {
         <SkeletonTable rows={count} columns={3} />
       ) : isError ? (
         <ErrorState error={error} onRetry={() => void refetch()} compact />
+      ) : favourable.length === 0 && data.data.length > 0 && !data.data.some((entry) => entry.projection.matchup?.grade?.graded) ? (
+        // Early in a season no defence has three games yet, so nothing is
+        // graded. That is one sentence of explanation, not a card-sized empty
+        // state competing with the panels that do have something to say.
+        <CardBody>
+          <p className="text-ink-secondary text-sm leading-relaxed">
+            Matchup grades start once a defence has played three games. None has yet this week,
+            so there is no list to show.
+          </p>
+        </CardBody>
       ) : favourable.length === 0 ? (
         <EmptyState
           title="No standout matchups"

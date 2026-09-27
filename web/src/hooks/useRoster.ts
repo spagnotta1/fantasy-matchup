@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 const PARAM = 'roster'
@@ -140,4 +140,22 @@ export function useLineupChoice(): [string[] | null, (ids: string[] | null) => v
 export function useRememberedRoster(): Set<string> {
   const [ids] = useRoster()
   return useMemo(() => new Set(ids), [ids])
+}
+
+/**
+ * Whether one player is on the remembered roster, and a way to add them.
+ *
+ * For pages that are not the roster: a player page offering "Add to my team"
+ * should update the roster the rest of the app reads without rewriting its own
+ * link, which `useRoster`'s setter does (the roster lives in My team's URL, not
+ * in a player's).
+ */
+export function useRosterMembership(playerId: string): [boolean, () => void] {
+  const [ids, setLocal] = useState<string[]>(() => readStored())
+  const add = useCallback(() => {
+    const next = [...new Set([...readStored(), playerId])].slice(0, MAX_PLAYERS)
+    writeStored(next)
+    setLocal(next)
+  }, [playerId])
+  return [ids.includes(playerId), add]
 }

@@ -8,14 +8,17 @@ import { RiskOpportunity } from '@/features/dashboard/RiskOpportunity'
 import { SimulationCallout } from '@/features/dashboard/SimulationCallout'
 import { TopProjections } from '@/features/dashboard/TopProjections'
 import { WeekOverview } from '@/features/dashboard/WeekOverview'
+import { YourWeek } from '@/features/dashboard/YourWeek'
+import { useRoster } from '@/hooks/useRoster'
 import { boardNotices, useBoard } from '@/hooks/useProjections'
 import { useSlate } from '@/app/slate-context'
 
 /**
  * The home screen.
  *
- * Ordered by the question a manager asks first: is there a board, who is
- * projected highest, who has the softest draw, and what is unusual. Every panel
+ * Ordered by the question a manager asks first: what does this week mean for
+ * my team, who is projected highest, what is unusual, who has the softest
+ * draw, and — last, as reference — the schedule. Every panel
  * reads the same cached board request — one network call feeds three of them,
  * which is the reason they are separate components rather than one giant one.
  *
@@ -26,6 +29,7 @@ import { useSlate } from '@/app/slate-context'
  */
 export default function DashboardPage() {
   const slate = useSlate()
+  const [rosterIds] = useRoster()
   const { data, isPlaceholderData } = useBoard()
   const projections = useMemo(() => data?.data.map((entry) => entry.projection), [data])
 
@@ -57,21 +61,26 @@ export default function DashboardPage() {
         what is a single event.
       */}
       <Refreshing active={isPlaceholderData} label={`Loading week ${slate.week ?? ''}`.trim()}>
+        {/*
+          Your team first: a manager opens the app to set their own lineup,
+          so that is the first thing answered. The league-wide boards follow,
+          and the schedule — reference, not a decision — comes last.
+        */}
         <div className="grid gap-6 xl:grid-cols-2">
           <div className="min-w-0 space-y-6">
-            <WeekOverview />
-            <BestMatchups />
+            <YourWeek />
+            <TopProjections />
           </div>
           <div className="min-w-0 space-y-6">
-            <TopProjections />
             <RiskOpportunity />
+            <BestMatchups />
             {/*
-              Last, deliberately. The dashboard answers "what should I care
-              about this week?" first; the simulation is what a manager does
-              *with* that answer, so it reads as the next step rather than
-              competing with the boards above it.
+              With a roster, "Estimate my chance of winning" in Your week is
+              the better entry point: it arrives with your lineup filled in.
+              Without one, this is how to enter both lineups by hand.
             */}
-            <SimulationCallout />
+            {rosterIds.length === 0 && <SimulationCallout />}
+            <WeekOverview />
           </div>
         </div>
       </Refreshing>

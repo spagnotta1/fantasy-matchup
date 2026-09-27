@@ -17,55 +17,35 @@
 :root {
   color-scheme: light;
 
-  /* Neutral ramp — the structural surface stack, light theme. */
-  --app-bg: oklch(97.5% 0.005 250);
+  /* Light theme: paper and ink.
+
+     A cool paper ground with white cards on it, and a deep navy ink for text
+     and marks. The navy is the brand colour in this theme; the accent is the
+     same ink one step lighter, so a primary button reads as "the ink, pressed
+     harder" rather than as a second colour competing with the data. */
+  --app-bg: oklch(95.7% 0.006 255);
   --app-surface: oklch(100% 0 0);
-  --app-surface-raised: oklch(99% 0.003 250);
-  --app-surface-sunken: oklch(95.5% 0.006 250);
-  --app-surface-hover: oklch(96% 0.008 250);
-  --app-border: oklch(90% 0.008 250);
-  --app-border-strong: oklch(83% 0.012 250);
+  --app-surface-raised: oklch(100% 0 0);
+  --app-surface-sunken: oklch(93.6% 0.009 258);
+  --app-surface-hover: oklch(96.9% 0.005 258);
+  --app-border: oklch(93% 0.009 258);
+  --app-border-strong: oklch(86.5% 0.014 258);
   /* The edge of a control the user can type in or open, kept separate from
-     `--app-border` on purpose.
+     `--app-border` on purpose: a card divider may be as faint as it likes, but
+     the outline of a text field is the only thing that says "this is a text
+     field", which puts it under WCAG 1.4.11 and its 3:1 floor. */
+  --app-border-input: oklch(62.8% 0.035 262);
 
-     A card divider is decoration and may be as faint as it likes. The outline
-     of a text field is the only thing that says "this is a text field", which
-     puts it under WCAG 1.4.11 and its 3:1 floor. `--app-border` measures
-     1.25:1 on a card — fine for a rule between rows, not enough to locate an
-     input. Raising `--app-border` itself to clear 3:1 would drag every table
-     line and card edge up with it and turn a calm layout into a grid of boxes,
-     so the control edge gets its own token and the structural lines keep the
-     weight they were designed with. */
-  --app-border-input: oklch(66% 0.012 250);
+  --app-text: oklch(25.4% 0.051 262);
+  --app-text-secondary: oklch(46.1% 0.049 265);
+  --app-text-muted: oklch(52% 0.042 265);
+  --app-text-inverted: oklch(100% 0 0);
 
-  --app-text: oklch(22% 0.015 255);
-  --app-text-secondary: oklch(45% 0.014 255);
-  /* 53%, not the 58% this started at. Muted text is the smallest type in the
-     product — 11px and 12px captions — and at 58% it measured 4.26:1 on white,
-     3.97:1 on the page background and 3.73:1 on a sunken panel: below AA on
-     every surface it is actually drawn on, worst exactly where the type is
-     smallest. 53% clears 4.5:1 against all three (5.29 / 4.92 / 4.63) and is
-     still visibly a step down from `--app-text-secondary`, which is the whole
-     job of the token. */
-  --app-text-muted: oklch(53% 0.012 255);
-  --app-text-inverted: oklch(99% 0 0);
-
-  /* Brand. A cool teal, not a league colour — this product is not a clone of
-     any of them, and the accent is the first thing that says so.
-
-     53.5% rather than the original 58%. The accent is a *background* — primary
-     buttons, the logo badge, the active nav pill — carrying `--app-on-accent`
-     text at 14px bold, which is not WCAG "large" text and so needs 4.5:1. At
-     58% that pairing measured 3.88:1. Darkening the background is the only
-     available direction, the foreground being already within a percent of
-     white. 53.5% gives 4.63:1 on the text and 4.75:1 against the card surface,
-     so it doubles as a legal non-text mark. Hover moves down in step to keep
-     the press feedback the same size it always was. */
-  --app-accent: oklch(53.5% 0.115 205);
-  --app-accent-hover: oklch(48% 0.118 205);
-  --app-accent-soft: oklch(94% 0.035 205);
-  --app-accent-text: oklch(41% 0.105 205);
-  --app-on-accent: oklch(99% 0 0);
+  --app-accent: oklch(33.2% 0.085 262);
+  --app-accent-hover: oklch(27% 0.07 262);
+  --app-accent-soft: oklch(93.3% 0.016 263);
+  --app-accent-text: oklch(38% 0.09 262);
+  --app-on-accent: oklch(100% 0 0);
 
   /* Semantic. Never the only carrier of meaning — every use is paired with a
      glyph, a label, or a sign. */
@@ -77,11 +57,6 @@
   --app-negative-soft: oklch(95% 0.035 22);
   --app-negative-text: oklch(47% 0.17 22);
 
-  /* 67%, down from 70%. Amber is the one hue that cannot be both a warning and
-     legible while it stays bright: at 70% it measured 2.73:1 against a card,
-     under the 3:1 that non-text indicators need, so a caution meter fill or
-     dot could vanish for a low-vision reader — the one reader it exists for.
-     `--app-caution-text` is a separate, much darker token and is unaffected. */
   --app-caution: oklch(67% 0.14 75);
   --app-caution-soft: oklch(95.5% 0.05 80);
   --app-caution-text: oklch(48% 0.11 65);
@@ -90,28 +65,42 @@
   --app-info-soft: oklch(95% 0.035 255);
   --app-info-text: oklch(46% 0.14 260);
 
-  --app-focus: oklch(58% 0.15 240);
+  --app-focus: oklch(55% 0.16 250);
 
-  /* Chart tokens.
-   *
-   * Separate from the UI accent because they answer a different question. The
-   * UI accent is tuned for text and controls; a chart mark is judged on the
-   * lightness band and contrast against the *card* surface it is drawn on.
-   * These values were run through the palette validator rather than picked:
-   * light #008d9a and dark #00a4ab both pass band, chroma and contrast.
-   *
-   * There is deliberately only ONE series colour. Colouring outcomes by
-   * boom/green vs bust/red fails colour-vision separation outright (measured
-   * ΔE 3.8 deutan for that pair), so magnitude is carried by bar height and
-   * category by labels — never by hue. */
-  --app-chart-series: oklch(58% 0.115 205);
-  --app-chart-grid: oklch(93% 0.006 250);
-  --app-chart-axis: oklch(80% 0.01 250);
-  --app-chart-reference: oklch(65% 0.014 255);
+  /* Chart tokens. One series colour, the ink: magnitude is carried by height
+     and category by labels, never by hue (boom-green against bust-red measured
+     deltaE 3.8 for deutan vision). */
+  --app-chart-series: oklch(38% 0.09 262);
+  --app-chart-grid: oklch(93% 0.009 258);
+  --app-chart-axis: oklch(80% 0.015 258);
+  --app-chart-reference: oklch(62% 0.03 262);
 
-  --app-shadow-sm: 0 1px 2px oklch(20% 0.02 255 / 0.06);
-  --app-shadow: 0 1px 3px oklch(20% 0.02 255 / 0.08), 0 4px 12px oklch(20% 0.02 255 / 0.05);
-  --app-shadow-lg: 0 8px 30px oklch(20% 0.02 255 / 0.12);
+  /* The field: the identity of the product, drawn wherever a range is.
+
+     Every outcome range sits on a pale strip ruled with a yard line every five
+     points, on one shared 0-40 scale, so ranges in a list are comparable by
+     eye. The yellow line is the line to gain: 20 points, the same threshold
+     the published boom probability is measured against, so "chance of 20+"
+     beside a row is the share of outcomes past the yellow line.
+
+     Yellow on a light field cannot reach the 3:1 a meaningful mark needs, and
+     darkening it until it does turns it mustard and loses the reference. So
+     the line keeps its broadcast yellow and carries a one-pixel ink edge on
+     each side, the way the on-air line carries a shadow; the edge is what is
+     measured. */
+  --app-field: oklch(95.8% 0.009 151);
+  --app-field-line: oklch(25.4% 0.051 262 / 0.09);
+  --app-line-to-gain: oklch(83.7% 0.168 91);
+  --app-line-to-gain-edge: oklch(25.4% 0.051 262);
+  --app-range-box: oklch(33.2% 0.085 262);
+  --app-range-whisker: oklch(46.1% 0.049 265);
+  --app-range-median: oklch(100% 0 0);
+  /* "You" in a head-to-head: the one warm colour, used for nothing else. */
+  --app-you: oklch(53.9% 0.162 40);
+
+  --app-shadow-sm: 0 1px 2px oklch(25% 0.05 262 / 0.05);
+  --app-shadow: 0 1px 3px oklch(25% 0.05 262 / 0.06), 0 6px 18px oklch(25% 0.05 262 / 0.05);
+  --app-shadow-lg: 0 10px 34px oklch(25% 0.05 262 / 0.14);
 }
 
 /*
@@ -124,100 +113,130 @@
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --app-bg: oklch(17% 0.012 255);
-    --app-surface: oklch(21% 0.014 255);
-    --app-surface-raised: oklch(24.5% 0.016 255);
-    --app-surface-sunken: oklch(14.5% 0.012 255);
-    --app-surface-hover: oklch(27% 0.018 255);
-    --app-border: oklch(30% 0.016 255);
-    --app-border-strong: oklch(40% 0.02 255);
-    --app-border-input: oklch(51.5% 0.02 255);
+    /* Dark theme: the field at night. Turf green, chalk text, the yellow line
+       needing no edge because it clears the turf on its own. The chalk is the
+       accent here, so a primary button is a chalk block with turf lettering. */
+    --app-bg: oklch(31.4% 0.049 163);
+    --app-surface: oklch(35.9% 0.056 163);
+    --app-surface-raised: oklch(38% 0.059 163);
+    --app-surface-sunken: oklch(28.5% 0.045 162);
+    --app-surface-hover: oklch(40.6% 0.063 164);
+    --app-border: oklch(43.6% 0.061 162);
+    --app-border-strong: oklch(53.9% 0.063 161);
+    --app-border-input: oklch(66% 0.059 160);
 
-    --app-text: oklch(96% 0.004 255);
-    --app-text-secondary: oklch(76% 0.012 255);
-    --app-text-muted: oklch(62% 0.014 255);
-    --app-text-inverted: oklch(17% 0.012 255);
+    --app-text: oklch(96.7% 0.008 122);
+    --app-text-secondary: oklch(86% 0.025 155);
+    --app-text-muted: oklch(80% 0.035 156);
+    --app-text-inverted: oklch(31.4% 0.049 163);
 
-    --app-accent: oklch(72% 0.115 200);
-    --app-accent-hover: oklch(78% 0.115 200);
-    --app-accent-soft: oklch(30% 0.05 205);
-    --app-accent-text: oklch(80% 0.1 200);
-    --app-on-accent: oklch(15% 0.02 220);
+    --app-accent: oklch(96.7% 0.008 122);
+    --app-accent-hover: oklch(100% 0 0);
+    --app-accent-soft: oklch(27% 0.045 163);
+    --app-accent-text: oklch(93.3% 0.034 155);
+    --app-on-accent: oklch(31.4% 0.049 163);
 
-    --app-positive: oklch(72% 0.15 152);
-    --app-positive-soft: oklch(29% 0.06 152);
-    --app-positive-text: oklch(80% 0.13 152);
+    --app-positive: oklch(82% 0.15 152);
+    --app-positive-soft: oklch(25% 0.05 152);
+    --app-positive-text: oklch(88% 0.12 152);
 
-    --app-negative: oklch(68% 0.17 25);
-    --app-negative-soft: oklch(30% 0.07 25);
-    --app-negative-text: oklch(78% 0.14 25);
+    --app-negative: oklch(78% 0.14 25);
+    --app-negative-soft: oklch(27% 0.06 25);
+    --app-negative-text: oklch(86% 0.1 25);
 
-    --app-caution: oklch(80% 0.13 80);
-    --app-caution-soft: oklch(31% 0.06 70);
-    --app-caution-text: oklch(85% 0.11 82);
+    --app-caution: oklch(84% 0.13 80);
+    --app-caution-soft: oklch(27% 0.05 70);
+    --app-caution-text: oklch(89% 0.1 82);
 
-    --app-info: oklch(72% 0.12 255);
-    --app-info-soft: oklch(29% 0.06 258);
-    --app-info-text: oklch(81% 0.1 255);
+    --app-info: oklch(80% 0.1 245);
+    --app-info-soft: oklch(26% 0.05 250);
+    --app-info-text: oklch(88% 0.07 245);
 
-    --app-focus: oklch(75% 0.13 235);
+    --app-focus: oklch(88% 0.12 210);
 
-    /* Stepped for the dark band (L 0.48–0.67), not flipped from the light value. */
-    --app-chart-series: oklch(65% 0.115 200);
-    --app-chart-grid: oklch(27% 0.014 255);
-    --app-chart-axis: oklch(38% 0.016 255);
-    --app-chart-reference: oklch(58% 0.014 255);
+    --app-chart-series: oklch(92% 0.03 150);
+    --app-chart-grid: oklch(43.6% 0.061 162);
+    --app-chart-axis: oklch(58% 0.05 160);
+    --app-chart-reference: oklch(75% 0.035 156);
 
-    --app-shadow-sm: 0 1px 2px oklch(0% 0 0 / 0.4);
-    --app-shadow: 0 1px 3px oklch(0% 0 0 / 0.45), 0 6px 16px oklch(0% 0 0 / 0.35);
-    --app-shadow-lg: 0 12px 40px oklch(0% 0 0 / 0.5);
+    --app-field: oklch(40.6% 0.063 164);
+    --app-field-line: oklch(96.7% 0.008 122 / 0.12);
+    --app-line-to-gain: oklch(87.1% 0.168 96);
+    /* The same as the line itself: on turf the yellow is its own edge. */
+    --app-line-to-gain-edge: oklch(87.1% 0.168 96);
+    --app-range-box: oklch(96.7% 0.008 122);
+    --app-range-whisker: oklch(86% 0.025 155);
+    --app-range-median: oklch(31.4% 0.049 163);
+    --app-you: oklch(76% 0.146 50);
+
+    --app-shadow-sm: 0 1px 2px oklch(10% 0.03 163 / 0.35);
+    --app-shadow: 0 1px 3px oklch(10% 0.03 163 / 0.4), 0 6px 16px oklch(10% 0.03 163 / 0.3);
+    --app-shadow-lg: 0 12px 40px oklch(10% 0.03 163 / 0.45);
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --app-bg: oklch(17% 0.012 255);
-  --app-surface: oklch(21% 0.014 255);
-  --app-surface-raised: oklch(24.5% 0.016 255);
-  --app-surface-sunken: oklch(14.5% 0.012 255);
-  --app-surface-hover: oklch(27% 0.018 255);
-  --app-border: oklch(30% 0.016 255);
-  --app-border-strong: oklch(40% 0.02 255);
-  --app-border-input: oklch(51.5% 0.02 255);
+  /* Dark theme: the field at night. Turf green, chalk text, the yellow line
+     needing no edge because it clears the turf on its own. The chalk is the
+     accent here, so a primary button is a chalk block with turf lettering. */
+  --app-bg: oklch(31.4% 0.049 163);
+  --app-surface: oklch(35.9% 0.056 163);
+  --app-surface-raised: oklch(38% 0.059 163);
+  --app-surface-sunken: oklch(28.5% 0.045 162);
+  --app-surface-hover: oklch(40.6% 0.063 164);
+  --app-border: oklch(43.6% 0.061 162);
+  --app-border-strong: oklch(53.9% 0.063 161);
+  --app-border-input: oklch(66% 0.059 160);
 
-  --app-text: oklch(96% 0.004 255);
-  --app-text-secondary: oklch(76% 0.012 255);
-  --app-text-muted: oklch(62% 0.014 255);
-  --app-text-inverted: oklch(17% 0.012 255);
+  --app-text: oklch(96.7% 0.008 122);
+  --app-text-secondary: oklch(86% 0.025 155);
+  --app-text-muted: oklch(80% 0.035 156);
+  --app-text-inverted: oklch(31.4% 0.049 163);
 
-  --app-accent: oklch(72% 0.115 200);
-  --app-accent-hover: oklch(78% 0.115 200);
-  --app-accent-soft: oklch(30% 0.05 205);
-  --app-accent-text: oklch(80% 0.1 200);
-  --app-on-accent: oklch(15% 0.02 220);
+  --app-accent: oklch(96.7% 0.008 122);
+  --app-accent-hover: oklch(100% 0 0);
+  --app-accent-soft: oklch(27% 0.045 163);
+  --app-accent-text: oklch(93.3% 0.034 155);
+  --app-on-accent: oklch(31.4% 0.049 163);
 
-  --app-positive: oklch(72% 0.15 152);
-  --app-positive-soft: oklch(29% 0.06 152);
-  --app-positive-text: oklch(80% 0.13 152);
+  --app-positive: oklch(82% 0.15 152);
+  --app-positive-soft: oklch(25% 0.05 152);
+  --app-positive-text: oklch(88% 0.12 152);
 
-  --app-negative: oklch(68% 0.17 25);
-  --app-negative-soft: oklch(30% 0.07 25);
-  --app-negative-text: oklch(78% 0.14 25);
+  --app-negative: oklch(78% 0.14 25);
+  --app-negative-soft: oklch(27% 0.06 25);
+  --app-negative-text: oklch(86% 0.1 25);
 
-  --app-caution: oklch(80% 0.13 80);
-  --app-caution-soft: oklch(31% 0.06 70);
-  --app-caution-text: oklch(85% 0.11 82);
+  --app-caution: oklch(84% 0.13 80);
+  --app-caution-soft: oklch(27% 0.05 70);
+  --app-caution-text: oklch(89% 0.1 82);
 
-  --app-info: oklch(72% 0.12 255);
-  --app-info-soft: oklch(29% 0.06 258);
-  --app-info-text: oklch(81% 0.1 255);
+  --app-info: oklch(80% 0.1 245);
+  --app-info-soft: oklch(26% 0.05 250);
+  --app-info-text: oklch(88% 0.07 245);
 
-  --app-focus: oklch(75% 0.13 235);
+  --app-focus: oklch(88% 0.12 210);
 
-  --app-shadow-sm: 0 1px 2px oklch(0% 0 0 / 0.4);
-  --app-shadow: 0 1px 3px oklch(0% 0 0 / 0.45), 0 6px 16px oklch(0% 0 0 / 0.35);
-  --app-shadow-lg: 0 12px 40px oklch(0% 0 0 / 0.5);
+  --app-chart-series: oklch(92% 0.03 150);
+  --app-chart-grid: oklch(43.6% 0.061 162);
+  --app-chart-axis: oklch(58% 0.05 160);
+  --app-chart-reference: oklch(75% 0.035 156);
+
+  --app-field: oklch(40.6% 0.063 164);
+  --app-field-line: oklch(96.7% 0.008 122 / 0.12);
+  --app-line-to-gain: oklch(87.1% 0.168 96);
+  /* The same as the line itself: on turf the yellow is its own edge. */
+  --app-line-to-gain-edge: oklch(87.1% 0.168 96);
+  --app-range-box: oklch(96.7% 0.008 122);
+  --app-range-whisker: oklch(86% 0.025 155);
+  --app-range-median: oklch(31.4% 0.049 163);
+  --app-you: oklch(76% 0.146 50);
+
+  --app-shadow-sm: 0 1px 2px oklch(10% 0.03 163 / 0.35);
+  --app-shadow: 0 1px 3px oklch(10% 0.03 163 / 0.4), 0 6px 16px oklch(10% 0.03 163 / 0.3);
+  --app-shadow-lg: 0 12px 40px oklch(10% 0.03 163 / 0.45);
 }
 
 @theme inline {
@@ -264,6 +283,15 @@
   --color-chart-axis: var(--app-chart-axis);
   --color-chart-reference: var(--app-chart-reference);
 
+  --color-field: var(--app-field);
+  --color-field-line: var(--app-field-line);
+  --color-line-to-gain: var(--app-line-to-gain);
+  --color-line-to-gain-edge: var(--app-line-to-gain-edge);
+  --color-range-box: var(--app-range-box);
+  --color-range-whisker: var(--app-range-whisker);
+  --color-range-median: var(--app-range-median);
+  --color-you: var(--app-you);
+
   --shadow-card: var(--app-shadow-sm);
   --shadow-raised: var(--app-shadow);
   --shadow-overlay: var(--app-shadow-lg);
@@ -271,9 +299,11 @@
   --radius-card: 0.875rem;
   --radius-control: 0.5rem;
 
+  /* Commissioner: a sports-program grotesque with tabular figures, so one
+     family serves headings, body and the numbers in a ranking column. */
   --font-sans:
-    'Inter var', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+    'Commissioner Variable', 'Commissioner', ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', sans-serif;
   /* Numbers in a table must align vertically or they cannot be compared at a
      glance. A tabular-figure stack is not decoration here, it is the whole
      reason a ranking board is readable. */
@@ -347,7 +377,6 @@
     background-color: var(--color-bg);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }

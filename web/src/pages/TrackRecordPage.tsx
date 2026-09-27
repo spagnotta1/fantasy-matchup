@@ -99,7 +99,7 @@ export default function TrackRecordPage() {
 
           <Refreshing active={isPlaceholderData}>
             <Headline record={record} />
-            <div className="mt-6 grid gap-6 xl:grid-cols-2">
+            <div className="mt-6 grid gap-6 2xl:grid-cols-2">
               <PositionTable rows={record.by_position} />
               <BandTable rows={record.by_band} />
             </div>

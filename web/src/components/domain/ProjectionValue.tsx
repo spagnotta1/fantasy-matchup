@@ -78,40 +78,81 @@ export function ProjectionValue({
   )
 }
 
+/** Yard lines on the field, in points. */
+const YARD_LINE_POINTS = 5
+
 /**
- * The outcome range as a bar: floor, median, ceiling.
+ * The outcome range, drawn on the field.
  *
  * The single most useful visualisation in the product and the reason it is a
  * primitive rather than a chart. It answers "how much can this move?" at a
  * glance, which a point estimate cannot, and it does it in a table row.
  *
- * The numeric endpoints are always rendered beside it, because a bar alone is
- * not readable to a screen reader or measurable by eye.
+ * Read left to right on a strip ruled every five points: the thin line runs
+ * from a bad week to a strong week (P10 to P90), the solid box holds the middle
+ * half of outcomes (P25 to P75), and the tick inside it is the median. The
+ * yellow line is the line to gain — the boom threshold the published
+ * probability is measured against — so a reader can see how much of a range
+ * lies past it before reading the percentage beside it.
+ *
+ * Every mark is a published percentile. Nothing here interpolates, smooths or
+ * extends a tail the API did not send; a run without P25/P75 draws the line
+ * and the median only.
+ *
+ * The numeric endpoints are always rendered beside it, because a strip alone
+ * is not readable to a screen reader or measurable by eye.
  */
 export function OutcomeRange({
   floor,
+  p25,
   median,
+  p75,
   ceiling,
-  /** Shared upper bound so bars in a list are comparable to each other. */
+  threshold,
+  /** Shared upper bound so strips in a list are comparable to each other. */
   scaleMax,
+  /** `lg` where one range is the subject of the screen, as on a player page. */
+  size = 'md',
   className,
 }: {
   floor: number | null | undefined
+  p25?: number | null
   median: number | null | undefined
+  p75?: number | null
   ceiling: number | null | undefined
+  /** The boom threshold, drawn as the line to gain. Omitted: no line. */
+  threshold?: number | null
   scaleMax?: number
+  size?: 'md' | 'lg'
   className?: string
 }) {
+  const large = size === 'lg'
   if (floor === null || floor === undefined || ceiling === null || ceiling === undefined) {
     return <span className="text-ink-muted text-xs">Range unavailable</span>
   }
 
-  const max = scaleMax && scaleMax > 0 ? scaleMax : ceiling
-  const clamp = (value: number) => Math.max(0, Math.min(100, (value / max) * 100))
-  const start = clamp(floor)
-  const end = clamp(ceiling)
-  const width = Math.max(end - start, 1)
-  const marker = median !== null && median !== undefined ? clamp(median) : null
+  // Round the scale up to a whole yard line so the rules land on 5, 10, 15…
+  // rather than wherever the board's highest ceiling happens to fall.
+  const rawMax = scaleMax && scaleMax > 0 ? scaleMax : ceiling
+  const max = Math.max(YARD_LINE_POINTS, Math.ceil(rawMax / YARD_LINE_POINTS) * YARD_LINE_POINTS)
+  const at = (value: number) => Math.max(0, Math.min(100, (value / max) * 100))
+  const has = (value: number | null | undefined): value is number =>
+    value !== null && value !== undefined && Number.isFinite(value)
+
+  const start = at(floor)
+  const width = Math.max(at(ceiling) - start, 1)
+  const box = has(p25) && has(p75) ? { left: at(p25), width: Math.max(at(p75) - at(p25), 1) } : null
+  const marker = has(median) ? at(median) : null
+  const line = has(threshold) && threshold > 0 && threshold < max ? at(threshold) : null
+
+  const label = [
+    `8 in 10 outcomes between ${formatPoints(floor)} and ${formatPoints(ceiling)} points`,
+    box ? `middle half ${formatPoints(p25)} to ${formatPoints(p75)}` : null,
+    has(median) ? `median ${formatPoints(median)}` : null,
+    line !== null ? `line at ${formatPoints(threshold)}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
@@ -119,18 +160,41 @@ export function OutcomeRange({
         {formatPoints(floor)}
       </span>
       <div
-        className="bg-surface-sunken relative h-1.5 min-w-16 flex-1 overflow-hidden rounded-full"
+        className={cn('bg-field relative min-w-20 flex-1 overflow-hidden rounded-md', large ? 'h-11' : 'h-6')}
+        style={{
+          backgroundImage: `repeating-linear-gradient(to right, var(--color-field-line) 0 1px, transparent 1px ${(YARD_LINE_POINTS / max) * 100}%)`,
+        }}
         role="img"
-        aria-label={`Likely range ${formatPoints(floor)} to ${formatPoints(ceiling)} points, middle ${formatPoints(median)}`}
+        aria-label={label}
       >
         <div
-          className="bg-accent/45 absolute inset-y-0 rounded-full"
+          className="bg-range-whisker absolute top-1/2 h-0.5 -translate-y-1/2"
           style={{ left: `${start}%`, width: `${width}%` }}
         />
+        {box && (
+          <div
+            className={cn('bg-range-box absolute top-1/2 -translate-y-1/2 rounded-[3px]', large ? 'h-5' : 'h-3')}
+            style={{ left: `${box.left}%`, width: `${box.width}%` }}
+          />
+        )}
         {marker !== null && (
           <div
-            className="bg-accent absolute inset-y-0 w-0.5 rounded-full"
+            className={cn(
+              'absolute top-1/2 w-0.5 -translate-x-1/2 -translate-y-1/2',
+              large ? 'h-5' : 'h-3',
+              box ? 'bg-range-median' : 'bg-range-box',
+            )}
             style={{ left: `${marker}%` }}
+          />
+        )}
+        {line !== null && (
+          <div
+            className="bg-line-to-gain absolute inset-y-0 w-1 -translate-x-1/2"
+            style={{
+              left: `${line}%`,
+              boxShadow:
+                '-1px 0 0 var(--color-line-to-gain-edge), 1px 0 0 var(--color-line-to-gain-edge)',
+            }}
           />
         )}
       </div>

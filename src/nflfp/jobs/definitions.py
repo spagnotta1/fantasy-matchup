@@ -216,7 +216,7 @@ def evaluate_model(context: JobContext) -> JobOutcome:
     criteria is a successful run with ``passed: false`` in the detail, which is
     what makes it queryable in the job log rather than buried in an exception.
     """
-    from ..predict.backtest import run_backtest
+    from ..predict.backtest import acceptance_inputs, run_backtest
     from ..predict.dataset import load_rows
     from ..predict.foundation import FROZEN_MODEL, meets_acceptance
     from ..predict.registry import get_model_factory
@@ -243,20 +243,13 @@ def evaluate_model(context: JobContext) -> JobOutcome:
             skip_reason="no held-out distributions were produced; not enough residual history",
         )
 
-    coverage_80 = next(
-        (entry.observed for entry in result.coverage if entry.nominal == 0.80), None
+    # The baseline on the same seasons, so "beats baseline_l4" compares models
+    # rather than seasons. Point accuracy only, so it takes seconds.
+    baseline = run_backtest(
+        get_model_factory("baseline_l4"), rows, test_seasons=seasons,
+        profile="half_ppr", fit_distribution=False,
     )
-    reliable = [entry for entry in result.ranges if entry.reliable]
-    passed, reasons = meets_acceptance(
-        coverage_p10_p90=coverage_80 if coverage_80 is not None else 0.0,
-        max_calibration_error=max(result.calibration_max.values(), default=1.0),
-        max_conditional_bias=max((abs(entry.bias) for entry in reliable), default=0.0),
-        crps=result.mean_crps if result.mean_crps is not None else float("inf"),
-        mae_by_position={
-            position: metrics.mae for position, metrics in result.by_position.items()
-        },
-        walk_forward=result.walk_forward,
-    )
+    passed, reasons = meets_acceptance(**acceptance_inputs(result, baseline))
 
     detail = {
         "model": model_name,

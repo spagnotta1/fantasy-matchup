@@ -79,6 +79,12 @@ export default function UsagePage() {
     for (const entry of board.data?.data ?? []) {
       if (state.position && entry.projection.player.position !== state.position) continue
       if (metric === 'target' && entry.projection.player.position === 'QB') continue
+      // A quarterback's snap share is all or nothing: 35% to 100% means a new
+      // starter, not a growing role. Measured on the 2026 week 3 board, nine of
+      // the top 25 "rising" rows were backups who started one game, crowding
+      // out the RB/WR/TE role changes this list exists to find. They stay one
+      // tap away on the QB tab, where a change of starter is the question.
+      if (metric === 'snap' && !state.position && entry.projection.player.position === 'QB') continue
       const move = movement(entry, metric)
       if (move && (direction === 'up' ? move.change > 0 : move.change < 0)) list.push(move)
     }
@@ -101,7 +107,7 @@ export default function UsagePage() {
             'Each row compares a player’s most recent game with their four-game average, which is what the projection is built from. One game can be misleading: a blowout, an in-game injury or a return from a bye can all skew it.',
           ]}
         />
-        {board.data && <NoticeList notices={boardNotices(board.data.meta)} />}
+        {board.data && <NoticeList notices={boardNotices(board.data.meta, { showsGrades: false })} />}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -141,7 +147,11 @@ export default function UsagePage() {
         <CardHeader
           as="h2"
           title={`${metricLabel}: ${direction === 'up' ? 'rising' : 'falling'}`}
-          description={`Last game compared with the four-game average, in percentage points. Players averaging under ${Math.round(MIN_SHARE[metric] * 100)}% are left out.`}
+          description={`Last game compared with the four-game average, in percentage points. Players averaging under ${Math.round(MIN_SHARE[metric] * 100)}% are left out.${
+            metric === 'snap' && !state.position
+              ? ' Quarterbacks are listed under QB: their snap share jumps only when the starter changes.'
+              : ''
+          }`}
           action={<ProvenanceBadge provenance="derived" />}
         />
         {board.isPending ? (

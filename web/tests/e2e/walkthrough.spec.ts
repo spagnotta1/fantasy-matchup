@@ -179,24 +179,23 @@ test('the game log charts the most recent 17 games, oldest to newest', async ({ 
 })
 
 test('a scoring profile change is reflected in the URL and the request', async ({ page }) => {
-  const requests: string[] = []
-  page.on('request', (r) => {
-    if (r.url().includes('/api/v1/')) requests.push(r.url())
-  })
-
   await page.goto('/rankings/rb')
   await settle(page)
+
+  // Armed before the change and awaited after it. Checking a request log once
+  // the network went idle raced the re-render: against a fast local API the
+  // page could go idle before the board's new request had even started, and
+  // the test failed on an app that re-requests correctly.
+  const rerequested = page.waitForRequest(
+    (request) => request.url().includes('/api/v1/') && request.url().includes('scoring_profile=ppr'),
+  )
 
   await openSlateControls(page)
   await slateSelect(page, /^scoring$/i).selectOption('ppr')
 
   // Same reason as the week test: wait for the commit, not for the network.
   await expect(page).toHaveURL(/scoring=ppr/)
-  await settle(page)
-  expect(
-    requests.some((u) => u.includes('scoring_profile=ppr')),
-    'the board should be re-requested in the new scoring profile',
-  ).toBe(true)
+  await rerequested
 })
 
 test('a deep link to a position board opens that board directly', async ({ page }) => {
@@ -248,12 +247,12 @@ test('a search that matches nothing explains itself and offers a way out', async
   await page.goto('/rankings')
   await settle(page)
 
-  await page.getByLabel(/search these rankings/i).fill('zzzzzznotaplayer')
-  await expect(page.getByText(/no players match that search/i)).toBeVisible()
+  await page.getByRole('searchbox', { name: /search players/i }).fill('zzzzzznotaplayer')
+  await expect(page.getByText(/no players match these filters/i)).toBeVisible()
 
-  // The toolbar's inline X carries the same name; the empty state's is the
-  // one being tested, so scope to it.
-  await page.getByRole('alert').or(page.locator('main')).getByRole('button', { name: /clear search/i }).last().click()
+  // The empty state's way out clears every filter (search and team), not just
+  // the search box — the toolbar's inline X still clears only the search.
+  await page.locator('main').getByRole('button', { name: /clear filters/i }).click()
   await expect(page.locator('a[href^="/players/"]').first()).toBeVisible()
 })
 
@@ -326,4 +325,16 @@ test('results offer a way back to the controls without scrolling the page', asyn
   // lands in the controls rather than back in the results.
   await expect(page.getByRole('button', { name: /^run simulation$/i })).toBeInViewport()
   await expect(page.getByRole('button', { name: /^run simulation$/i })).toBeEnabled()
+})
+
+test('the old players list redirects into the one board, keeping its filters', async ({ page }) => {
+  // Players and Rankings were merged. Old links, bookmarks and shared URLs
+  // must land on the same view they described, not on an unfiltered board.
+  await page.goto('/players?position=RB&team=KC')
+  await expect(page).toHaveURL(/\/rankings\/rb\?(.*&)?team=KC/)
+  await settle(page)
+
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('KC RB rankings')
+  await expect(page.getByRole('combobox', { name: 'Team' })).toHaveValue('KC')
+  expect(await page.locator('main a[href^="/players/"]').count()).toBeGreaterThan(0)
 })

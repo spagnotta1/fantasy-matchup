@@ -38,6 +38,14 @@ export function SlateControls({ className, compact = false }: { className?: stri
     value: String(week),
     label: `Week ${week}`,
   }))
+  // Same reasoning as the season above: a link to a week that is not
+  // published must show that week in its own picker, or the picker claims
+  // week 1 while the page explains that week 9 is not out.
+  const unpublishedWeek =
+    slate.week !== null && weekOptions.length > 0 && !slate.availableWeeks.includes(slate.week)
+  if (unpublishedWeek) {
+    weekOptions.push({ value: String(slate.week), label: `Week ${slate.week} (not out)` })
+  }
 
   const profileOptions = slate.availableProfiles.map((profile) => ({
     value: profile,
@@ -66,7 +74,7 @@ export function SlateControls({ className, compact = false }: { className?: stri
         "No published weeks" is a statement about the data, so it must not be
         shown when the real problem is that we could not reach the API at all.
       */}
-      {noPublishedWeeks && !slate.catalogFailed ? (
+      {noPublishedWeeks && slate.catalogReady ? (
         <Tooltip content="Projections for this season are not out yet. They are added by the weekly update.">
           <span className="border-line bg-surface-sunken text-ink-muted inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 text-xs">
             <CircleAlert aria-hidden className="size-3.5" />
@@ -82,7 +90,7 @@ export function SlateControls({ className, compact = false }: { className?: stri
           options={weekOptions.length > 0 ? weekOptions : [{ value: '', label: placeholder }]}
           disabled={weekOptions.length === 0}
           onChange={(event) => slate.setWeek(Number(event.target.value))}
-          className={compact ? 'flex-1' : 'w-28'}
+          className={compact ? 'flex-1' : unpublishedWeek ? 'w-40' : 'w-28'}
         />
       )}
 

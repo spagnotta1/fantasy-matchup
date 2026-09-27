@@ -288,3 +288,83 @@ class TestPositionSupport:
             entry.is_projected or (entry.reason and entry.blocked_on)
             for entry in registry_snapshot
         )
+
+
+class TestAcceptanceEdgeCases:
+    """The reduction of a backtest to pass/fail, at its boundaries."""
+
+    @staticmethod
+    def _passing(**overrides) -> dict:
+        base = dict(
+            coverage_p10_p90=VALIDATION.coverage_p10_p90,
+            max_calibration_error=VALIDATION.boom_calibration_max,
+            max_conditional_bias=VALIDATION.max_conditional_bias,
+            crps=VALIDATION.crps,
+            mae_by_position={bar.position: bar.mae - 0.10 for bar in BASELINE_BAR},
+            walk_forward=True,
+        )
+        base.update(overrides)
+        return base
+
+    def test_a_crps_tie_at_the_recorded_precision_passes(self):
+        """2.9271 is the frozen 2.927 to the precision it was recorded at. The
+        incumbent re-measured on its own seasons scored exactly this and used
+        to fail its own bar on the fourth decimal."""
+        passed, reasons = meets_acceptance(**self._passing(crps=2.9271))
+        assert passed, reasons
+
+    def test_a_crps_worse_at_the_recorded_precision_fails(self):
+        passed, reasons = meets_acceptance(**self._passing(crps=2.9276))
+        assert not passed
+        assert any("CRPS" in reason for reason in reasons)
+
+    @pytest.mark.parametrize(
+        "field",
+        ["coverage_p10_p90", "max_calibration_error", "max_conditional_bias", "crps"],
+    )
+    def test_a_nan_measurement_fails_instead_of_passing(self, field):
+        """NaN compares False against every limit, so it used to pass."""
+        passed, reasons = meets_acceptance(**self._passing(**{field: float("nan")}))
+        assert not passed
+        assert any("fails closed" in reason for reason in reasons)
+
+    def test_a_nan_mae_fails(self):
+        mae = {bar.position: bar.mae - 0.10 for bar in BASELINE_BAR}
+        mae["TE"] = float("nan")
+        passed, reasons = meets_acceptance(**self._passing(mae_by_position=mae))
+        assert not passed
+        assert any("TE MAE" in reason for reason in reasons)
+
+    def test_the_same_season_baseline_is_the_bar_when_supplied(self):
+        """Measured 2019-2025: baseline_l4 RB 4.504. A model at 4.40 beats it,
+        though it would lose to the recorded 2023-25 bar of 4.26 — which
+        compares seasons, not models."""
+        same_seasons = {"QB": 6.637, "RB": 4.504, "TE": 3.290, "WR": 4.237}
+        model = {"QB": 6.16, "RB": 4.40, "TE": 3.08, "WR": 4.02}
+        passed, reasons = meets_acceptance(**self._passing(
+            mae_by_position=model, baseline_mae_by_position=same_seasons
+        ))
+        assert passed, reasons
+
+        against_record, reasons = meets_acceptance(**self._passing(mae_by_position=model))
+        assert not against_record
+        assert any("recorded 2023-2025" in reason for reason in reasons)
+
+    def test_losing_to_the_same_season_baseline_fails(self):
+        same_seasons = {"QB": 6.637, "RB": 4.504, "TE": 3.290, "WR": 4.237}
+        model = {"QB": 6.51, "RB": 4.520, "TE": 3.18, "WR": 4.16}
+        passed, reasons = meets_acceptance(**self._passing(
+            mae_by_position=model, baseline_mae_by_position=same_seasons
+        ))
+        assert not passed
+        assert reasons == ("RB MAE 4.520 does not beat baseline_l4's 4.504 (same seasons)",)
+
+    def test_a_baseline_missing_a_position_fails_closed(self):
+        passed, reasons = meets_acceptance(**self._passing(
+            baseline_mae_by_position={"QB": 9.0, "RB": 9.0, "WR": 9.0}
+        ))
+        assert not passed
+        assert any("no baseline_l4 MAE for TE" in reason for reason in reasons)
+
+    def test_the_summary_says_which_seasons_the_recorded_bar_covers(self):
+        assert foundation_summary()["baseline_bar_seasons"] == [2023, 2024, 2025]

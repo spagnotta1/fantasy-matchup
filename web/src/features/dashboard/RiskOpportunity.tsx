@@ -8,7 +8,7 @@ import { EmptyState, ErrorState } from '@/components/feedback/States'
 import { PlayerIdentity } from '@/components/domain/PlayerIdentity'
 import { ProjectionValue } from '@/components/domain/ProjectionValue'
 import { useBoard } from '@/hooks/useProjections'
-import { formatPercent, formatPoints } from '@/utils/format'
+import { formatPercent, formatPoints, formatThreshold } from '@/utils/format'
 import type { RankedProjection } from '@/api/schemas'
 
 type Lens = 'ceiling' | 'bust' | 'injury' | 'weather'
@@ -148,9 +148,9 @@ function detailFor(entry: RankedProjection, lens: Lens): React.ReactNode {
 
   switch (lens) {
     case 'ceiling':
-      return `${position} ${opponent} · ceiling ${formatPoints(points.ceiling)} · ${formatPercent(points.boom_probability)} chance of ${formatPoints(points.boom_threshold)}+`
+      return `${position} ${opponent} · ceiling ${formatPoints(points.ceiling)} · ${formatPercent(points.boom_probability)} chance of ${formatThreshold(points.boom_threshold)}+`
     case 'bust':
-      return `${position} ${opponent} · ${formatPercent(points.bust_probability)} chance of scoring under ${formatPoints(points.bust_threshold)}`
+      return `${position} ${opponent} · ${formatPercent(points.bust_probability)} chance of scoring under ${formatThreshold(points.bust_threshold)}`
     case 'injury': {
       const injury = entry.projection.context.injury
       return `${position} ${opponent} · listed ${injury?.report_status ?? 'questionable'}${injury?.will_not_play ? ' — not expected to play' : ''}`

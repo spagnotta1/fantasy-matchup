@@ -100,7 +100,7 @@ export default function InjuriesPage() {
               'The projections do not account for injuries. Each player shows their normal projection, with their injury status beside it as the warning.',
           ]}
         />
-        {board.data && <NoticeList notices={boardNotices(board.data.meta)} />}
+        {board.data && <NoticeList notices={boardNotices(board.data.meta, { showsGrades: false })} />}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">

@@ -181,6 +181,13 @@ export function SlateProvider({ children }: { children: ReactNode }) {
   )
 
   const setWeek = useCallback((value: number) => update({ week: String(value) }), [update])
+
+  const { refetch: refetchSeasons, isError: seasonsFailed } = seasonsQuery
+  const { refetch: refetchProfiles, isError: profilesFailed } = profilesQuery
+  const retryCatalog = useCallback(() => {
+    if (seasonsFailed) void refetchSeasons()
+    if (profilesFailed) void refetchProfiles()
+  }, [seasonsFailed, profilesFailed, refetchSeasons, refetchProfiles])
   const setScoringProfile = useCallback(
     (value: string) => update({ scoring: value }),
     [update],
@@ -192,7 +199,10 @@ export function SlateProvider({ children }: { children: ReactNode }) {
       week,
       scoringProfile,
       resolved: catalogReady && season !== null && week !== null,
+      catalogReady,
       catalogFailed: seasonsQuery.isError || profilesQuery.isError,
+      catalogError: seasonsQuery.error ?? profilesQuery.error ?? null,
+      retryCatalog,
       hasPublishedBoard: week !== null && availableWeeks.includes(week),
       availableWeeks,
       availableSeasons,
@@ -208,6 +218,9 @@ export function SlateProvider({ children }: { children: ReactNode }) {
       catalogReady,
       seasonsQuery.isError,
       profilesQuery.isError,
+      seasonsQuery.error,
+      profilesQuery.error,
+      retryCatalog,
       availableWeeks,
       availableSeasons,
       availableProfiles,

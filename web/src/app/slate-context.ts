@@ -21,6 +21,12 @@ export interface SlateSelection {
    * a lie, and the controls need to be able to tell the two apart.
    */
   catalogFailed: boolean
+  /** The season and scoring catalogues have both loaded. */
+  catalogReady: boolean
+  /** Why the catalogue failed, for the error state. Null while it has not. */
+  catalogError: unknown
+  /** Refetch whichever catalogue failed. */
+  retryCatalog: () => void
   /** Whether the current selection is known to have a published board. */
   hasPublishedBoard: boolean
   /** Published weeks for the selected season, newest last. */

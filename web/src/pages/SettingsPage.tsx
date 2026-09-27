@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { CheckCircle2, CircleDashed } from 'lucide-react'
 
 import { useSlate } from '@/app/slate-context'
@@ -306,16 +307,141 @@ function ModelCard() {
         ) : scalars.length === 0 ? (
           <p className="text-ink-muted text-sm">No summary fields were returned.</p>
         ) : (
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            {scalars.map(([key, value]) => (
-              <Row key={key} label={formatLabel(key)}>
-                {String(value)}
-              </Row>
-            ))}
-          </dl>
+          <div className="space-y-6">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              {scalars.map(([key, value]) => (
+                <Row key={key} label={formatLabel(key)}>
+                  {String(value)}
+                </Row>
+              ))}
+            </dl>
+            <ModelEvidence document={data} />
+          </div>
         )}
       </CardBody>
     </Card>
+  )
+}
+
+const pct = (value: number) => `${(value * 100).toFixed(1)}%`
+const pctPoints = (value: number) => `${(value * 100).toFixed(0)} percentage points`
+
+/** The parts of `/meta/model` this card explains. Optional throughout: the
+ * document is free-form, and a field missing from a future freeze should drop
+ * its sentence, not the card. */
+const evidenceSchema = z.object({
+  validation: z
+    .object({
+      seasons: z.array(z.number()).optional(),
+      held_out_distributions: z.number().optional(),
+      interval_coverage: z
+        .object({
+          p10_p90: z.object({ observed: z.number(), nominal: z.number() }).optional(),
+          p25_p75: z.object({ observed: z.number(), nominal: z.number() }).optional(),
+        })
+        .optional(),
+      crps: z.number().optional(),
+      calibration: z.object({ boom: z.object({ max: z.number() }).optional() }).optional(),
+      max_conditional_bias: z.number().optional(),
+    })
+    .optional(),
+  baseline_bar_seasons: z.array(z.number()).optional(),
+  acceptance: z
+    .object({
+      max_coverage_error: z.number().optional(),
+      max_calibration_error: z.number().optional(),
+      max_conditional_bias: z.number().optional(),
+      max_crps: z.number().optional(),
+      must_beat_baseline: z.boolean().optional(),
+      requires_walk_forward: z.boolean().optional(),
+    })
+    .optional(),
+})
+
+/**
+ * What the model was measured to do, and what a replacement must prove.
+ *
+ * Both lists come straight from the frozen record the API serves, restated in
+ * plain words. They are measurements of past, held-out projections — each made
+ * using only games before it — not a promise about this week.
+ */
+function ModelEvidence({ document }: { document: unknown }) {
+  const parsed = evidenceSchema.safeParse(document)
+  if (!parsed.success) return null
+  const { validation, acceptance, baseline_bar_seasons: barSeasons } = parsed.data
+
+  const span = (seasons?: number[]) =>
+    seasons && seasons.length > 0 ? `${Math.min(...seasons)}–${Math.max(...seasons)}` : null
+
+  const checked = [
+    validation?.held_out_distributions && span(validation.seasons)
+      ? `Tested on ${validation.held_out_distributions.toLocaleString()} past projections from ${span(validation.seasons)}, each made using only games played before it.`
+      : null,
+    validation?.interval_coverage?.p10_p90
+      ? `The 80% ranges held the real score ${pct(validation.interval_coverage.p10_p90.observed)} of the time.`
+      : null,
+    validation?.interval_coverage?.p25_p75
+      ? `The middle-half ranges held it ${pct(validation.interval_coverage.p25_p75.observed)} of the time, against 50%.`
+      : null,
+    validation?.calibration?.boom
+      ? `Boom chances: the worst group of predictions was off by ${pctPoints(validation.calibration.boom.max)}.`
+      : null,
+    validation?.max_conditional_bias !== undefined
+      ? `No projection band ran more than ${validation.max_conditional_bias.toFixed(2)} points high or low on average.`
+      : null,
+  ].filter((line): line is string => line !== null)
+
+  const bar = acceptance
+    ? [
+        acceptance.max_coverage_error !== undefined
+          ? `Its 80% ranges hold within ${pctPoints(acceptance.max_coverage_error)} of 80%.`
+          : null,
+        acceptance.max_calibration_error !== undefined
+          ? `No group of boom or bust chances is off by more than ${pctPoints(acceptance.max_calibration_error)}.`
+          : null,
+        acceptance.max_conditional_bias !== undefined
+          ? `No projection band runs more than ${acceptance.max_conditional_bias.toFixed(2)} points high or low.`
+          : null,
+        acceptance.max_crps !== undefined
+          ? `Its whole-distribution score (CRPS) is no worse than this model's ${acceptance.max_crps}.`
+          : null,
+        acceptance.must_beat_baseline
+          ? `It beats a plain last-four-games average at every position, measured on the same seasons${barSeasons ? ` (the recorded bar covers ${span(barSeasons)})` : ''}.`
+          : null,
+        acceptance.requires_walk_forward
+          ? 'It is tested week by week, only ever using earlier games — never a random split.'
+          : null,
+      ].filter((line): line is string => line !== null)
+    : []
+
+  return (
+    <>
+      {checked.length > 0 && (
+        <section>
+          <h3 className="text-ink text-sm font-semibold">How this model was checked</h3>
+          <ul className="text-ink-secondary mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
+            {checked.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {bar.length > 0 && (
+        <section>
+          <h3 className="text-ink text-sm font-semibold">What a replacement must prove</h3>
+          <p className="text-ink-muted mt-1 text-xs leading-relaxed">
+            A new model replaces this one only if it clears every one of these on the same test.
+            A sharper average that widens the ranges or skews the boom chances does not count as
+            better.
+          </p>
+          <ul className="text-ink-secondary mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
+            {bar.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
   )
 }
 

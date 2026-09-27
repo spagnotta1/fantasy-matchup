@@ -14,7 +14,6 @@ import {
   Target,
   Radio,
   UserRound,
-  Users,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -64,15 +63,7 @@ export const NAV_ITEMS: NavItem[] = [
     to: '/rankings',
     label: 'Rankings',
     icon: BarChart3,
-    description: "This week's rankings by position",
-    primary: true,
-    group: 'week',
-  },
-  {
-    to: '/players',
-    label: 'Players',
-    icon: Users,
-    description: 'Search and filter every projected player',
+    description: 'Every projected player, by position or team',
     primary: true,
     group: 'week',
   },
@@ -129,7 +120,9 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'My team',
     icon: UserRound,
     description: 'Your roster projected, and your best lineup',
-    primary: false,
+    // In the five-slot mobile bar since Players merged into Rankings: the
+    // roster is where most of a manager's week starts.
+    primary: true,
     group: 'tools',
   },
   {

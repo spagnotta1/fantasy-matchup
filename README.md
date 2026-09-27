@@ -1412,6 +1412,28 @@ or decalibrating its boom probabilities is not an improvement.
 could not, the bar would be wrong — and that a model with a better centre but a
 worse distribution is rejected on CRPS.
 
+Three details of how the check is applied, found by re-running it end to end
+(`python scripts/challenger_eval.py <model>`):
+
+- **The baseline is measured on the same seasons.** The recorded `baseline_l4`
+  bar covers 2023-25 only. Over 2019-2025 the same baseline scores RB 4.50 and
+  WR 4.24 against 4.26 and 4.05, because earlier seasons are harder for every
+  model. Evaluations now backtest `baseline_l4` on the seasons they evaluate and
+  compare against that. The recorded bar is only the fallback for a caller that
+  evaluates exactly 2023-25.
+- **CRPS is compared at the precision it was recorded to** (3 dp). The
+  incumbent re-measured scores 2.9271, a tie with 2.927, not a loss.
+- **A non-finite measurement fails.** NaN compares false against every limit,
+  so a metric that failed to compute used to pass.
+
+Measured this way over 2019-2025, `shrinkage_eb` misses one criterion: RB MAE
+4.520 against the same-season baseline's 4.504. It clears every
+distribution criterion. The `lightgbm_components` challenger beats the baseline
+at every position, improves CRPS (2.815) and boom calibration (worst bin 0.051),
+and fails on conditional bias: +0.57 points in the 20-25 band (n=368), over the
+0.25 limit. It is registered and not promoted. The full report is in
+`artifacts/challenger_lightgbm_components_report.txt`.
+
 ## Scoring
 
 `src/nflfp/scoring.py` defines league rules as data. `player_week` exposes one

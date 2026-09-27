@@ -85,6 +85,15 @@ const PAIRS = [
   // deliberately NOT checked: it appears only behind `hover:`, and a hover
   // enhancement is not what identifies a control.
   ['border-input', 'surface', 3.0],
+  // The field. Every mark drawn on it identifies part of a range, so each owes
+  // 3:1 against the strip; the line to gain is measured by its edge, which in
+  // the light theme is the ink outline that makes the yellow legible.
+  ['range-box', 'field', 3.0],
+  ['range-whisker', 'field', 3.0],
+  ['range-median', 'range-box', 3.0],
+  ['line-to-gain-edge', 'field', 3.0],
+  ['you', 'field', 3.0],
+  ['you', 'surface', 3.0],
 ]
 
 const browser = await chromium.launch()

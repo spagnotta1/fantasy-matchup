@@ -9,12 +9,13 @@ import { SkeletonCards, SkeletonTable } from '@/components/ui/Skeleton'
 import { InfoTip } from '@/components/ui/Tooltip'
 import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/feedback/States'
 import { CalibrationNotice } from '@/components/domain/CalibrationNotice'
+import { LatestWeekButton } from '@/components/domain/LatestWeekButton'
 import { ProjectionCards } from '@/components/domain/ProjectionCards'
 import { ProjectionTable } from '@/components/domain/ProjectionTable'
 import { PositionTabs } from '@/features/rankings/PositionTabs'
 import { RankingsToolbar } from '@/features/rankings/RankingsToolbar'
 import { UnprojectedPosition } from '@/features/rankings/UnprojectedPosition'
-import type { ViewMode } from '@/features/players/PlayerFilters'
+import type { ViewMode } from '@/features/rankings/RankingsToolbar'
 import { usePositions } from '@/hooks/useCatalog'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { boardNotices, useBoard, usePositionRankings } from '@/hooks/useProjections'
@@ -25,6 +26,7 @@ import { formatScoringProfile } from '@/utils/format'
 
 interface RankingsPageState {
   query: string
+  team: string
   sort: SortKey
   direction: SortDirection
   view: ViewMode
@@ -32,13 +34,18 @@ interface RankingsPageState {
 
 const DEFAULT_STATE: RankingsPageState = {
   query: '',
+  team: '',
   sort: 'rank',
   direction: 'asc',
   view: 'table',
 }
 
 /**
- * The weekly board.
+ * The weekly board — every projected player, by position or team.
+ *
+ * This is the only board. It used to be one of two: Players had a team filter
+ * and a position dropdown, Rankings had position tabs and tiers, and both drew
+ * the same table. `/players` now redirects here with its filters intact.
  *
  * Two data sources behind one screen, chosen by the route. A position tab reads
  * `/rankings/{position}`, which re-ranks and re-tiers inside that position; the
@@ -67,8 +74,9 @@ export default function RankingsPage() {
   const unknownPosition = position !== null && positions.isSuccess && support === null
 
   const [state, setState] = useUrlState(DEFAULT_STATE)
-  const { query, sort, direction, view } = state
+  const { query, team, sort, direction, view } = state
   const setQuery = useCallback((value: string) => setState({ query: value }), [setState])
+  const setTeam = useCallback((value: string) => setState({ team: value }), [setState])
   const setView = useCallback((value: ViewMode) => setState({ view: value }), [setState])
 
   const isCompact = useMediaQuery('(max-width: 639px)')
@@ -83,9 +91,16 @@ export default function RankingsPage() {
   const deferredQuery = useDeferredValue(query)
   const entries = useMemo(() => {
     if (!active.data) return []
-    const matched = active.data.data.filter((entry) => matchesQuery(entry, deferredQuery))
+    // Team is filtered here, not in the request: the board is already the
+    // whole slate (or the whole position), so narrowing it in the browser
+    // keeps each player's league-wide rank — "KC's WR3 is WR24 overall" is
+    // exactly what a team view is for.
+    const matched = active.data.data.filter(
+      (entry) =>
+        (team === '' || entry.projection.team === team) && matchesQuery(entry, deferredQuery),
+    )
     return sortBoard(matched, sort, direction)
-  }, [active.data, deferredQuery, sort, direction])
+  }, [active.data, deferredQuery, team, sort, direction])
   const projections = useMemo(
     () => active.data?.data.map((entry) => entry.projection),
     [active.data],
@@ -132,13 +147,18 @@ export default function RankingsPage() {
 
   const showTiers = sort === 'rank' && direction === 'asc' && position !== null
   const total = active.data?.data.length ?? 0
-  const filtered = query.trim().length > 0
+  const filtered = query.trim().length > 0 || team !== ''
 
   return (
     <>
       <PageHeader
-        title={position && !unknownPosition ? `${position} rankings` : 'Rankings'}
-        question="Who should I start at each position this week?"
+        title={
+          [team || null, position && !unknownPosition ? position : null, 'rankings']
+            .filter(Boolean)
+            .join(' ')
+            .replace(/^rankings$/, 'Rankings')
+        }
+        question="Who should I start this week, and how does everyone compare?"
       />
 
       <PositionTabs active={position} />
@@ -162,6 +182,8 @@ export default function RankingsPage() {
           <RankingsToolbar
             query={query}
             onQueryChange={setQuery}
+            team={team}
+            onTeamChange={setTeam}
             sort={sort}
             onSortChange={onSortChange}
             view={effectiveView}
@@ -186,20 +208,22 @@ export default function RankingsPage() {
             ) : !active.data || entries.length === 0 ? (
               <EmptyState
                 icon={<SearchX aria-hidden className="size-5" />}
-                title={filtered ? 'No players match that search' : 'No rankings for this week'}
+                title={filtered ? 'No players match these filters' : 'No rankings for this week'}
                 description={
                   filtered
-                    ? 'Try a different name, or clear the search to see everyone.'
+                    ? 'Try a different name or team, or clear the filters to see everyone.'
                     : active.data?.meta.model == null
                       ? 'Projections for this week are not out yet. Rankings appear after the weekly update runs.'
                       : `This week's projections include no ${position ?? 'projected'} players for week ${slate.week ?? '—'}.`
                 }
                 action={
                   filtered ? (
-                    <Button variant="secondary" size="sm" onClick={() => setQuery('')}>
-                      Clear search
+                    <Button variant="secondary" size="sm" onClick={() => setState({ query: '', team: '' })}>
+                      Clear filters
                     </Button>
-                  ) : undefined
+                  ) : (
+                    <LatestWeekButton />
+                  )
                 }
               />
             ) : (

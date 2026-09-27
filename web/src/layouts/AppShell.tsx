@@ -1,7 +1,9 @@
-import { Suspense } from 'react'
+import { Suspense, type ReactNode } from 'react'
 import { Outlet, ScrollRestoration, useLocation, useMatches } from 'react-router-dom'
 
 import { RouteChrome } from '@/app/RouteChrome'
+import { useSlate } from '@/app/slate-context'
+import { ErrorState } from '@/components/feedback/States'
 import { SlateProvider } from '@/app/SlateProvider'
 import { SkeletonCards, SkeletonTable } from '@/components/ui/Skeleton'
 
@@ -16,6 +18,20 @@ import { TopBar } from './TopBar'
  * and the slate selection. Only the content region swaps, which is what makes
  * changing views feel instant rather than like loading a new page.
  */
+/**
+ * Every page waits for the season and week to resolve before it asks for
+ * anything. When the catalogue behind them fails, that wait never ends, and
+ * each page sat on its loading skeleton indefinitely with no error and no way
+ * to retry. This turns that state into one error with a retry, in place of the
+ * page. Settings is exempt: it reports service health, which is exactly what a
+ * reader wants to see during an outage.
+ */
+function CatalogGate({ pathname, children }: { pathname: string; children: ReactNode }) {
+  const slate = useSlate()
+  if (!slate.catalogFailed || pathname.startsWith('/settings')) return <>{children}</>
+  return <ErrorState error={slate.catalogError} onRetry={slate.retryCatalog} />
+}
+
 export function AppShell() {
   const location = useLocation()
   // The deepest matched route's id: stable across param changes on one route
@@ -63,7 +79,9 @@ export function AppShell() {
               new param in place.
             */}
             <Suspense key={routeId} fallback={<RouteFallback pathname={location.pathname} />}>
-              <Outlet />
+              <CatalogGate pathname={location.pathname}>
+                <Outlet />
+              </CatalogGate>
             </Suspense>
           </main>
         </div>

@@ -3,8 +3,10 @@ import { LayoutGrid, Search, Table2, X } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
+import { useTeams } from '@/hooks/useCatalog'
 import { SORT_OPTIONS, type SortKey } from '@/utils/board'
-import type { ViewMode } from '@/features/players/PlayerFilters'
+
+export type ViewMode = 'table' | 'cards'
 
 /**
  * Search, ordering and layout for the board.
@@ -17,6 +19,8 @@ import type { ViewMode } from '@/features/players/PlayerFilters'
 export function RankingsToolbar({
   query,
   onQueryChange,
+  team,
+  onTeamChange,
   sort,
   onSortChange,
   view,
@@ -26,6 +30,9 @@ export function RankingsToolbar({
 }: {
   query: string
   onQueryChange: (value: string) => void
+  /** Team abbreviation, or '' for every team. */
+  team: string
+  onTeamChange: (value: string) => void
   sort: SortKey
   onSortChange: (value: SortKey) => void
   view: ViewMode
@@ -33,11 +40,13 @@ export function RankingsToolbar({
   resultCount: number
   totalCount: number
 }) {
+  const teams = useTeams()
+
   return (
     <div className="mb-4 space-y-3">
       <div className="flex flex-wrap items-end gap-3">
         <Input
-          label="Search these rankings"
+          label="Search players"
           hideLabel
           placeholder="Search by name or team…"
           value={query}
@@ -57,6 +66,18 @@ export function RankingsToolbar({
               </button>
             ) : undefined
           }
+        />
+
+        <Select
+          label="Team"
+          hideLabel
+          value={team}
+          onChange={(event) => onTeamChange(event.target.value)}
+          className="w-32"
+          options={[
+            { value: '', label: 'All teams' },
+            ...(teams.data ?? []).map((entry) => ({ value: entry.abbr, label: entry.abbr })),
+          ]}
         />
 
         <Select

@@ -199,8 +199,11 @@ export function ComparisonGrid({ entries }: { entries: ComparisonEntry[] }) {
                 <td key={entry.projection.player.player_id} className="px-4 py-3">
                   <OutcomeRange
                     floor={entry.floor}
+                    p25={entry.projection.prediction.points.p25}
                     median={entry.projection.prediction.points.median}
+                    p75={entry.projection.prediction.points.p75}
                     ceiling={entry.ceiling}
+                    threshold={entry.projection.prediction.points.boom_threshold}
                     scaleMax={scaleMax}
                   />
                 </td>
@@ -248,8 +251,11 @@ export function ComparisonGrid({ entries }: { entries: ComparisonEntry[] }) {
             <div className="mt-3">
               <OutcomeRange
                 floor={entry.floor}
+                p25={entry.projection.prediction.points.p25}
                 median={entry.projection.prediction.points.median}
+                p75={entry.projection.prediction.points.p75}
                 ceiling={entry.ceiling}
+                threshold={entry.projection.prediction.points.boom_threshold}
                 scaleMax={scaleMax}
               />
             </div>
