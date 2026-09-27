@@ -120,15 +120,22 @@ async def resolve_window(
     raise NotFound("season", resolved_season)
 
 
-async def list_teams(session: AsyncSession) -> tuple[TeamRef, ...]:
-    """Every team, alphabetical.
+async def list_teams(
+    session: AsyncSession, *, include_former: bool = False
+) -> tuple[TeamRef, ...]:
+    """Every current team, alphabetical.
+
+    Former codes — the Oakland Raiders, San Diego Chargers, St. Louis Rams — are
+    left out unless ``include_former`` asks for them: a team directory listing
+    two Raiders is wrong, while resolving a 2015 game's ``STL`` still needs them.
+    See :func:`~nflfp.services.repository.fetch_teams`.
 
     Returns an empty tuple rather than raising when the team dimension has not
     been ingested. It is a branding table: the app is degraded without it, not
     broken, and failing a whole request because a logo URL is missing would be
     the wrong trade.
     """
-    rows = await repository.fetch_teams(session)
+    rows = await repository.fetch_teams(session, current_only=not include_former)
     return tuple(team_ref(row) for row in rows)
 
 
@@ -139,7 +146,7 @@ async def get_team(session: AsyncSession, abbr: str) -> TeamRef:
         NotFound: if no such team exists.
     """
     wanted = abbr.strip().upper()
-    for team in await list_teams(session):
+    for team in await list_teams(session, include_former=True):
         if team.abbr.upper() == wanted:
             return team
     raise NotFound("team", abbr)
@@ -151,7 +158,10 @@ async def team_index(session: AsyncSession) -> dict[str, TeamRef]:
     One query for a whole board rather than one per row — the difference
     between a slate endpoint that does two queries and one that does 300.
     """
-    return {team.abbr.upper(): team for team in await list_teams(session)}
+    return {
+        team.abbr.upper(): team
+        for team in await list_teams(session, include_former=True)
+    }
 
 
 async def list_published_seasons(session: AsyncSession) -> tuple[SeasonAvailability, ...]:
