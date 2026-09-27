@@ -436,6 +436,23 @@
   contain-intrinsic-size: auto 12.5rem;
 }
 
+/*
+ * No row hover highlight while the page scrolls, so the rows sliding under a
+ * still cursor do not each repaint the whole table. Set and cleared by
+ * `useScrollingFlag`.
+ *
+ * Unlayered on purpose: inside `@layer base` it lost to Tailwind's `hover:`
+ * utilities, which sit in a later layer, and did nothing.
+ *
+ * It cancels the highlight rather than setting `pointer-events: none` on the
+ * body: that property is inherited, so toggling it restyled every element in
+ * the table (~24,000 on a full slate) and made scrolling six times slower, not
+ * faster. This selector matches only the one row under the cursor.
+ */
+html[data-scrolling] tbody tr:hover {
+  background-color: transparent;
+}
+
 /* Skip link: off-screen until focused, then pinned over the shell. */
 @utility skip-link {
   position: absolute;
