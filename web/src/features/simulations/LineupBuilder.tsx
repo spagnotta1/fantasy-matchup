@@ -116,10 +116,16 @@ export function LineupBuilder({
     : undefined
 
   return (
-    <Card className="relative overflow-hidden">
+    // Not `overflow-hidden`: the last row's player search opens a dropdown
+    // below the card, and clipping it hid every result. The strip and the
+    // body's field gradient are rounded to the card's corners instead.
+    <Card className="relative">
       <span
         aria-hidden
-        className={cn('absolute inset-x-0 top-0 h-1', side === 'you' ? 'bg-you' : 'bg-accent')}
+        className={cn(
+          'absolute inset-x-0 top-0 h-1 rounded-t-[calc(var(--radius-card)-1px)]',
+          side === 'you' ? 'bg-you' : 'bg-accent',
+        )}
       />
       <CardHeader
         as="h2"
@@ -171,7 +177,7 @@ export function LineupBuilder({
         rather than fourteen empty search boxes and a button in the corner.
       */}
       <CardBody
-        className="space-y-2 p-3 sm:p-4"
+        className="space-y-2 rounded-b-[calc(var(--radius-card)-1px)] p-3 sm:p-4"
         style={{
           backgroundImage:
             'linear-gradient(to right, color-mix(in oklch, var(--color-field) 70%, transparent), transparent 70%)',
