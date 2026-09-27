@@ -1,9 +1,11 @@
-import { memo, useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Radio } from 'lucide-react'
+import { Radio, Search, X } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { Card, CardHeader } from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Skeleton, SkeletonTable } from '@/components/ui/Skeleton'
@@ -13,18 +15,27 @@ import { ShowMoreRows } from '@/components/domain/BoardBudget'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { OutcomeRange } from '@/components/domain/ProjectionValue'
 import { MatchupColorBar, ScoreBugTeam } from '@/components/domain/ScoreBug'
-import { TeamLink } from '@/components/domain/TeamLink'
 import { useSlate } from '@/app/slate-context'
 import { LIVE_REFRESH_MS, useLive } from '@/hooks/useInsights'
 import { useRenderBudget } from '@/hooks/useRenderBudget'
 import { replayAnimation, useCountUp } from '@/hooks/useCountUp'
 import { useRememberedRoster } from '@/hooks/useRoster'
+import { useUrlDraft } from '@/hooks/useUrlDraft'
 import { useUrlState } from '@/hooks/useUrlState'
 import { cn } from '@/utils/cn'
 import { formatPoints, formatSigned } from '@/utils/format'
 import type { LiveGame, LivePlayer } from '@/api/schemas'
 
-const DEFAULT_STATE = { position: '', who: 'all' }
+const DEFAULT_STATE = { position: '', who: 'all', query: '', game: '' }
+
+/** Case-insensitive substring match on name or team, as on the boards. */
+function matchesSearch(player: LivePlayer, query: string): boolean {
+  const term = query.trim().toLocaleLowerCase()
+  if (!term) return true
+  return (
+    player.name.toLocaleLowerCase().includes(term) || player.team.toLocaleLowerCase().includes(term)
+  )
+}
 
 /** A signed count, with a real minus sign for negative yardage. */
 const n = (value: number | undefined) => {
@@ -69,16 +80,32 @@ export default function LivePage() {
   const [state, setState] = useUrlState(DEFAULT_STATE)
   const data = live.data?.data
 
+  // The field owns its text and the URL catches up when typing pauses — see
+  // `useUrlDraft` for why binding the input to the URL dropped keystrokes.
+  const setQuery = useCallback((value: string) => setState({ query: value }), [setState])
+  const [search, setSearch] = useUrlDraft(state.query, setQuery)
+  const deferredSearch = useDeferredValue(search)
+
   const games = useMemo(() => new Map((data?.games ?? []).map((g) => [g.event_id, g])), [data])
+  // A game from another week's link matches nothing here, so it is ignored
+  // rather than leaving an empty table behind a filter nobody can see.
+  const selectedGame = state.game ? games.get(state.game) : undefined
   const players = useMemo(
     () =>
       (data?.players ?? []).filter(
         (p) =>
           (!state.position || p.position === state.position) &&
-          (state.who !== 'mine' || roster.has(p.player_id)),
+          (state.who !== 'mine' || roster.has(p.player_id)) &&
+          (!selectedGame || p.event_id === selectedGame.event_id) &&
+          matchesSearch(p, deferredSearch),
       ),
-    [data, state.position, state.who, roster],
+    [data, state.position, state.who, roster, selectedGame, deferredSearch],
   )
+  const filtered = Boolean(state.position || state.who !== 'all' || selectedGame || search.trim())
+  const clearFilters = () => {
+    setSearch('', { immediate: true })
+    setState({ position: '', who: 'all', query: '', game: '' })
+  }
   const inProgress = (data?.games ?? []).some((g) => g.state === 'in')
   // A full Sunday is ~300 players; draw the top of it and reveal the rest on
   // request, like the boards (see `useRenderBudget`).
@@ -130,16 +157,47 @@ export default function LivePage() {
           */}
           <ul
             aria-label="Games this week"
-            className="-mx-4 mb-6 flex snap-x gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0"
+            // `pt-1` and the ring-width side padding keep a selected tile's ring
+            // inside the scroller, which clips on both axes; `scroll-px-4`
+            // snaps a tile to the gutter rather than to the screen edge.
+            className="-mx-4 mb-6 flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 pt-1 pb-2 sm:mx-0 sm:scroll-px-1 sm:px-1"
           >
             {tickerOrder(data?.games ?? []).map((game) => (
               <li key={game.event_id} className="w-40 shrink-0 snap-start">
-                <GameTile game={game} />
+                <GameTile
+                  game={game}
+                  selected={selectedGame?.event_id === game.event_id}
+                  onSelect={() =>
+                    setState({ game: selectedGame?.event_id === game.event_id ? '' : game.event_id })
+                  }
+                />
               </li>
             ))}
           </ul>
 
           <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Input
+              label="Search players"
+              hideLabel
+              placeholder="Search by name or team…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              icon={<Search className="size-4" />}
+              className="min-w-0 flex-1 basis-56 sm:max-w-72"
+              type="search"
+              trailing={
+                search ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('', { immediate: true })}
+                    aria-label="Clear search"
+                    className="text-ink-muted hover:text-ink flex size-6 items-center justify-center rounded-md"
+                  >
+                    <X aria-hidden className="size-3.5" />
+                  </button>
+                ) : undefined
+              }
+            />
             <SegmentedControl
               label="Position"
               value={state.position}
@@ -160,6 +218,19 @@ export default function LivePage() {
                 Add your roster first
               </Link>
             )}
+            {selectedGame && (
+              <Badge tone="accent" className="gap-1 py-0.5 pr-0.5">
+                {selectedGame.away} @ {selectedGame.home}
+                <button
+                  type="button"
+                  onClick={() => setState({ game: '' })}
+                  aria-label={`Show every game, not just ${selectedGame.away} at ${selectedGame.home}`}
+                  className="hover:bg-surface-hover flex size-5 items-center justify-center rounded-full"
+                >
+                  <X aria-hidden className="size-3" />
+                </button>
+              </Badge>
+            )}
           </div>
 
           <Card className="overflow-hidden">
@@ -177,12 +248,31 @@ export default function LivePage() {
             {players.length === 0 ? (
               <EmptyState
                 icon={<Radio aria-hidden className="size-5" />}
-                eyebrow={data?.games.length ? 'Pre-game warmups' : undefined}
-                title={data?.games.length ? 'No points yet' : 'No games found for this week'}
+                eyebrow={data?.games.length && !filtered ? 'Pre-game warmups' : undefined}
+                title={
+                  !data?.games.length
+                    ? 'No games found for this week'
+                    : selectedGame?.state === 'pre'
+                      ? `${selectedGame.away} @ ${selectedGame.home} has not kicked off`
+                      : filtered
+                        ? 'No players match'
+                        : 'No points yet'
+                }
                 description={
-                  data?.games.length
-                    ? 'Nobody matching these filters has scored yet. Points appear once games kick off.'
-                    : 'We could not find any games for the selected week.'
+                  !data?.games.length
+                    ? 'We could not find any games for the selected week.'
+                    : selectedGame?.state === 'pre'
+                      ? 'Points appear here once the game starts.'
+                      : filtered
+                        ? 'Nobody who has played this week matches these filters.'
+                        : 'Points appear once games kick off.'
+                }
+                action={
+                  filtered ? (
+                    <Button size="sm" variant="secondary" onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  ) : undefined
                 }
               />
             ) : (
@@ -240,7 +330,22 @@ function tickerOrder(games: LiveGame[]): LiveGame[] {
   )
 }
 
-function GameTile({ game }: { game: LiveGame }) {
+/**
+ * One game on the ticker, and the way to narrow the table to it.
+ *
+ * The whole tile is the button — a pressed toggle, so a second click shows
+ * every game again. The team names are plain text rather than links for that
+ * reason: a link inside a button is two controls in one place.
+ */
+function GameTile({
+  game,
+  selected,
+  onSelect,
+}: {
+  game: LiveGame
+  selected: boolean
+  onSelect: () => void
+}) {
   const live = game.state === 'in'
   const final = game.state === 'post'
   const awayScore = game.away_score ?? 0
@@ -248,10 +353,14 @@ function GameTile({ game }: { game: LiveGame }) {
   const scored = game.state !== 'pre'
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      aria-label={`${game.away} at ${game.home}, ${final ? 'final' : (game.detail ?? game.state)}. ${selected ? 'Showing only this game; press to show every game.' : 'Show only players in this game.'}`}
       className={cn(
-        'bg-surface shadow-card relative h-full overflow-hidden rounded-[var(--radius-control)] border px-3 pt-3 pb-2',
-        live ? 'border-negative/50' : 'border-line',
+        'bg-surface shadow-card hover:bg-surface-hover relative block h-full w-full overflow-hidden rounded-[var(--radius-control)] border px-3 pt-3 pb-2 text-left transition-colors',
+        selected ? 'border-accent ring-accent ring-2' : live ? 'border-negative/50' : 'border-line',
       )}
     >
       <MatchupColorBar away={game.away} home={game.home} />
@@ -261,14 +370,14 @@ function GameTile({ game }: { game: LiveGame }) {
           score={scored ? game.away_score : undefined}
           trailing={final && awayScore < homeScore}
         >
-          <TeamLink team={game.away} />
+          <span>{game.away}</span>
         </ScoreBugTeam>
         <ScoreBugTeam
           team={game.home}
           score={scored ? game.home_score : undefined}
           trailing={final && homeScore < awayScore}
         >
-          <TeamLink team={game.home} />
+          <span>{game.home}</span>
         </ScoreBugTeam>
       </div>
       <p
@@ -280,7 +389,7 @@ function GameTile({ game }: { game: LiveGame }) {
         {live && <span aria-hidden className="bg-negative animate-live-dot size-1.5 shrink-0 rounded-full" />}
         {final ? 'Final' : (game.detail ?? game.state)}
       </p>
-    </div>
+    </button>
   )
 }
 
