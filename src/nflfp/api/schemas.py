@@ -1926,6 +1926,63 @@ class ValueBoardOut(Schema):
 
 
 # ---------------------------------------------------------------------------
+# Trade values
+# ---------------------------------------------------------------------------
+
+
+class TradeValueOut(Schema):
+    """One player's rest-of-season worth, each factor kept apart."""
+
+    player: PlayerOut
+    position: str
+    team: str | None = None
+    rate: float = Field(
+        description="`provenance: model` — expected points for `rate_week`, read as a per-game rate."
+    )
+    rate_week: int = Field(description="The week whose published projection supplied the rate.")
+    on_bye: bool = Field(
+        description="The team has no game this week, so the rate is from an earlier week."
+    )
+    games_left: int = Field(description="Regular-season games the team plays from this week on, counting it.")
+    availability: float = Field(
+        description="`provenance: derived` — share of games the player is expected to be available for."
+    )
+    availability_basis: str = Field(description="`player_history` or `position_prior`.")
+    expected_games: float = Field(description="`games_left` times `availability`.")
+    rest_of_season: float = Field(
+        description="`rate` times `expected_games`. A rate carried forward, not a forecast."
+    )
+    value_over_replacement: float = Field(
+        description="`rest_of_season` minus the position's waiver-wire level. Negative below it."
+    )
+    trade_value: float = Field(description="`value_over_replacement` floored at zero.")
+    overall_rank: int = Field(description="1-based, by trade value across positions.")
+    position_rank: int = Field(description="1-based, by rest-of-season points within position.")
+
+
+class TradeReplacementOut(Schema):
+    """The waiver-wire level one position is measured from."""
+
+    position: str
+    rostered: int = Field(description="Players at the position the league is assumed to roster.")
+    value: float = Field(description="Rest-of-season points of the best unrostered player.")
+    player_id: str | None = None
+    name: str | None = None
+
+
+class TradeValuesOut(Schema):
+    provenance: Provenance = Provenance.DERIVED
+    applied_to_projection: bool = False
+    season: int
+    week: int
+    teams: int
+    roster_size: int
+    remaining_weeks: list[int]
+    replacement: list[TradeReplacementOut]
+    values: list[TradeValueOut] = Field(description="Best trade value first.")
+
+
+# ---------------------------------------------------------------------------
 # Depth chart (context) and live scoring (actual, unofficial)
 # ---------------------------------------------------------------------------
 

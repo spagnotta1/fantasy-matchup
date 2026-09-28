@@ -14,6 +14,7 @@ from ..services import depth as depth_service
 from ..services import live as live_service
 from ..services import schedule as schedule_service
 from ..services import track_record as track_record_service
+from ..services import trade as trade_service
 from ..services.draft import aggregate as draft_aggregate
 from ..services.draft import engine as draft_engine
 from ..services.draft import pool as draft_pool
@@ -882,5 +883,45 @@ def live_slate(source: live_service.LiveSlate) -> schemas.LiveSlateOut:
                 components=dict(p.components),
             )
             for p in source.players
+        ],
+    )
+
+
+def trade_values(source: trade_service.TradeValues) -> schemas.TradeValuesOut:
+    return schemas.TradeValuesOut(
+        season=source.season,
+        week=source.week,
+        teams=source.teams,
+        roster_size=trade_service.ROSTER_SIZE,
+        remaining_weeks=list(source.remaining_weeks),
+        replacement=[
+            schemas.TradeReplacementOut(
+                position=level.position,
+                rostered=level.starters,
+                value=level.value,
+                player_id=level.player_id,
+                name=source.replacement_names.get(level.position),
+            )
+            for level in source.replacement.values()
+        ],
+        values=[
+            schemas.TradeValueOut(
+                player=player(value.player),
+                position=value.position,
+                team=value.team,
+                rate=value.rate,
+                rate_week=value.rate_week,
+                on_bye=value.on_bye,
+                games_left=value.games_left,
+                availability=value.availability,
+                availability_basis=value.availability_basis,
+                expected_games=value.expected_games,
+                rest_of_season=value.rest_of_season,
+                value_over_replacement=value.value_over_replacement,
+                trade_value=value.trade_value,
+                overall_rank=value.overall_rank,
+                position_rank=value.position_rank,
+            )
+            for value in source.values
         ],
     )

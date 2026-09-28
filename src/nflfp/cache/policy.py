@@ -83,6 +83,7 @@ RULES: tuple[CacheRule, ...] = (
     # how long a finished game waits to be graded.
     CacheRule("/api/v1/track-record", 900, "historical aggregate; grows as games complete"),
     CacheRule("/api/v1/schedule-strength", 300, "defensive form as of a week, like the matchups"),
+    CacheRule("/api/v1/trade/values", 300, "the week's board carried forward; moves only on publish"),
     # One upstream read a minute however many people are watching. Shorter
     # would be "more live" and would make the public endpoint pay per viewer.
     CacheRule("/api/v1/live", 60, "in-game box scores; bounds the upstream to one read a minute"),
@@ -172,7 +173,7 @@ def slate_paths(
 
     These are the client's own requests for that slate: every scoring profile's
     board, position boards and track record, plus the profile-independent
-    schedule, defence and strength-of-schedule reads. Parameter order does not
+    schedule, defence and strength-of-schedule reads, and the trade values. Parameter order does not
     matter — keys are normalised — but every parameter does.
     """
     slate = f"season={season}&week={week}"
@@ -190,4 +191,5 @@ def slate_paths(
         for position in positions:
             paths.append(f"/api/v1/rankings/{position}?{board}")
         paths.append(f"/api/v1/track-record?scoring_profile={profile}")
+        paths.append(f"/api/v1/trade/values?{slate}&scoring_profile={profile}")
     return tuple(paths)

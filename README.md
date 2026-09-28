@@ -794,12 +794,30 @@ wk 5 and wk 10) it matched **833 of 858** players exactly; every difference is
 a two-point conversion except one blocked-punt touchdown, neither of which a box
 score carries.
 
-The web app's *My team* and *Trade helper* views are built on these reads plus
+The web app's *My team* and *Trade analyzer* views are built on these reads plus
 the board. The roster lives in the URL (and the browser, like the slate) —
-there is no account and nothing stored server-side. The trade helper's
-rest-of-season figure is this week's projection times the games left, the same
-rate-times-games construction as the draft pool, and is labelled a rate, not a
-forecast.
+there is no account and nothing stored server-side.
+
+**`/trade/values`** gives the trade analyzer one number per player that adds up
+across a trade: rest-of-season points above the waiver wire, `provenance:
+derived`. It is the draft pool's construction read at the current week — this
+week's expected points (`model`) as a per-game rate, times the games the team
+has left counting this week, times the pool's shrunk historical availability —
+then measured from the best *unrostered* player at the position. Starting depth
+comes from the draft engine's `replacement_levels` (dedicated slots, flex by
+auction); the bench is assumed to hold positions in the lineup's proportions,
+which for the default twelve-team, fifteen-player league rosters about 26 QB,
+69 RB, 60 WR and 26 TE. That proportion is an assumption and the notices say
+so. Values floor at zero, so a waiver-level throw-in cannot lower a side. A
+bye-week team's players are valued from their most recent published week and
+carry `on_bye`. It is a rate carried forward, not a forecast.
+
+The page's verdict ("Favours you", "Favours them", "Close to even") is
+arithmetic on those values, and "close to even" — within 10% of the larger
+side — is a display threshold, not a measured margin. Because value adds up
+and a lineup does not, a manager with a My team roster also sees the trade's
+effect on their best starting lineup at current per-game rates; the two
+disagree on most two-for-ones, and the page says so when they do.
 
 ### Deliberate response behaviours
 

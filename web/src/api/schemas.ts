@@ -1150,6 +1150,56 @@ export const valueBoardSchema = z.object({
 export type ValueBoard = z.infer<typeof valueBoardSchema>
 
 // ---------------------------------------------------------------------------
+// Trade values (derived)
+// ---------------------------------------------------------------------------
+
+export const tradeValueSchema = z.object({
+  player: playerSchema,
+  position: z.string(),
+  team: maybeString,
+  /** Provenance `model`: expected points for `rate_week`, read as a per-game rate. */
+  rate: z.number(),
+  rate_week: z.number(),
+  /** The team has no game this week; the rate is from an earlier week. */
+  on_bye: z.boolean(),
+  games_left: z.number(),
+  /** Provenance `derived`: share of games the player is usually available for. */
+  availability: z.number(),
+  availability_basis: z.string(),
+  expected_games: z.number(),
+  /** Rate × expected games. A rate carried forward, not a forecast. */
+  rest_of_season: z.number(),
+  value_over_replacement: z.number(),
+  /** Rest-of-season points above the waiver wire, floored at zero. */
+  trade_value: z.number(),
+  overall_rank: z.number(),
+  position_rank: z.number(),
+})
+export type TradeValue = z.infer<typeof tradeValueSchema>
+
+export const tradeReplacementSchema = z.object({
+  position: z.string(),
+  rostered: z.number(),
+  value: z.number(),
+  player_id: maybeString,
+  name: maybeString,
+})
+export type TradeReplacement = z.infer<typeof tradeReplacementSchema>
+
+export const tradeValuesSchema = z.object({
+  provenance: provenanceSchema,
+  applied_to_projection: z.boolean(),
+  season: z.number(),
+  week: z.number(),
+  teams: z.number(),
+  roster_size: z.number(),
+  remaining_weeks: z.array(z.number()),
+  replacement: z.array(tradeReplacementSchema),
+  values: z.array(tradeValueSchema),
+})
+export type TradeValues = z.infer<typeof tradeValuesSchema>
+
+// ---------------------------------------------------------------------------
 // Depth chart (context) and live scoring (actual, unofficial)
 // ---------------------------------------------------------------------------
 

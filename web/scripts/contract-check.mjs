@@ -159,6 +159,7 @@ await check(`track record (${season})`, () =>
   insights.getTrackRecord({ season, week, scoringProfile: 'ppr' }),
 )
 await check('schedule strength WR', () => insights.getScheduleStrength('WR', { season, week }))
+await check('trade values', () => insights.getTradeValues({ season, week }))
 await check('live scoring', () => insights.getLive(slate))
 await expectRefusal('schedule strength K refused', () =>
   insights.getScheduleStrength('K', { season, week }),
