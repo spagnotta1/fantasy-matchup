@@ -5,6 +5,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import type { MatchupGrade } from '@/api/schemas'
 import { formatPoints } from '@/utils/format'
 import { toneForLetter } from '@/utils/grades'
+import { cn } from '@/utils/cn'
 
 interface MatchupGradeChipProps {
   /** Null when the projection carries no matchup block at all — same story to tell. */
@@ -35,14 +36,25 @@ export function MatchupGradeChip({
   align = 'center',
 }: MatchupGradeChipProps) {
   if (!grade || !grade.graded || !grade.letter) {
+    // Same words and the same reason as before, without the pill. Early in a
+    // season every row on the board is ungraded, and 667 identical grey chips
+    // made the one caveat the loudest thing on the screen. It stays beside
+    // the number it qualifies; it just stops competing with the grades that
+    // do exist.
     return (
       <Tooltip
         align={align}
         content={grade?.reason ?? 'This defence has not played enough games yet to grade the matchup.'}
       >
-        <Badge tone="neutral" size={size} icon={<HelpCircle className="size-3" />}>
+        <span
+          className={cn(
+            'text-ink-muted decoration-line-strong inline-flex items-center gap-1 whitespace-nowrap underline decoration-dotted underline-offset-2',
+            size === 'sm' ? 'text-[0.6875rem]' : 'text-xs',
+          )}
+        >
+          <HelpCircle aria-hidden className="size-3 shrink-0" />
           Not graded
-        </Badge>
+        </span>
       </Tooltip>
     )
   }

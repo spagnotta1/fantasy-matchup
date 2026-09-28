@@ -192,3 +192,11 @@ export function boardCeiling(entries: RankedProjection[]): number {
     return ceiling !== null && ceiling !== undefined && ceiling > max ? ceiling : max
   }, 0)
 }
+
+/** The drawn order, as far as `useReorderAnimation` follows it. */
+export function orderSignature(entries: RankedProjection[]): string {
+  return entries
+    .slice(0, 40)
+    .map((entry) => entry.projection.player.player_id)
+    .join(',')
+}

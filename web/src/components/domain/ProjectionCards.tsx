@@ -4,12 +4,13 @@ import { CloudRain } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
 import { ShowMoreRows } from '@/components/domain/BoardBudget'
+import { useReorderAnimation } from '@/hooks/useReorderAnimation'
 import { useRenderBudget } from '@/hooks/useRenderBudget'
 import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
-import { boardCeiling, groupByTier } from '@/utils/board'
+import { boardCeiling, groupByTier, orderSignature } from '@/utils/board'
 import { formatPercent, formatPoints, formatThreshold } from '@/utils/format'
 import type { RankedProjection } from '@/api/schemas'
 
@@ -46,19 +47,21 @@ export const ProjectionCards = memo(function ProjectionCards({
 
   const budget = useRenderBudget(entries.length)
   const visible = useMemo(() => entries.slice(0, budget.shown), [entries, budget.shown])
+  const orderKey = useMemo(() => orderSignature(visible), [visible])
+  const ref = useReorderAnimation<HTMLDivElement>(orderKey)
 
   if (!showTiers) {
     return (
-      <>
+      <div ref={ref}>
         <CardGrid entries={visible} scaleMax={scaleMax} showRank={showRank} rankMode={rankMode} />
         <ShowMoreRows budget={budget} />
-      </>
+      </div>
     )
   }
 
   return (
     <>
-      <div className="space-y-6">
+      <div ref={ref} className="space-y-6">
         {groupByTier(visible).map((group) => {
           const size = tierSizes.get(group.tier) ?? group.entries.length
           return (
@@ -138,7 +141,7 @@ const ProjectionCard = memo(function ProjectionCard({
   const weather = projection.context.weather
 
   return (
-    <li className="deferred-card">
+    <li data-flip-key={projection.player.player_id} className="deferred-card">
       <Link
         to={`/players/${encodeURIComponent(projection.player.player_id)}`}
         className="bg-surface border-line hover:border-line-strong focus-visible:outline-focus block rounded-[var(--radius-card)] border p-4 shadow-card transition-colors"

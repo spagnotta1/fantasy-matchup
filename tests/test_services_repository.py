@@ -461,3 +461,28 @@ class TestMissingRelations:
         assert await repository.relation_exists(warehouse, "projections") is True
         repository.clear_relation_cache()
         assert await repository.relation_exists(warehouse, "nonexistent_table") is False
+
+
+class TestCurrentTeams:
+    """Former franchise codes stay in the dimension but out of the directory."""
+
+    async def _add_former(self, warehouse):
+        from sqlalchemy import text
+
+        await warehouse.execute(
+            text(
+                "INSERT INTO raw_teams (team_abbr, team_name, team_nick, team_conf, team_division) "
+                "VALUES ('OAK', 'Oakland Raiders', 'Raiders', 'AFC', 'AFC West')"
+            )
+        )
+
+    async def test_a_team_off_the_latest_schedule_is_not_current(self, warehouse):
+        await self._add_former(warehouse)
+        current = await repository.fetch_teams(warehouse, current_only=True)
+        assert "OAK" not in [row["team_abbr"] for row in current]
+        assert [row["team_abbr"] for row in current] == ["BUF", "KC"]
+
+    async def test_the_full_dimension_still_resolves_old_codes(self, warehouse):
+        await self._add_former(warehouse)
+        everyone = await repository.fetch_teams(warehouse)
+        assert "OAK" in [row["team_abbr"] for row in everyone]

@@ -110,6 +110,11 @@ def _resolve_correlation(
         "rather than silently dropped — a total missing a starter is wrong in a "
         "direction the caller cannot see. `GET /meta/lineup-slots` serves the "
         "slot vocabulary; `GET /meta/positions` explains the gaps.\n\n"
+        "**Final games are results, not draws.** A player whose game is over "
+        "enters as the points they scored — the official line once loaded, "
+        "ESPN's unofficial box score before then — reported in "
+        "`players[].final`. A game in progress is sampled in full. Send "
+        "`use_final_scores: false` for the pre-kickoff view.\n\n"
         "Nothing is stored. Rosters, simulation history and authentication are "
         "later phases."
     ),
@@ -131,6 +136,7 @@ async def simulate_matchup(
         seed=request.seed,
         correlation_mode=mode,
         correlation_model=correlation_model,
+        use_final_scores=request.use_final_scores,
     )
     return schemas.Envelope[schemas.MatchupSimulationOut](
         data=mappers.matchup_simulation(result),

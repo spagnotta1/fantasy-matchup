@@ -135,18 +135,24 @@ test('my team fills a lineup from a roster in the link, and keeps it out of any 
   expect(page.url()).toContain('roster=')
 })
 
-test('the trade helper states a difference and names its assumption', async ({ page }) => {
-  await page.goto('/rankings')
+test('the trade analyzer weighs two sides and names its assumption', async ({ page }) => {
+  await page.goto('/trade?view=top')
   await settle(page)
-  const ids = await page
-    .locator('main a[href^="/players/"]')
-    .evaluateAll((links) => links.slice(0, 3).map((a) => (a.getAttribute('href') ?? '').split('/').pop()))
-  await page.goto(`/trade?give=${ids[0]}&get=${ids[1]},${ids[2]}`)
-  await settle(page)
+  await expect(page.getByRole('heading', { name: 'Top 150' })).toBeVisible()
 
-  await expect(page.getByRole('heading', { name: 'The difference' })).toBeVisible()
-  await expect(page.getByText(/read it as a rate, not a forecast/)).toBeVisible()
-  await expect(page.locator('main').getByText('This week', { exact: true })).toBeVisible()
+  // Build a trade from the board: the top player for the next two.
+  const rows = page.locator('main ol > li')
+  await rows.nth(0).getByRole('button', { name: /to You give$/ }).click()
+  await rows.nth(1).getByRole('button', { name: /to You get$/ }).click()
+  await rows.nth(2).getByRole('button', { name: /to You get$/ }).click()
+  await page.getByRole('tab', { name: 'Trade analyzer' }).click()
+
+  // A lean, worded as a statement about the values rather than a result.
+  await expect(page.getByRole('heading', { name: /^(Favours you|Favours them|Close to even)$/ })).toBeVisible()
+  await expect(page.getByText('Estimated rest-of-season value')).toBeVisible()
+  await page.getByText('How the values work').click()
+  await expect(page.getByText(/It is a rate carried forward, not a forecast/)).toBeVisible()
+  await expect(page.getByText(/a display choice, not a measured margin of error/)).toBeVisible()
 })
 
 test('live scoring is labelled unofficial and never replaces the projection', async ({ page }) => {

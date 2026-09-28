@@ -497,6 +497,19 @@ export type TeamOutlook = z.infer<typeof teamOutlookSchema>
 // Simulation
 // ---------------------------------------------------------------------------
 
+/**
+ * What a player scored in a game that is over. Provenance `actual`. The
+ * simulation used it in every draw in place of the projection.
+ */
+export const finalScoreSchema = z.object({
+  provenance: provenanceSchema,
+  points: z.number(),
+  /** False: ESPN's in-game box score, replaced by the official line later. */
+  official: z.boolean(),
+  source: z.string(),
+})
+export type FinalScore = z.infer<typeof finalScoreSchema>
+
 export const simulatedPlayerSchema = z.object({
   provenance: provenanceSchema,
   player_id: z.string(),
@@ -509,6 +522,7 @@ export const simulatedPlayerSchema = z.object({
   floor: maybeNumber,
   ceiling: maybeNumber,
   simulated_mean: z.number(),
+  final: finalScoreSchema.nullish(),
 })
 export type SimulatedPlayer = z.infer<typeof simulatedPlayerSchema>
 
@@ -581,6 +595,8 @@ export interface SimulationRequest {
   simulation_count?: number
   seed?: number | null
   correlation_mode?: string
+  /** Default true: a player whose game is over enters as what they scored. */
+  use_final_scores?: boolean
   team_a: LineupEntry[]
   team_b: LineupEntry[]
 }
@@ -1132,6 +1148,56 @@ export const valueBoardSchema = z.object({
   market: marketWindowSchema.nullish(),
 })
 export type ValueBoard = z.infer<typeof valueBoardSchema>
+
+// ---------------------------------------------------------------------------
+// Trade values (derived)
+// ---------------------------------------------------------------------------
+
+export const tradeValueSchema = z.object({
+  player: playerSchema,
+  position: z.string(),
+  team: maybeString,
+  /** Provenance `model`: expected points for `rate_week`, read as a per-game rate. */
+  rate: z.number(),
+  rate_week: z.number(),
+  /** The team has no game this week; the rate is from an earlier week. */
+  on_bye: z.boolean(),
+  games_left: z.number(),
+  /** Provenance `derived`: share of games the player is usually available for. */
+  availability: z.number(),
+  availability_basis: z.string(),
+  expected_games: z.number(),
+  /** Rate × expected games. A rate carried forward, not a forecast. */
+  rest_of_season: z.number(),
+  value_over_replacement: z.number(),
+  /** Rest-of-season points above the waiver wire, floored at zero. */
+  trade_value: z.number(),
+  overall_rank: z.number(),
+  position_rank: z.number(),
+})
+export type TradeValue = z.infer<typeof tradeValueSchema>
+
+export const tradeReplacementSchema = z.object({
+  position: z.string(),
+  rostered: z.number(),
+  value: z.number(),
+  player_id: maybeString,
+  name: maybeString,
+})
+export type TradeReplacement = z.infer<typeof tradeReplacementSchema>
+
+export const tradeValuesSchema = z.object({
+  provenance: provenanceSchema,
+  applied_to_projection: z.boolean(),
+  season: z.number(),
+  week: z.number(),
+  teams: z.number(),
+  roster_size: z.number(),
+  remaining_weeks: z.array(z.number()),
+  replacement: z.array(tradeReplacementSchema),
+  values: z.array(tradeValueSchema),
+})
+export type TradeValues = z.infer<typeof tradeValuesSchema>
 
 // ---------------------------------------------------------------------------
 // Depth chart (context) and live scoring (actual, unofficial)

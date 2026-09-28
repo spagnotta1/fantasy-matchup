@@ -35,6 +35,7 @@ from .routers import (
     players,
     projections,
     simulations,
+    trade,
 )
 from .spa import mount_frontend
 
@@ -240,6 +241,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         insights.router,
         simulations.router,
         draft.router,
+        trade.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
 

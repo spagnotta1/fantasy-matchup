@@ -279,6 +279,37 @@ test('a full simulation runs and reports a result', async ({ page }) => {
   await expect(page.locator('main')).toContainText(/iterations|seed/i)
 })
 
+test('autofill for your side uses your My team roster, never the rest of the board', async ({ page }) => {
+  // A roster of mid-board players: none of them is who a best-available fill
+  // would pick first, so any stranger in the lineup shows up in the URL.
+  await page.goto('/rankings')
+  await settle(page)
+  const board = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/projections?limit=1000')
+    const body = (await response.json()) as { data: { projection: { player: { player_id: string; position: string } } }[] }
+    return body.data.map((entry) => entry.projection.player)
+  })
+  const take = (position: string, count: number, skip: number) =>
+    board.filter((player) => player.position === position).slice(skip, skip + count).map((player) => player.player_id)
+  const roster = [...take('QB', 1, 8), ...take('RB', 3, 12), ...take('WR', 3, 15), ...take('TE', 1, 6)]
+  await page.evaluate((ids) => {
+    localStorage.setItem('nflfp.roster', JSON.stringify(ids))
+    localStorage.removeItem('nflfp.lineup')
+  }, roster)
+
+  await page.goto('/simulation')
+  await settle(page)
+  const fill = page.getByRole('button', { name: 'Autofill from My team' })
+  await expect(fill).toBeEnabled()
+  await fill.click()
+
+  // The lineup is mirrored into `?a=` as slot:id pairs — every one must be ours.
+  await expect.poll(() => new URL(page.url()).searchParams.get('a') ?? '').not.toBe('')
+  const placed = (new URL(page.url()).searchParams.get('a') ?? '').split(',').map((pair) => pair.split(':')[1])
+  expect(placed).toHaveLength(7)
+  for (const id of placed) expect(roster).toContain(id)
+})
+
 test('a shared matchup link rebuilds both lineups', async ({ page, context }) => {
   await page.goto('/simulation')
   await settle(page)

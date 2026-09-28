@@ -143,3 +143,24 @@ export function useLive() {
     placeholderData: keepPreviousSubject('live'),
   })
 }
+
+/**
+ * Rest-of-season trade values for the slate's week.
+ *
+ * Every number is `derived`: this week's projection carried over the games
+ * left, measured from the waiver wire. It changes only when a run publishes.
+ */
+export function useTradeValues() {
+  const slate = useSlate()
+  const params = { season: slate.season, week: slate.week, scoringProfile: slate.scoringProfile }
+  const subject = `${slate.season}-${slate.week}`
+
+  return useQuery({
+    queryKey: queryKeys.insights.tradeValues(params),
+    queryFn: ({ signal }) => insightsApi.getTradeValues(params, signal),
+    enabled: slate.resolved,
+    staleTime: 5 * 60 * 1000,
+    meta: { subject },
+    placeholderData: keepPreviousSubject(subject),
+  })
+}

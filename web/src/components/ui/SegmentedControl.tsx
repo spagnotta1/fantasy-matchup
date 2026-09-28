@@ -1,5 +1,6 @@
 import { useId } from 'react'
 
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { cn } from '@/utils/cn'
 
 export interface SegmentOption<T extends string> {
@@ -35,26 +36,38 @@ export function SegmentedControl<T extends string>({
   className,
 }: SegmentedControlProps<T>) {
   const name = useId()
+  // One raised pill that slides to the chosen option. Until it has been
+  // measured the chosen label draws its own, so nothing is ever unmarked.
+  const [ref, pill] = useSlidingIndicator<HTMLDivElement>(value)
 
   return (
     <div
+      ref={ref}
       role="radiogroup"
       aria-label={label}
       className={cn(
-        'bg-surface-sunken border-line inline-flex items-center gap-0.5 rounded-[var(--radius-control)] border p-0.5',
+        'bg-surface-sunken border-line relative inline-flex items-center gap-0.5 rounded-[var(--radius-control)] border p-0.5',
         className,
       )}
     >
+      {pill && (
+        <span
+          aria-hidden
+          className="bg-surface shadow-card absolute rounded-[calc(var(--radius-control)-2px)]"
+          style={pill}
+        />
+      )}
       {options.map((option) => {
         const selected = option.value === value
         return (
           <label
             key={option.value}
+            data-active={selected}
             className={cn(
               'relative inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] font-medium transition-colors',
               size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3 text-sm',
               selected
-                ? 'bg-surface text-ink shadow-card'
+                ? cn('text-ink', !pill && 'bg-surface shadow-card')
                 : 'text-ink-muted hover:text-ink-secondary',
               'focus-within:outline-focus focus-within:outline-2 focus-within:outline-offset-2',
             )}

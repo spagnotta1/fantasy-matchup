@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 import type { Player } from '@/api/schemas'
 
-/** Rendered diameter of each avatar size, in CSS pixels. Matches `size-8/10/16`. */
-const AVATAR_PX = { sm: 32, md: 40, lg: 64 } as const
+/** Rendered diameter of each avatar size, in CSS pixels. Matches `size-8/10/16/28`. */
+const AVATAR_PX = { sm: 32, md: 40, lg: 64, xl: 112 } as const
 
 /** The transform segment nflverse's headshot URLs carry: format and quality only. */
 const HEADSHOT_TRANSFORM = /\/image\/(upload|private)\/f_auto,q_auto\//
@@ -36,11 +36,18 @@ function sizedHeadshot(url: string, px: number): string {
 export function PlayerAvatar({
   player,
   size = 'md',
+  className,
 }: {
   player: Pick<Player, 'name' | 'headshot_url'>
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
+  className?: string
 }) {
-  const sizes = { sm: 'size-8 text-[0.625rem]', md: 'size-10 text-xs', lg: 'size-16 text-lg' } as const
+  const sizes = {
+    sm: 'size-8 text-[0.625rem]',
+    md: 'size-10 text-xs',
+    lg: 'size-16 text-lg',
+    xl: 'size-28 text-3xl',
+  } as const
   const px = AVATAR_PX[size]
   const initials = player.name
     .split(' ')
@@ -53,11 +60,15 @@ export function PlayerAvatar({
       className={cn(
         'bg-surface-sunken text-ink-muted relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold',
         sizes[size],
+        className,
       )}
     >
       {/* Initials sit underneath rather than in a fallback branch: the headshot
           host is external, and an image that 404s should reveal them without a
-          load-error handler and a re-render. */}
+          re-render. The headshots are cut-outs on a transparent ground, so the
+          image carries the avatar's own fill — otherwise the initials showed
+          through either side of the player's head. A failed load hides the
+          image in the DOM directly, which is what lets the initials back. */}
       <span aria-hidden>{initials}</span>
       {player.headshot_url && (
         <img
@@ -68,7 +79,10 @@ export function PlayerAvatar({
           alt=""
           loading="lazy"
           decoding="async"
-          className="absolute inset-0 size-full object-cover"
+          onError={(event) => {
+            event.currentTarget.hidden = true
+          }}
+          className="bg-surface-sunken absolute inset-0 size-full object-cover"
         />
       )}
     </span>

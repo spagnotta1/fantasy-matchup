@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
 
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -40,7 +41,7 @@ export function ProjectionValue({
   className,
 }: {
   points: Points | null | undefined
-  size?: 'sm' | 'md' | 'lg' | 'xl'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'hero'
   markUncalibrated?: boolean
   actualPoints?: number | null
   className?: string
@@ -52,6 +53,7 @@ export function ProjectionValue({
     md: 'text-base',
     lg: 'text-2xl',
     xl: 'text-4xl',
+    hero: 'text-5xl leading-none font-bold sm:text-6xl',
   } as const
 
   return (
@@ -113,6 +115,21 @@ export function OutcomeRange({
   scaleMax,
   /** `lg` where one range is the subject of the screen, as on a player page. */
   size = 'md',
+  /**
+   * Points actually scored, provenance `actual`, drawn as the ball.
+   *
+   * The Live page's reason for being: the ball moves down the field the
+   * player's projection was drawn on, so "ahead of his range" or "past the
+   * line" is visible before any number is read. It is a different kind of
+   * number from everything else on the strip and is labelled as such.
+   */
+  actual,
+  /**
+   * Leave out the printed floor and ceiling beside the strip. Only for a
+   * caller that prints them elsewhere in the same row, as the Live table's
+   * projection cell does; a strip on its own is not readable without them.
+   */
+  hideEndpoints = false,
   className,
 }: {
   floor: number | null | undefined
@@ -124,6 +141,8 @@ export function OutcomeRange({
   threshold?: number | null
   scaleMax?: number
   size?: 'md' | 'lg'
+  actual?: number | null
+  hideEndpoints?: boolean
   className?: string
 }) {
   const large = size === 'lg'
@@ -144,8 +163,13 @@ export function OutcomeRange({
   const box = has(p25) && has(p75) ? { left: at(p25), width: Math.max(at(p75) - at(p25), 1) } : null
   const marker = has(median) ? at(median) : null
   const line = has(threshold) && threshold > 0 && threshold < max ? at(threshold) : null
+  // Kept a hair inside the strip so a ball at zero, or past the end of the
+  // scale, is drawn whole rather than half clipped by the rounded edge. The
+  // exact number is in the label and beside the strip.
+  const ball = has(actual) ? Math.max(2, Math.min(98, at(actual))) : null
 
   const label = [
+    ball !== null ? `${formatPoints(actual)} points scored so far` : null,
     `8 in 10 outcomes between ${formatPoints(floor)} and ${formatPoints(ceiling)} points`,
     box ? `middle half ${formatPoints(p25)} to ${formatPoints(p75)}` : null,
     has(median) ? `median ${formatPoints(median)}` : null,
@@ -156,11 +180,14 @@ export function OutcomeRange({
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      <span className="tnum text-ink-muted w-9 shrink-0 text-right text-xs">
-        {formatPoints(floor)}
-      </span>
+      {!hideEndpoints && (
+        <span className="tnum text-ink-muted w-9 shrink-0 text-right text-xs">
+          {formatPoints(floor)}
+        </span>
+      )}
+      <YardReadout max={max}>
       <div
-        className={cn('bg-field relative min-w-20 flex-1 overflow-hidden rounded-md', large ? 'h-11' : 'h-6')}
+        className={cn('bg-field relative w-full overflow-hidden rounded-md', large ? 'h-11' : 'h-6')}
         style={{
           backgroundImage: `repeating-linear-gradient(to right, var(--color-field-line) 0 1px, transparent 1px ${(YARD_LINE_POINTS / max) * 100}%)`,
         }}
@@ -197,8 +224,78 @@ export function OutcomeRange({
             }}
           />
         )}
+        {ball !== null && (
+          // Ink with a field-coloured halo, so it reads over the whisker and
+          // the box alike. Slides when the score changes; the reduced-motion
+          // rule turns the slide into a jump.
+          <svg
+            aria-hidden
+            viewBox="0 0 22 14"
+            className={cn(
+              'absolute top-1/2 -translate-x-1/2 -translate-y-1/2 drop-shadow-sm transition-[left] duration-700 ease-out',
+              large ? 'w-7' : 'w-5',
+            )}
+            style={{ left: `${ball}%` }}
+          >
+            <ellipse cx="11" cy="7" rx="10" ry="6" fill="var(--color-ink)" stroke="var(--color-field)" strokeWidth="1.5" />
+            <path
+              d="M7 7h8M9 5.4v3.2M11 5.4v3.2M13 5.4v3.2"
+              stroke="var(--color-field)"
+              strokeWidth="1.1"
+              strokeLinecap="round"
+            />
+          </svg>
+        )}
       </div>
-      <span className="tnum text-ink-muted w-9 shrink-0 text-xs">{formatPoints(ceiling)}</span>
+      </YardReadout>
+      {!hideEndpoints && (
+        <span className="tnum text-ink-muted w-9 shrink-0 text-xs">{formatPoints(ceiling)}</span>
+      )}
+    </div>
+  )
+}
+
+/**
+ * A yard marker that follows the mouse along a strip: where on the scale the
+ * pointer is, in points.
+ *
+ * The strip is a ruler with a line every five points and no numbers on it;
+ * this is the numbers, on demand. It reads the scale and nothing else — it
+ * never claims a probability for the spot it points at, because the API
+ * publishes five percentiles, not a curve to look one up on.
+ *
+ * Mouse only. On touch the first tap is a navigation (rows and cards are
+ * links), and a readout that sticks after the finger lifts is noise.
+ */
+function YardReadout({ max, children }: { max: number; children: ReactNode }) {
+  const [at, setAt] = useState<number | null>(null)
+  return (
+    <div
+      className="relative min-w-20 flex-1"
+      onPointerMove={(event) => {
+        if (event.pointerType !== 'mouse') return
+        const box = event.currentTarget.getBoundingClientRect()
+        setAt(Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)))
+      }}
+      onPointerLeave={() => setAt(null)}
+    >
+      {children}
+      {at !== null && (
+        <>
+          <span
+            aria-hidden
+            className="bg-ink/60 pointer-events-none absolute inset-y-0 w-px"
+            style={{ left: `${at * 100}%` }}
+          />
+          <span
+            aria-hidden
+            className="bg-ink text-surface tnum pointer-events-none absolute -top-5 z-10 -translate-x-1/2 rounded px-1.5 py-px text-[0.625rem] font-semibold whitespace-nowrap shadow-card"
+            style={{ left: `${at * 100}%` }}
+          >
+            {Math.round(at * max)} pts
+          </span>
+        </>
+      )}
     </div>
   )
 }

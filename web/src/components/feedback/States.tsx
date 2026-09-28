@@ -42,6 +42,8 @@ export function ErrorState({
       <span className="bg-negative-soft text-negative-text flex size-10 items-center justify-center rounded-full">
         <Icon aria-hidden className="size-5" />
       </span>
+      {/* The product's voice, above the plain title that says what happened. */}
+      <Eyebrow>{offline ? 'Delay of game' : 'Flag on the play'}</Eyebrow>
       <h3 className="text-ink text-sm font-semibold">{title}</h3>
       <p className="text-ink-secondary max-w-sm text-sm leading-relaxed">{description}</p>
 
@@ -97,8 +99,20 @@ export function EmptyState({
    * a property of where the component is used, so the caller names it.
    */
   titleAs: Title = 'h3',
+  /**
+   * A short football line above the title, e.g. "Incomplete pass".
+   *
+   * Personality, kept to empty and error states — never beside a number,
+   * where copy has to stay literal. The title under it still says, plainly,
+   * what is going on.
+   */
+  eyebrow,
+  /** Drawn in place of the round icon badge, at its own size. */
+  illustration,
 }: {
   title: string
+  eyebrow?: string
+  illustration?: ReactNode
   description: ReactNode
   action?: ReactNode
   icon?: ReactNode
@@ -109,9 +123,12 @@ export function EmptyState({
     <div
       className={cn('flex flex-col items-center justify-center gap-3 px-6 py-14 text-center', className)}
     >
-      <span className="bg-surface-sunken text-ink-muted flex size-10 items-center justify-center rounded-full">
-        {icon ?? <Inbox aria-hidden className="size-5" />}
-      </span>
+      {illustration ?? (
+        <span className="bg-surface-sunken text-ink-muted flex size-10 items-center justify-center rounded-full">
+          {icon ?? <Inbox aria-hidden className="size-5" />}
+        </span>
+      )}
+      {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
       <Title className="text-ink text-sm font-semibold">{title}</Title>
       <p className="text-ink-secondary max-w-sm text-sm leading-relaxed">{description}</p>
       {action && <div className="mt-1">{action}</div>}
@@ -221,5 +238,11 @@ export function NoticeList({
         </div>
       </div>
     </aside>
+  )
+}
+
+function Eyebrow({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-ink-muted -mb-2 text-[0.6875rem] font-bold tracking-[0.14em] uppercase">{children}</p>
   )
 }

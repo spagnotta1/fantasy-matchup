@@ -24,12 +24,28 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
+from typing import Any
+
+from .errors import PermanentProviderError
 from .http import JsonHttpClient
 from .odds import ESPN_SCOREBOARD_URL, ESPN_TEAM_FIXUPS
 
 logger = logging.getLogger(__name__)
 
 ESPN_SUMMARY_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary"
+
+#: ESPN serves the same site API under a second hostname. Verified identical for
+#: the scoreboard and the summary box score (2026-09-27). The two sit behind
+#: different edge rules: on 2026-09-27 the primary host began answering the
+#: deployed API with HTTP 403 while the same request from elsewhere succeeded.
+ESPN_PRIMARY_HOST = "site.api.espn.com"
+ESPN_FALLBACK_HOST = "site.web.api.espn.com"
+
+#: A plain, honest client name, tried when the browser-shaped default is
+#: refused. ESPN's edge scores the User-Agent together with where a request
+#: comes from, and which one it accepts has been seen to differ by origin, so
+#: neither is assumed to be the one that works.
+PLAIN_USER_AGENT = "nflfp/0.1 (+https://github.com/spagnotta1/nfl-fantasy)"
 
 #: Box scores fetched at once. A slate is sixteen games; eight in flight keeps a
 #: cold fetch near two round-trips without looking like a burst to the upstream.
@@ -202,27 +218,86 @@ class EspnLiveProvider:
         summary_url: str = ESPN_SUMMARY_URL,
     ) -> None:
         self._client = client or JsonHttpClient(provider_name=self.name)
+        # An injected client is a test's or a caller's choice, and is used as
+        # given. Only the default client gets the second User-Agent.
+        self._plain_client = (
+            None
+            if client is not None
+            else JsonHttpClient(provider_name=self.name, user_agent=PLAIN_USER_AGENT)
+        )
         self._scoreboard_url = scoreboard_url
         self._summary_url = summary_url
+
+    def fetch_scoreboard(self, season: int, week: int) -> list[LiveGame]:
+        """The week's games and their state. Blocking; raises on an upstream failure."""
+        payload = self._get(
+            self._scoreboard_url, {"dates": season, "seasontype": 2, "week": week}
+        )
+        return parse_scoreboard(payload)
+
+    def fetch_box(self, event_id: str) -> list[LiveLine]:
+        """One game's box score. Blocking; raises on an upstream failure."""
+        summary = self._get(self._summary_url, {"event": event_id})
+        return parse_boxscore(summary, event_id)
+
+    #: The route that last worked, shared across instances: the live endpoint
+    #: builds a provider per request, and a week's sixteen box scores should not
+    #: each rediscover that the first route is refused.
+    _preferred_route: tuple[bool, bool] = (False, False)
+
+    def _routes(self) -> list[tuple[bool, bool]]:
+        """(use fallback host, use plain UA), the last good one first."""
+        routes = [(False, False), (True, False)]
+        if self._plain_client is not None:
+            routes += [(False, True), (True, True)]
+        preferred = EspnLiveProvider._preferred_route
+        if preferred in routes:
+            routes.remove(preferred)
+            routes.insert(0, preferred)
+        return routes
+
+    def _get(self, url: str, params: dict[str, Any]) -> Any:
+        """GET through the first route ESPN accepts.
+
+        Only a refusal (a permanent HTTP error such as 403) moves on to the next
+        route. A timeout or a 5xx has already been retried by the client and is
+        not something another hostname would fix, so it is raised as it is.
+        """
+        last: PermanentProviderError | None = None
+        for fallback_host, plain in self._routes():
+            target = url.replace(ESPN_PRIMARY_HOST, ESPN_FALLBACK_HOST) if fallback_host else url
+            client = self._plain_client if plain and self._plain_client else self._client
+            try:
+                payload = client.get_json(target, params)
+            except PermanentProviderError as exc:
+                last = exc
+                continue
+            if (fallback_host, plain) != EspnLiveProvider._preferred_route:
+                logger.warning(
+                    "%s: switched route to host=%s ua=%s after a refusal",
+                    self.name,
+                    ESPN_FALLBACK_HOST if fallback_host else ESPN_PRIMARY_HOST,
+                    "plain" if plain else "default",
+                )
+                EspnLiveProvider._preferred_route = (fallback_host, plain)
+            return payload
+        assert last is not None
+        raise last
 
     def fetch_week(self, season: int, week: int) -> LiveWeek:
         """Blocking. Call from a worker thread, never from the event loop."""
         result = LiveWeek()
         try:
-            payload = self._client.get_json(
-                self._scoreboard_url, {"dates": season, "seasontype": 2, "week": week}
-            )
+            result.games = self.fetch_scoreboard(season, week)
         except Exception as exc:
             logger.warning("%s: scoreboard %s week %s failed: %s", self.name, season, week, exc)
             result.warnings.append(f"scoreboard unavailable: {exc}")
             return result
 
-        result.games = parse_scoreboard(payload)
         started = [game for game in result.games if game.state in ("in", "post")]
 
         def box(game: LiveGame) -> list[LiveLine]:
-            summary = self._client.get_json(self._summary_url, {"event": game.event_id})
-            return parse_boxscore(summary, game.event_id)
+            return self.fetch_box(game.event_id)
 
         with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as pool:
             futures = {game.event_id: pool.submit(box, game) for game in started}

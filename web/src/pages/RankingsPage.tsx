@@ -216,6 +216,7 @@ export default function RankingsPage() {
             ) : !active.data || entries.length === 0 ? (
               <EmptyState
                 icon={<SearchX aria-hidden className="size-5" />}
+                eyebrow={filtered ? 'No gain on the play' : undefined}
                 title={filtered ? 'No players match these filters' : 'No rankings for this week'}
                 description={
                   filtered

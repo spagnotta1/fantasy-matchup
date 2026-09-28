@@ -25,6 +25,10 @@ const SHOWN = 6
  * ends. What is shown instead is the published P10 and P90 and the distance
  * between them, which is a subtraction of two numbers the API returned.
  *
+ * A player whose game is over is left out: their score is settled and they
+ * cannot swing anything. Their published range is still a fact, but ranking it
+ * here would point at a week that has already happened.
+ *
  * Nor is it a sensitivity analysis. Nothing here re-runs the simulation with a
  * player removed; the ordering is by how wide each player's own range is, which
  * is the honest reading of "who could swing this".
@@ -47,10 +51,14 @@ export function SwingFactors({
     .sort((left, right) => right.spread - left.spread)
     .slice(0, SHOWN)
 
+  const settled = [...playersA, ...playersB].filter((player) => player.final).length
+
   if (swings.length === 0) {
     return (
       <p className="text-ink-muted text-sm">
-        No scoring ranges are available for these players, so there is nothing to rank.
+        {settled > 0
+          ? 'Every player on both sides has finished their game, so nobody is left to swing it.'
+          : 'No scoring ranges are available for these players, so there is nothing to rank.'}
       </p>
     )
   }
@@ -121,6 +129,8 @@ export function SwingFactors({
         Ranked by the gap between each player&apos;s floor and ceiling — a bad week and a big one,
         each about 1 week in 10. The marker is the projection, which is often off-centre because a
         big week can run further above it than a bad week falls below it.
+        {settled > 0 &&
+          ` ${settled} player${settled === 1 ? ' has' : 's have'} finished ${settled === 1 ? 'their game' : 'their games'} and ${settled === 1 ? 'is' : 'are'} left out.`}
       </p>
     </div>
   )
@@ -129,6 +139,7 @@ export function SwingFactors({
 function collect(players: SimulatedPlayer[], side: string): Swing[] {
   const swings: Swing[] = []
   for (const player of players) {
+    if (player.final) continue
     const { floor, ceiling } = player
     if (floor === null || floor === undefined || ceiling === null || ceiling === undefined) continue
     swings.push({ player, side, floor, ceiling, spread: ceiling - floor })

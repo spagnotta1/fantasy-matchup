@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom'
 import { CalendarX, ChevronRight } from 'lucide-react'
 
-import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
+import { MatchupColorBar, ScoreBugTeam } from '@/components/domain/ScoreBug'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState, ErrorState, Refreshing } from '@/components/feedback/States'
 import { useGames } from '@/hooks/useMatchups'
@@ -47,6 +47,7 @@ export function GameList({ selectedGameId }: { selectedGameId?: string }) {
       <Card>
         <EmptyState
           icon={<CalendarX aria-hidden className="size-5" />}
+          eyebrow="Bye week"
           title="No games scheduled"
           description="There are no games in the selected week. Pick another week at the top of the page."
         />
@@ -73,43 +74,61 @@ function GameCard({ game, selected }: { game: Game; selected: boolean }) {
     game.home_score !== undefined &&
     game.away_score !== null &&
     game.away_score !== undefined
+  const awayScore = game.away_score ?? 0
+  const homeScore = game.home_score ?? 0
+
+  // Market lines as one quiet line of text rather than a row of chips: on a
+  // slate of sixteen identical cards, three pills each was the loudest thing
+  // on the page. "Upcoming" is gone for the same reason — the kickoff date
+  // under it already says so.
+  const lines = [
+    game.home_spread !== null && game.home_spread !== undefined ? describeSpread(game) : null,
+    game.total_line !== null && game.total_line !== undefined ? `O/U ${formatPoints(game.total_line)}` : null,
+  ].filter(Boolean)
 
   return (
     <Link
       to={`/matchups/${encodeURIComponent(game.game_id)}`}
       aria-current={selected ? 'true' : undefined}
       className={[
-        'bg-surface hover:border-line-strong focus-visible:outline-focus group block h-full rounded-[var(--radius-card)] border p-4 shadow-card transition-colors',
+        'bg-surface hover:border-line-strong focus-visible:outline-focus group relative block h-full overflow-hidden rounded-[var(--radius-card)] border px-4 pt-5 pb-4 shadow-card transition-[border-color,transform,box-shadow] hover:-translate-y-0.5 hover:shadow-raised',
         selected ? 'border-accent ring-accent/30 ring-2' : 'border-line',
       ].join(' ')}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-ink text-sm font-semibold tracking-tight">
-          {game.away_team} <span className="text-ink-muted font-normal">at</span> {game.home_team}
-        </p>
+      <MatchupColorBar away={game.away_team} home={game.home_team} />
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <ScoreBugTeam
+            team={game.away_team}
+            score={completed ? game.away_score : undefined}
+            trailing={completed && awayScore < homeScore}
+          />
+          <ScoreBugTeam
+            team={game.home_team}
+            score={completed ? game.home_score : undefined}
+            trailing={completed && homeScore < awayScore}
+          >
+            <span className="text-ink-muted mr-1 font-normal">at</span>
+            {game.home_team}
+          </ScoreBugTeam>
+        </div>
         <ChevronRight
           aria-hidden
-          className="text-ink-muted group-hover:text-ink size-4 shrink-0 transition-colors"
+          className="text-ink-muted group-hover:text-ink mt-0.5 size-4 shrink-0 transition-colors"
         />
       </div>
 
-      <p className="text-ink-muted mt-0.5 text-xs">{formatGameDay(game.gameday)}</p>
-
-      {completed && (
-        <p className="text-ink-secondary tnum mt-2 text-sm">
-          Final {game.away_team} {game.away_score} — {game.home_team} {game.home_score}
-        </p>
-      )}
-
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        {game.home_spread !== null && game.home_spread !== undefined && (
-          <Badge tone="neutral">{describeSpread(game)}</Badge>
-        )}
-        {game.total_line !== null && game.total_line !== undefined && (
-          <Badge tone="neutral">O/U {formatPoints(game.total_line)}</Badge>
-        )}
-        {!completed && game.is_upcoming && <Badge tone="info">Upcoming</Badge>}
-      </div>
+      <p className="text-ink-muted border-line mt-3 flex flex-wrap gap-x-2 border-t pt-2.5 text-xs">
+        <span className={completed ? 'text-ink font-semibold' : undefined}>
+          {completed ? 'Final' : formatGameDay(game.gameday)}
+        </span>
+        {lines.map((line) => (
+          <span key={line} className="tnum">
+            <span aria-hidden className="mr-2">·</span>
+            {line}
+          </span>
+        ))}
+      </p>
     </Link>
   )
 }

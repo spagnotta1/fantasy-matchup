@@ -166,3 +166,68 @@ class TestDepthGrouping:
         assert list(grouped) == ["QB", "RB", "WR", "TE"]
         assert [e.name for e in grouped["WR"]] == ["A", "B"]
         assert grouped["RB"] == ()
+
+
+class TestRefusalFallback:
+    """ESPN answering 403 moves to the next route rather than failing the page."""
+
+    SCOREBOARD = {"events": []}
+
+    class Client:
+        def __init__(self, name, refuse, calls):
+            self.name, self.refuse, self.calls = name, refuse, calls
+
+        def get_json(self, url, params=None):
+            self.calls.append((self.name, url.split("/")[2]))
+            if (self.name, url.split("/")[2]) in self.refuse:
+                from nflfp.providers.errors import PermanentProviderError
+
+                raise PermanentProviderError("HTTP 403 from espn", provider="espn-live")
+            return {"events": []}
+
+    @pytest.fixture(autouse=True)
+    def _fresh_route(self, monkeypatch):
+        from nflfp.providers.live import EspnLiveProvider
+
+        monkeypatch.setattr(EspnLiveProvider, "_preferred_route", (False, False))
+
+    def provider(self, refuse):
+        from nflfp.providers.live import EspnLiveProvider
+
+        calls: list = []
+        live = EspnLiveProvider()
+        live._client = self.Client("default", refuse, calls)
+        live._plain_client = self.Client("plain", refuse, calls)
+        return live, calls
+
+    def test_a_refused_primary_host_falls_back_to_the_second(self):
+        live, calls = self.provider({("default", "site.api.espn.com")})
+        assert live.fetch_scoreboard(2026, 3) == []
+        assert calls == [("default", "site.api.espn.com"), ("default", "site.web.api.espn.com")]
+
+    def test_a_refused_user_agent_falls_back_to_the_plain_one(self):
+        live, calls = self.provider(
+            {("default", "site.api.espn.com"), ("default", "site.web.api.espn.com")}
+        )
+        live.fetch_scoreboard(2026, 3)
+        assert calls[-1] == ("plain", "site.api.espn.com")
+
+    def test_the_working_route_is_remembered(self):
+        live, calls = self.provider({("default", "site.api.espn.com")})
+        live.fetch_scoreboard(2026, 3)
+        calls.clear()
+        live.fetch_scoreboard(2026, 3)
+        assert calls == [("default", "site.web.api.espn.com")]
+
+    def test_every_route_refused_raises_the_refusal(self):
+        from nflfp.providers.errors import PermanentProviderError
+
+        everything = {
+            (name, host)
+            for name in ("default", "plain")
+            for host in ("site.api.espn.com", "site.web.api.espn.com")
+        }
+        live, calls = self.provider(everything)
+        with pytest.raises(PermanentProviderError):
+            live.fetch_scoreboard(2026, 3)
+        assert len(calls) == 4

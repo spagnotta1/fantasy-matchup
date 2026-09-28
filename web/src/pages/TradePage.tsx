@@ -1,318 +1,296 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowLeftRight, X } from 'lucide-react'
+import { ArrowLeftRight } from 'lucide-react'
 
-import { Card, CardBody, CardHeader } from '@/components/ui/Card'
+import { Card } from '@/components/ui/Card'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { InfoTip } from '@/components/ui/Tooltip'
-import { EmptyState, NoticeList, Refreshing } from '@/components/feedback/States'
-import { InjuryBadge } from '@/components/domain/InjuryBadge'
-import { PlayerIdentity } from '@/components/domain/PlayerIdentity'
-import { PlayerSearchField } from '@/components/domain/PlayerSearchField'
-import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/feedback/States'
+import { TopValues } from '@/features/trade/TopValues'
+import { TradeSide, type SideRow } from '@/features/trade/TradeSide'
+import { TradeVerdict } from '@/features/trade/TradeVerdict'
+import { SIDE_LIMIT, bestLineup, evenOut, fromRoster, tradeBalance } from '@/features/trade/tradeMath'
+import { eligiblePositions, expandSlots } from '@/features/simulations/lineupFormat'
 import { useSlate } from '@/app/slate-context'
-import { useScheduleStrength } from '@/hooks/useInsights'
+import { useTradeValues } from '@/hooks/useInsights'
 import { useBoard, usePlayers } from '@/hooks/useProjections'
+import { useRoster } from '@/hooks/useRoster'
+import { useLineupCatalog } from '@/hooks/useSimulation'
+import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { cn } from '@/utils/cn'
-import { formatPoints, formatSigned, headlinePoints } from '@/utils/format'
-import { toneForScore } from '@/utils/grades'
-import type { Player, RankedProjection, TeamSchedule } from '@/api/schemas'
-
-const SIDE_LIMIT = 5
-const FANTASY_POSITIONS = ['QB', 'RB', 'WR', 'TE'] as const
+import { headlinePoints } from '@/utils/format'
+import type { Injury, RankedProjection, TradeValue } from '@/api/schemas'
 
 type Side = 'give' | 'get'
-
-interface Valued {
-  id: string
-  player: Player | undefined
-  entry: RankedProjection | undefined
-  weekly: number | null
-  games: number | null
-  restOfSeason: number | null
-  schedule: number | null
-}
+type View = 'trade' | 'top'
 
 function parseIds(value: string | null): string[] {
   return value ? [...new Set(value.split(',').filter(Boolean))].slice(0, SIDE_LIMIT) : []
 }
 
 /**
- * Trade helper: two sides, set against each other on numbers this product can
- * stand behind.
+ * Trade analyzer: two sides weighed on one number that adds up, and the board
+ * that number comes from.
  *
- * There is no rest-of-season projection in this system, and this page does not
- * invent one. What it can say is arithmetic on published numbers:
+ * The number is rest-of-season value above the waiver wire (`/trade/values`):
+ * this week's published projection used as a per-game rate, carried over the
+ * games left and scaled by historical availability, measured from the best
+ * player nobody rosters. It is `derived` and a rate, not a forecast, and the
+ * page says both beside the verdict.
  *
- * - **This week** — each player's published projection (`model`).
- * - **At this week's rate** — that projection times the games his team has left
- *   (`derived`). The same construction the draft pool uses, stated as what it
- *   is: it assumes he plays every remaining game in the role he has now. No
- *   injury, no role change, no regression is in it.
- * - **Schedule** — the mean current-form grade of his remaining opponents at
- *   his position (`derived`), carried forward, not forecast.
- *
- * It sets the two sides side by side and states the difference. It does not
- * declare a winner: roster fit, depth and league settings decide trades, and
- * none of them are in the data.
+ * What the value cannot know is the manager's roster, so when My team holds one
+ * the page also shows the trade's effect on their best starting lineup — the
+ * question a two-for-one actually turns on.
  */
 export default function TradePage() {
   const slate = useSlate()
   const [params, setParams] = useSearchParams()
   const give = parseIds(params.get('give'))
   const get = parseIds(params.get('get'))
+  const view: View = params.get('view') === 'top' ? 'top' : 'trade'
+
+  const values = useTradeValues()
   const board = useBoard()
+  const [rosterIds] = useRoster()
+  const catalog = useLineupCatalog()
   const identities = usePlayers([...give, ...get])
 
-  // One schedule read per position — cached, and shared with the Matchups grid.
-  const schedules = {
-    QB: useScheduleStrength('QB'),
-    RB: useScheduleStrength('RB'),
-    WR: useScheduleStrength('WR'),
-    TE: useScheduleStrength('TE'),
-  }
-
   const byId = useMemo(() => {
+    const map = new Map<string, TradeValue>()
+    for (const value of values.data?.data.values ?? []) map.set(value.player.player_id, value)
+    return map
+  }, [values.data])
+
+  const boardById = useMemo(() => {
     const map = new Map<string, RankedProjection>()
     for (const entry of board.data?.data ?? []) map.set(entry.projection.player.player_id, entry)
     return map
   }, [board.data])
 
-  const setSide = (side: Side, ids: string[]) =>
-    setParams(
-      (current) => {
-        const next = new URLSearchParams(current)
-        if (ids.length) next.set(side, ids.join(','))
-        else next.delete(side)
-        return next
-      },
-      { replace: true },
-    )
+  const injuries = useMemo(() => {
+    const map = new Map<string, Injury | null | undefined>()
+    for (const [id, entry] of boardById) map.set(id, entry.projection.context.injury)
+    return map
+  }, [boardById])
 
-  const value = (id: string, index: number): Valued => {
-    const entry = byId.get(id)
-    const player = entry?.projection.player ?? identities[index]?.data
-    const position = (player?.position ?? '') as (typeof FANTASY_POSITIONS)[number]
-    const team = entry?.projection.team ?? player?.team ?? null
-    const row: TeamSchedule | undefined = schedules[position]?.data?.data.teams.find((t) => t.team === team)
-    const weekly = headlinePoints(entry?.projection.prediction.points).value
-    const games = row ? row.cells.filter((c) => c.opponent).length : null
-    return {
-      id,
-      player,
-      entry,
-      weekly,
-      games,
-      restOfSeason: weekly !== null && games !== null ? weekly * games : null,
-      schedule: row?.mean_score ?? null,
+
+  // Two quick taps land before a re-render, and the second must see the
+  // first. The router's functional update still hands back the params of the
+  // last render, so the latest write is tracked here instead.
+  const latest = useRef(params)
+  latest.current = params
+  const update = (next: Partial<Record<Side | 'view', string | null>>) => {
+    const out = new URLSearchParams(latest.current)
+    for (const [key, value] of Object.entries(next)) {
+      if (value) out.set(key, value)
+      else out.delete(key)
     }
+    latest.current = out
+    setParams(out, { replace: true })
   }
+  const editSides = (edit: (sides: Record<Side, string[]>) => Record<Side, string[]>) => {
+    const current = latest.current
+    const out = new URLSearchParams(current)
+    const next = edit({ give: parseIds(current.get('give')), get: parseIds(current.get('get')) })
+    for (const key of ['give', 'get'] as const) {
+      if (next[key].length) out.set(key, next[key].join(','))
+      else out.delete(key)
+    }
+    latest.current = out
+    setParams(out, { replace: true })
+  }
+  const add = (side: Side, id: string) =>
+    editSides((sides) => {
+      if (sides[side].includes(id) || sides[side].length >= SIDE_LIMIT) return sides
+      const other: Side = side === 'give' ? 'get' : 'give'
+      return { [side]: [...sides[side], id], [other]: sides[other].filter((x) => x !== id) } as Record<Side, string[]>
+    })
+  const remove = (side: Side, id: string) =>
+    editSides((sides) => ({ ...sides, [side]: sides[side].filter((x) => x !== id) }))
 
-  const giveRows = give.map((id, i) => value(id, i))
-  const getRows = get.map((id, i) => value(id, give.length + i))
-  const sum = (rows: Valued[], key: 'weekly' | 'restOfSeason') =>
-    rows.reduce((total, row) => total + (row[key] ?? 0), 0)
+  const rowsFor = (ids: string[], offset: number): SideRow[] =>
+    ids.map((id, index) => {
+      const value = byId.get(id)
+      return {
+        id,
+        value,
+        player: value?.player ?? boardById.get(id)?.projection.player ?? identities[offset + index]?.data,
+        injury: injuries.get(id),
+      }
+    })
+  const giveRows = rowsFor(give, 0)
+  const getRows = rowsFor(get, give.length)
+  const valued = (rows: SideRow[]) => rows.flatMap((row) => (row.value ? [row.value] : []))
+  const giveValues = valued(giveRows)
+  const getValues = valued(getRows)
+  const balance = tradeBalance(giveValues, getValues)
 
-  const weeklyGap = sum(getRows, 'weekly') - sum(giveRows, 'weekly')
-  const seasonGap = sum(getRows, 'restOfSeason') - sum(giveRows, 'restOfSeason')
-  const missing = [...giveRows, ...getRows].filter((r) => r.weekly === null)
+  const roster = useMemo(() => new Set(rosterIds), [rosterIds])
+  const inTrade = new Map<string, Side>([
+    ...give.map((id) => [id, 'give'] as [string, Side]),
+    ...get.map((id) => [id, 'get'] as [string, Side]),
+  ])
+  const pool = values.data?.data.values ?? []
+  const even = evenOut(balance, pool, new Set(inTrade.keys()), roster)
+
+  // This week, on the board's own headline number — a bye or an inactive
+  // listing is no projection, and is named rather than silently zeroed.
+  const weekPoints = (ids: string[]) =>
+    ids.reduce((sum, id) => sum + (headlinePoints(boardById.get(id)?.projection.prediction.points).value ?? 0), 0)
+  const weekGap = weekPoints(get) - weekPoints(give)
+  const weekMissing = [...giveRows, ...getRows]
+    .filter((row) => row.player && headlinePoints(boardById.get(row.id)?.projection.prediction.points).value === null)
+    .map((row) => row.player?.name ?? row.id)
+
+  const lineup = useMemo(() => {
+    if (rosterIds.length === 0 || catalog.isPending) return null
+    const slots = expandSlots(catalog.format)
+    const eligible = (slot: string) => eligiblePositions(catalog.slots, slot)
+    const mine = rosterIds.flatMap((id) => {
+      const value = byId.get(id)
+      return value && !injuries.get(id)?.will_not_play ? [value] : []
+    })
+    const after = [
+      ...mine.filter((value) => !give.includes(value.player.player_id)),
+      ...getValues.filter((value) => !injuries.get(value.player.player_id)?.will_not_play),
+    ]
+    return {
+      before: bestLineup(mine, slots, eligible),
+      after: bestLineup(after, slots, eligible),
+      notOnRoster: giveRows.filter((row) => !roster.has(row.id)).map((row) => row.player?.name ?? row.id),
+    }
+  }, [rosterIds, catalog, byId, injuries, give, getValues, giveRows, roster])
+
+  const rosterSuggestions = rosterIds
+    .flatMap((id) => {
+      const value = byId.get(id)
+      return value && !inTrade.has(id) ? [value] : []
+    })
+    .sort((a, b) => b.trade_value - a.trade_value)
+    .slice(0, 6)
+
   const ready = give.length > 0 && get.length > 0
+  const data = values.data?.data
 
   return (
     <>
       <PageHeader
-        title="Trade helper"
-        question="What does this trade change — this week and for the rest of the season?"
+        title="Trade analyzer"
+        question="Who gets more rest-of-season value in this trade, and what does it do to your lineup?"
       />
 
-      <NoticeList
-        className="mb-6"
-        notices={[
-          '“At this week’s rate” is each player’s projection this week multiplied by the games their team has left. It assumes they play every game in their current role — no injuries, no role change — so read it as a rate, not a forecast.',
-          'The schedule grade shows how each remaining opponent is defending the position right now. It is not a forecast of how those defences will play later.',
-        ]}
-      />
+      <ViewTabs view={view} onChange={(next) => update({ view: next === 'top' ? 'top' : null })} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <SideCard
-          title="You give"
-          side="give"
-          rows={giveRows}
-          allIds={[...give, ...get]}
-          onChange={(ids) => setSide('give', ids)}
-          ids={give}
-        />
-        <SideCard
-          title="You get"
-          side="get"
-          rows={getRows}
-          allIds={[...give, ...get]}
-          onChange={(ids) => setSide('get', ids)}
-          ids={get}
-        />
-      </div>
+      {values.isError ? (
+        <ErrorState error={values.error} onRetry={() => void values.refetch()} />
+      ) : values.isPending ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Skeleton className="h-48 rounded-[var(--radius-card)]" />
+          <Skeleton className="h-48 rounded-[var(--radius-card)]" />
+        </div>
+      ) : data && data.values.length === 0 ? (
+        <>
+          <NoticeList className="mb-4" notices={values.data?.meta.notices ?? []} />
+          <Card>
+            <EmptyState
+              icon={<ArrowLeftRight aria-hidden className="size-5" />}
+              title="No trade values for this week"
+              description="Values are built from the week's published projections. Pick a published week to compare players."
+            />
+          </Card>
+        </>
+      ) : (
+        <Refreshing active={values.isPlaceholderData}>
+          {view === 'top' ? (
+            <TopValues values={pool} injuries={injuries} inTrade={inTrade} onAdd={add} />
+          ) : (
+            <>
+              <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+                <TradeSide
+                  title="You give"
+                  side="give"
+                  rows={giveRows}
+                  total={balance.give}
+                  allIds={[...give, ...get]}
+                  suggestions={rosterSuggestions}
+                  suggestionsLabel="From your team"
+                  onAdd={(id) => add('give', id)}
+                  onRemove={(id) => remove('give', id)}
+                />
+                <TradeSide
+                  title="You get"
+                  side="get"
+                  rows={getRows}
+                  total={balance.get}
+                  allIds={[...give, ...get]}
+                  onAdd={(id) => add('get', id)}
+                  onRemove={(id) => remove('get', id)}
+                />
+              </div>
 
-      <Card className="mt-6">
-        <CardHeader
-          as="h2"
-          title="The difference"
-          description={`What you get minus what you give, from week ${slate.week ?? '—'}.`}
-          action={<ProvenanceBadge provenance="derived" />}
-        />
-        {!ready ? (
-          <EmptyState
-            icon={<ArrowLeftRight aria-hidden className="size-5" />}
-            title="Add a player to each side"
-            description="Search for the players on both sides of the trade to compare them."
-          />
-        ) : (
-          <Refreshing active={board.isPlaceholderData}>
-            <CardBody className="grid gap-4 sm:grid-cols-2">
-              <Gap label="This week" value={weeklyGap} unit="projected points" />
-              <Gap label="At this week’s rate, rest of season" value={seasonGap} unit="points" />
-            </CardBody>
-            {missing.length > 0 && (
-              <CardBody className="border-line text-caution-text border-t py-3 text-xs">
-                {missing.map((r) => r.player?.name ?? r.id).join(', ')} {missing.length === 1 ? 'has' : 'have'} no
-                projection this week (usually a bye week or an inactive listing), so{' '}
-                {missing.length === 1 ? 'counts' : 'count'} as zero above.
-              </CardBody>
-            )}
-          </Refreshing>
-        )}
-      </Card>
+              {ready ? (
+                <TradeVerdict
+                  balance={balance}
+                  even={even}
+                  ownRoster={even !== null && fromRoster(even, roster)}
+                  weekGap={weekGap}
+                  weekMissing={weekMissing}
+                  lineup={lineup}
+                  notices={values.data?.meta.notices ?? []}
+                  replacement={data?.replacement ?? []}
+                  week={slate.week}
+                  onAdd={add}
+                  onClear={() => update({ give: null, get: null })}
+                />
+              ) : (
+                <Card className="mt-4 sm:mt-6">
+                  <EmptyState
+                    icon={<ArrowLeftRight aria-hidden className="size-5" />}
+                    title="Add a player to each side"
+                    description="Search above, tap one of your players, or add from the Top 150."
+                  />
+                </Card>
+              )}
+            </>
+          )}
+        </Refreshing>
+      )}
     </>
   )
 }
 
-function Gap({ label, value, unit }: { label: string; value: number; unit: string }) {
+function ViewTabs({ view, onChange }: { view: View; onChange: (view: View) => void }) {
+  const [ref, underline] = useSlidingIndicator<HTMLDivElement>(view)
+  const tabs: { id: View; label: string }[] = [
+    { id: 'trade', label: 'Trade analyzer' },
+    { id: 'top', label: 'Top 150' },
+  ]
   return (
-    <div>
-      <p className="text-ink-muted text-xs font-medium tracking-wide uppercase">{label}</p>
-      <p
-        className={cn(
-          'tnum mt-1 text-2xl font-semibold tracking-tight',
-          value > 0 ? 'text-positive-text' : value < 0 ? 'text-negative-text' : 'text-ink',
-        )}
-      >
-        {formatSigned(value)}
-      </p>
-      <p className="text-ink-muted text-xs">{unit}, for the side you get</p>
-    </div>
-  )
-}
-
-const SCORE_CLASSES = {
-  positive: 'bg-positive-soft text-positive-text',
-  info: 'bg-info-soft text-info-text',
-  neutral: 'bg-surface-sunken text-ink-secondary',
-  caution: 'bg-caution-soft text-caution-text',
-  negative: 'bg-negative-soft text-negative-text',
-  accent: 'bg-accent-soft text-accent-text',
-} as const
-
-function SideCard({
-  title,
-  side,
-  rows,
-  ids,
-  allIds,
-  onChange,
-}: {
-  title: string
-  side: Side
-  rows: Valued[]
-  ids: string[]
-  allIds: string[]
-  onChange: (ids: string[]) => void
-}) {
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader as="h2" title={title} />
-      <CardBody className="border-line border-b">
-        <PlayerSearchField
-          label={`Add a player you ${side}`}
-          size="sm"
-          positions={[...FANTASY_POSITIONS]}
-          excludeIds={allIds}
-          disabled={ids.length >= SIDE_LIMIT}
-          hint={ids.length >= SIDE_LIMIT ? `Up to ${SIDE_LIMIT} players a side.` : undefined}
-          onSelect={(player) => onChange([...ids, player.player_id])}
+    <div ref={ref} role="tablist" aria-label="Trade view" className="border-line relative mb-4 flex gap-1 border-b sm:mb-5">
+      {underline && (
+        <span
+          aria-hidden
+          className="bg-accent pointer-events-none absolute h-0.5 rounded-full"
+          style={{ ...underline, top: undefined, height: undefined, bottom: -1 }}
         />
-      </CardBody>
-      {rows.length === 0 ? (
-        <p className="text-ink-muted px-4 py-6 text-center text-sm">No players yet.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <caption className="sr-only">{title}</caption>
-            <thead>
-              <tr className="border-line text-ink-muted border-b text-xs font-medium tracking-wide uppercase">
-                <th scope="col" className="px-3 py-2 text-left">Player</th>
-                <th scope="col" className="px-3 py-2 text-right">Week</th>
-                <th scope="col" className="px-3 py-2 text-right">
-                  <span className="inline-flex items-center gap-1">
-                    Rate × games
-                    <InfoTip
-                      label="About rate times games"
-                      content="This week's projection times the games their team has left. Assumes they play every game in their current role."
-                    />
-                  </span>
-                </th>
-                <th scope="col" className="hidden px-3 py-2 text-center sm:table-cell">Schedule</th>
-                <th scope="col" className="w-8 px-2 py-2"><span className="sr-only">Remove</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-line border-b last:border-b-0">
-                  <td className="px-3 py-2">
-                    {row.player ? (
-                      <PlayerIdentity
-                        player={row.player}
-                        team={row.entry?.projection.team}
-                        size="sm"
-                        subtitle={
-                          <span className="inline-flex items-center gap-1.5">
-                            {row.player.position} · {row.entry?.projection.team ?? row.player.team ?? '—'}
-                            <InjuryBadge injury={row.entry?.projection.context.injury} />
-                          </span>
-                        }
-                      />
-                    ) : (
-                      <span className="text-ink-muted text-sm">Loading…</span>
-                    )}
-                  </td>
-                  <td className="tnum text-ink px-3 py-2 text-right font-medium">{formatPoints(row.weekly)}</td>
-                  <td className="tnum text-ink-secondary px-3 py-2 text-right">
-                    {formatPoints(row.restOfSeason, 0)}
-                    {row.games !== null && <span className="text-ink-muted block text-[0.6875rem]">{row.games} games</span>}
-                  </td>
-                  <td className="hidden px-3 py-2 text-center sm:table-cell">
-                    {row.schedule === null ? (
-                      <span className="text-ink-muted text-xs">—</span>
-                    ) : (
-                      <span className={cn('tnum inline-block min-w-8 rounded px-1.5 py-0.5 text-xs font-semibold', SCORE_CLASSES[toneForScore(row.schedule)])}>
-                        {Math.round(row.schedule)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-2 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onChange(ids.filter((id) => id !== row.id))}
-                      aria-label={`Remove ${row.player?.name ?? 'player'}`}
-                      className="text-ink-muted hover:text-ink rounded-sm p-1"
-                    >
-                      <X aria-hidden className="size-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       )}
-    </Card>
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={view === tab.id}
+          data-active={view === tab.id || undefined}
+          onClick={() => onChange(tab.id)}
+          className={cn(
+            'relative h-10 px-3 text-sm font-bold tracking-tight transition-colors',
+            view === tab.id ? 'text-ink' : 'text-ink-muted hover:text-ink',
+            !underline && view === tab.id && 'border-accent border-b-2',
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
   )
 }

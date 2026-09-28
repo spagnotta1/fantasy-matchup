@@ -1,7 +1,7 @@
 /** The track record and strength of schedule — planning and accountability reads. */
 
 import { request } from './client'
-import { liveSlateSchema, scheduleStrengthSchema, trackRecordSchema } from './schemas'
+import { liveSlateSchema, scheduleStrengthSchema, trackRecordSchema, tradeValuesSchema } from './schemas'
 import { slateQuery, type SlateParams } from './projections'
 
 export interface TrackRecordParams {
@@ -38,4 +38,14 @@ export function getScheduleStrength(
 /** Games in progress and every started player's unofficial points so far. */
 export function getLive(params: SlateParams = {}, signal?: AbortSignal) {
   return request('/live', liveSlateSchema, { signal, params: slateQuery(params) })
+}
+
+/**
+ * Rest-of-season trade value for every projected player, above the waiver wire.
+ *
+ * Only the slate is sent — the league size stays at the server's default — so
+ * the request is the exact key the cache warmer fills after a publish.
+ */
+export function getTradeValues(params: SlateParams = {}, signal?: AbortSignal) {
+  return request('/trade/values', tradeValuesSchema, { signal, params: slateQuery(params) })
 }

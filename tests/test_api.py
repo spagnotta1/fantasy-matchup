@@ -1181,4 +1181,4 @@ class TestLiveScoring:
         response = await client.get(url("/live"), params={"season": SEASON, "week": UPCOMING_WEEK})
         assert response.status_code == 200
         assert response.json()["data"]["games"] == []
-        assert any("could not be fetched" in n for n in response.json()["meta"]["notices"])
+        assert any("could not be loaded" in n for n in response.json()["meta"]["notices"])

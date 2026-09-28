@@ -127,9 +127,9 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     to: '/trade',
-    label: 'Trade helper',
+    label: 'Trade analyzer',
     icon: ArrowLeftRight,
-    description: 'See what each side gives and gets in a trade',
+    description: 'Weigh a trade on rest-of-season value and see what it does to your lineup',
     primary: false,
     group: 'tools',
   },

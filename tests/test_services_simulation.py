@@ -500,3 +500,67 @@ class TestAssumptions:
             simulation.SimulationAssumptions.current().sampling_method
             == "inverse_transform_from_stored_percentiles"
         )
+
+
+# ---------------------------------------------------------------------------
+# Final scores
+# ---------------------------------------------------------------------------
+
+
+def settled(player_input: SimulationInput, points: float) -> SimulationInput:
+    from dataclasses import replace
+
+    from nflfp.services.final_scores import SOURCE_LIVE_FINAL, FinalScore
+
+    return replace(
+        player_input, final=FinalScore(player_input.player_id, points, SOURCE_LIVE_FINAL)
+    )
+
+
+class TestFinalScores:
+    """A player whose game is over is a result, not a draw."""
+
+    def test_a_settled_player_contributes_exactly_their_score(self):
+        side_a = team("a", 12.0)
+        side_a[3] = settled(side_a[3], 21.4)
+        result_a, _, _, _ = simulate(side_a, team("b", 12.0), iterations=2_000, seed=7)
+        assert result_a.players[3].simulated_mean == pytest.approx(21.4)
+        assert result_a.players[3].final is not None
+        assert result_a.players[3].final.points == 21.4
+        # The published projection travels unchanged beside the result.
+        assert result_a.players[3].expected_points == 12.0
+
+    def test_a_fully_settled_matchup_is_decided(self):
+        side_a = [settled(p, 15.0) for p in team("a", 12.0)]
+        side_b = [settled(p, 10.0) for p in team("b", 12.0)]
+        result_a, result_b, mean_margin, _ = simulate(
+            side_a, side_b, iterations=500, seed=1
+        )
+        assert result_a.win_probability == 1.0
+        assert result_b.loss_probability == 1.0
+        assert result_a.p10 == result_a.p90 == pytest.approx(105.0)
+        assert mean_margin == pytest.approx(35.0)
+
+    def test_settling_narrows_the_team_interval(self):
+        base = team("a", 12.0, spread=9.0)
+        partly = list(base)
+        for index in range(4):
+            partly[index] = settled(partly[index], 12.0)
+        wide, _, _, _ = simulate(base, team("b", 12.0), iterations=4_000, seed=3)
+        narrow, _, _, _ = simulate(partly, team("b", 12.0), iterations=4_000, seed=3)
+        assert (narrow.p90 - narrow.p10) < (wide.p90 - wide.p10)
+
+    def test_settling_one_player_leaves_every_other_draw_unchanged(self):
+        # The settled player's uniform is still drawn, so everyone else meets
+        # exactly the numbers they met before — the seed contract survives.
+        side_a = team("a", 12.0)
+        side_b = team("b", 11.0)
+        before, before_b, _, _ = simulate(side_a, side_b, iterations=1_000, seed=11)
+        side_a_settled = list(side_a)
+        side_a_settled[0] = settled(side_a[0], 30.0)
+        after, after_b, _, _ = simulate(side_a_settled, side_b, iterations=1_000, seed=11)
+        for index in range(1, 7):
+            assert after.players[index].simulated_mean == before.players[index].simulated_mean
+        assert [p.simulated_mean for p in after_b.players] == [
+            p.simulated_mean for p in before_b.players
+        ]

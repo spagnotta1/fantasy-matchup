@@ -10,9 +10,15 @@ import { PositionalEdges } from '@/features/simulations/PositionalEdges'
 import { ScoreDistribution } from '@/features/simulations/ScoreDistribution'
 import { SwingFactors } from '@/features/simulations/SwingFactors'
 import { groupNotices } from '@/features/simulations/notices'
-import { ShareMatchup } from '@/features/simulations/ShareMatchup'
+import { ShareImage, ShareMatchup } from '@/features/simulations/ShareMatchup'
+import { useCountUp } from '@/hooks/useCountUp'
 import { formatPercent, formatPoints, formatScoringProfile } from '@/utils/format'
-import type { MatchupSimulation, ResponseMeta, SimulationAssumptions } from '@/api/schemas'
+import type {
+  MatchupSimulation,
+  ResponseMeta,
+  SimulatedPlayer,
+  SimulationAssumptions,
+} from '@/api/schemas'
 import type { NoticeGroup } from '@/features/simulations/notices'
 
 /** Below this the two totals disagree enough to be worth explaining. */
@@ -64,6 +70,7 @@ export function SimulationResults({
         leaderLabel={leaderLabel}
         leaderProbability={leaderProbability}
         assumptions={result.assumptions}
+        result={result}
       />
 
       {/*
@@ -105,11 +112,7 @@ export function SimulationResults({
         />
       </div>
 
-      <Reconciliation
-        labelA={labelA}
-        simulated={teamA.expected_score}
-        projected={teamA.projection_sum}
-      />
+      <Reconciliation labelA={labelA} players={teamA.players} />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
@@ -225,7 +228,9 @@ function WinProbability({
   leaderLabel,
   leaderProbability,
   assumptions,
+  result,
 }: {
+  result: MatchupSimulation
   labelA: string
   labelB: string
   probabilityA: number
@@ -237,6 +242,12 @@ function WinProbability({
   assumptions: SimulationAssumptions
 }) {
   const limits = headlineLimits(assumptions)
+  // Revealed from even odds — the honest reading before anything was
+  // simulated — to the estimate. A new run counts from the last estimate to
+  // the next. Assistive tech reads the real figures from the label and the
+  // sentence below, never the numbers in flight.
+  const shownA = useCountUp(probabilityA, 900, 0.5)
+  const shownB = useCountUp(probabilityB, 900, 0.5)
   return (
     <Card className="overflow-hidden">
       <CardBody className="p-5 sm:p-6">
@@ -245,14 +256,16 @@ function WinProbability({
             <p className="text-ink-muted text-xs font-medium tracking-wide uppercase">
               {labelA} — estimated win probability
             </p>
-            <p className="text-accent-text tnum mt-1 text-5xl leading-none font-semibold tracking-tight">
-              {formatPercent(probabilityA)}
+            <p className="text-you tnum mt-1 text-5xl leading-none font-bold tracking-tight sm:text-6xl">
+              <span aria-hidden>{formatPercent(shownA)}</span>
+              <span className="sr-only">{formatPercent(probabilityA)}</span>
             </p>
           </div>
           <div className="min-w-0 text-right">
             <p className="text-ink-muted text-xs font-medium tracking-wide uppercase">{labelB}</p>
             <p className="text-ink-secondary tnum mt-1 text-3xl leading-none font-semibold tracking-tight">
-              {formatPercent(probabilityB)}
+              <span aria-hidden>{formatPercent(shownB)}</span>
+              <span className="sr-only">{formatPercent(probabilityB)}</span>
             </p>
           </div>
         </div>
@@ -262,27 +275,20 @@ function WinProbability({
           role="img"
           aria-label={`${labelA} wins ${formatPercent(probabilityA)} of simulated weeks, ${labelB} wins ${formatPercent(probabilityB)}.`}
         >
-          <div
-            className="bg-chart-series transition-[width] duration-500 ease-out"
-            style={{ width: `${probabilityA * 100}%` }}
-          />
-          <div
-            className="bg-chart-series/30 transition-[width] duration-500 ease-out"
-            style={{ width: `${probabilityB * 100}%` }}
-          />
+          <div className="bg-you" style={{ width: `${shownA * 100}%` }} />
+          <div className="bg-chart-series/30" style={{ width: `${shownB * 100}%` }} />
         </div>
 
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+        {/* A column on a phone: as a wrapping row the button kept its line and the
+            sentence beside it shrank to a few words a line. */}
+        <div className="mt-3 flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between">
           <p className="text-ink-secondary min-w-0 flex-1 text-sm leading-relaxed">
             Across {iterations.toLocaleString()} simulated weeks, {leaderLabel} finished ahead in{' '}
             {formatPercent(leaderProbability)} of them.
             {tieProbability > 0 && (
               <> Both lineups tied in {formatPercent(tieProbability, 2)}.</>
             )}{' '}
-            <span className="text-ink-muted">
-              This is an estimate based on each player&apos;s projected range, not a prediction of
-              the result.
-            </span>
+            <SettledSentence result={result} />
             {limits.length > 0 && (
               <span className="text-ink-muted mt-1.5 block">
                 It {joinClauses(limits)}.{' '}
@@ -292,7 +298,10 @@ function WinProbability({
               </span>
             )}
           </p>
-          <ShareMatchup />
+          <div className="flex flex-wrap items-start gap-2">
+            <ShareImage result={result} labelA={labelA} labelB={labelB} />
+            <ShareMatchup />
+          </div>
         </div>
       </CardBody>
     </Card>
@@ -313,15 +322,12 @@ function WinProbability({
  * renders nothing when the two agree, which is the state it is built to
  * disappear in.
  */
-function Reconciliation({
-  labelA,
-  simulated,
-  projected,
-}: {
-  labelA: string
-  simulated: number
-  projected: number
-}) {
+function Reconciliation({ labelA, players }: { labelA: string; players: SimulatedPlayer[] }) {
+  // Only the players still being sampled. A finished game's score replaces the
+  // projection by design, and that gap is a result, not a reconciliation issue.
+  const sampled = players.filter((player) => !player.final)
+  const simulated = sampled.reduce((total, player) => total + player.simulated_mean, 0)
+  const projected = sampled.reduce((total, player) => total + (player.expected_points ?? 0), 0)
   if (projected <= 0) return null
   const gap = Math.abs(simulated - projected) / projected
   if (gap <= RECONCILIATION_TOLERANCE) return null
@@ -332,8 +338,8 @@ function Reconciliation({
       aria-label="Totals do not reconcile"
     >
       <p className="text-caution-text text-xs leading-relaxed">
-        <span className="font-semibold">Why the two totals above differ.</span> For {labelA}, the
-        simulation averages {formatPoints(simulated)} points; the players&apos; projections add up
+        <span className="font-semibold">Why the two totals above differ.</span> For {labelA}
+        {sampled.length < players.length ? "'s players still to play" : ''}, the simulation averages {formatPoints(simulated)} points; the players&apos; projections add up
         to {formatPoints(projected)}. This week&apos;s projections were published without the
         model&apos;s final adjustment, and the simulation draws from each player&apos;s full range,
         which averages a little higher. The win chance and the margins come from the simulation,
@@ -344,6 +350,47 @@ function Reconciliation({
         />
       </p>
     </aside>
+  )
+}
+
+/**
+ * What the headline percentage is made of, once some games are over.
+ *
+ * Counted from `players[].final`, never from notice prose. Before any game has
+ * finished it is the sentence the page always carried. After, it says how many
+ * starters entered as a result, and when every one of them did, that there is
+ * nothing left to estimate — without calling an unofficial box score official.
+ */
+function SettledSentence({ result }: { result: MatchupSimulation }) {
+  const players = [...result.team_a.players, ...result.team_b.players]
+  const settled = players.filter((player) => player.final)
+  const unofficial = settled.some((player) => player.final && !player.final.official)
+
+  if (settled.length === 0) {
+    return (
+      <span className="text-ink-muted">
+        This is an estimate based on each player&apos;s projected range, not a prediction of the
+        result.
+      </span>
+    )
+  }
+  if (settled.length === players.length) {
+    return (
+      <span className="text-ink-muted">
+        Every game in both lineups is over, so nothing was estimated: these are the final scores
+        {unofficial ? ', unofficial until the official stat lines are loaded' : ''}.
+      </span>
+    )
+  }
+  return (
+    <span className="text-ink-muted">
+      {settled.length} of {players.length} players{' '}
+      {settled.length === 1 ? 'has finished their game' : 'have finished their games'}, so{' '}
+      {settled.length === 1 ? 'their actual score' : 'their actual scores'}
+      {unofficial ? ' (unofficial until the official stat lines are loaded)' : ''}{' '}
+      {settled.length === 1 ? 'is' : 'are'} used in every simulated week. The rest is an estimate based on each remaining player&apos;s
+      projected range, not a prediction of the result.
+    </span>
   )
 }
 
@@ -386,7 +433,7 @@ function LineupNotes({ groups }: { groups: NoticeGroup[] }) {
       <CardHeader
         as="h2"
         title="About these lineups"
-        description="What the engine flagged about the players on each side. None of it changes the numbers above."
+        description="What the engine flagged about the players on each side. A finished game's score replaces that player's projection; nothing else here changes the numbers above."
       />
       <CardBody className="grid gap-5 sm:grid-cols-2">
         {groups.map((group) => (

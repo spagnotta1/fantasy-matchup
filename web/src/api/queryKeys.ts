@@ -70,6 +70,7 @@ export const queryKeys = {
     live: (params: SlateParams) => [...queryKeys.insights.all, 'live', params] as const,
     scheduleStrength: (position: string, season: number | null, week: number | null) =>
       [...queryKeys.insights.all, 'schedule-strength', position, season, week] as const,
+    tradeValues: (params: SlateParams) => [...queryKeys.insights.all, 'trade-values', params] as const,
   },
 
   advice: {

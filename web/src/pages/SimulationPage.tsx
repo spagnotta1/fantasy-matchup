@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Play, Settings2, ShieldAlert } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
@@ -13,6 +13,7 @@ import { LineupBuilder, LineupSkeleton } from '@/features/simulations/LineupBuil
 import { SimulationHistory } from '@/features/simulations/SimulationHistory'
 import { SimulationResults } from '@/features/simulations/SimulationResults'
 import { PreRunExplainer } from '@/features/simulations/PreRunExplainer'
+import { liveFinals } from '@/features/simulations/finalScores'
 import {
   indexBoard,
   lineupReadiness,
@@ -31,6 +32,7 @@ import {
 import {
   autofillLineup,
   emptyLineup,
+  fillFromLineup,
   expandSlots,
   type LineupRow,
 } from '@/features/simulations/lineupFormat'
@@ -45,6 +47,8 @@ import {
 import { CORRELATION_MODES, useLineupCatalog, useSimulationRun } from '@/hooks/useSimulation'
 import { usePositions } from '@/hooks/useCatalog'
 import { useBoard, usePlayers } from '@/hooks/useProjections'
+import { useMyLineup } from '@/hooks/useMyLineup'
+import { useLive } from '@/hooks/useInsights'
 import { useSlate } from '@/app/slate-context'
 import { formatScoringProfile } from '@/utils/format'
 import { scrollBehavior } from '@/utils/motion'
@@ -97,6 +101,21 @@ export default function SimulationPage() {
   const board = useBoard()
   const positions = usePositions()
   const run = useSimulationRun()
+  // Games already over this week. A starter in one shows what they scored, and
+  // the simulation enters them as that score rather than as a draw.
+  const live = useLive()
+  // Guarded on the week: the live query keeps the previous week's data while a
+  // new one loads, and last week's finals must never label this week's rows.
+  const liveSlate = live.data?.data
+  const finals = useMemo(
+    () =>
+      liveFinals(
+        liveSlate && liveSlate.season === slate.season && liveSlate.week === slate.week
+          ? liveSlate
+          : undefined,
+      ),
+    [liveSlate, slate.season, slate.week],
+  )
   const [searchParams, setSearchParams] = useSearchParams()
 
   // Both lineups in one state object, not two.
@@ -267,17 +286,29 @@ export default function SimulationPage() {
     setPendingLoad(null)
   }, [])
 
-  /** Fill one side, treating the other side's players as unavailable. */
+  // The manager's own lineup, exactly as My team fields it: the starters they
+  // set there, or its highest-projected lineup from their roster.
+  const my = useMyLineup()
+  const hasRoster = my.ids.length > 0
+
+  /**
+   * Fill one side, treating the other side's players as unavailable.
+   *
+   * Your side fills from *your* roster whenever there is one — the lineup My
+   * team shows — and never from the rest of the board. Only without a roster
+   * (and always for the opponent, whose players this product cannot know) does
+   * it fall back to the highest-projected players still available, and the
+   * button says so.
+   */
   const onAutofill = (side: 'a' | 'b') => {
-    setLineups((current) => ({
-      ...current,
-      [side]: autofillLineup(
-        current[side],
-        boardEntries,
-        catalog.slots,
-        idsOf(side === 'a' ? current.b : current.a),
-      ),
-    }))
+    setLineups((current) => {
+      const taken = idsOf(side === 'a' ? current.b : current.a)
+      const next =
+        side === 'a' && hasRoster
+          ? fillFromLineup(current.a, my.lineup, catalog.slots, taken)
+          : autofillLineup(current[side], boardEntries, catalog.slots, taken)
+      return { ...current, [side]: next }
+    })
   }
 
   const onLoadHistory = (entry: HistoryEntry) => {
@@ -328,6 +359,7 @@ export default function SimulationPage() {
 
           <div className="grid gap-6 xl:grid-cols-2">
             <LineupBuilder
+              side="you"
               title={LABEL_A}
               description={`Your starting lineup — ${catalog.format.label}.`}
               rows={teamA}
@@ -338,7 +370,30 @@ export default function SimulationPage() {
               otherLineupIds={idsOf(teamB)}
               onChange={setTeamA}
               onAutofill={() => onAutofill('a')}
+              autofill={
+                hasRoster
+                  ? {
+                      label: 'Autofill from My team',
+                      short: 'From My team',
+                      description: 'Fill it with your lineup from My team, then swap anyone you like.',
+                      pending: my.board.isPending || my.catalog.isPending,
+                    }
+                  : {
+                      label: 'Autofill with top players',
+                      short: 'Autofill',
+                      description: (
+                        <>
+                          No roster yet, so this uses the highest-projected players still available.{' '}
+                          <Link to="/my-team" className="text-accent-text font-medium hover:underline">
+                            Add your roster
+                          </Link>{' '}
+                          to fill it with your own players.
+                        </>
+                      ),
+                    }
+              }
               disabled={run.isPending}
+              finals={finals}
             />
             <LineupBuilder
               title={LABEL_B}
@@ -352,6 +407,7 @@ export default function SimulationPage() {
               onChange={setTeamB}
               onAutofill={() => onAutofill('b')}
               disabled={run.isPending}
+              finals={finals}
             />
           </div>
 

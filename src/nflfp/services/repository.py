@@ -1051,16 +1051,35 @@ async def fetch_player_history(
 # ---------------------------------------------------------------------------
 
 
-async def fetch_teams(session: AsyncSession) -> list[dict]:
-    """The team dimension, alphabetical by abbreviation."""
+async def fetch_teams(session: AsyncSession, *, current_only: bool = False) -> list[dict]:
+    """The team dimension, alphabetical by abbreviation.
+
+    nflverse's team table keeps every code a franchise has played under —
+    ``OAK``, ``SD``, ``STL`` — plus ``LAR`` beside the ``LA`` the schedule
+    uses, and it carries no "active" flag. ``current_only`` keeps the teams on
+    the latest season's schedule, so a directory lists the league as it is and
+    a future relocation drops out on its own. The full set stays available
+    because historical games still name the old codes.
+
+    With no schedule loaded there is nothing to judge "current" by, and every
+    team is returned rather than none.
+    """
     if not await relation_exists(session, "raw_teams"):
         return []
+    current = current_only and await relation_exists(session, "game_team")
     return await _rows(
         session,
-        """
+        f"""
         SELECT team_abbr, team_name, team_nick, team_conf, team_division,
                team_color, team_color2, team_logo_espn, team_logo_wikipedia
         FROM raw_teams
+        {'''
+        WHERE NOT EXISTS (SELECT 1 FROM game_team)
+           OR team_abbr IN (
+                SELECT team FROM game_team
+                WHERE season = (SELECT max(season) FROM game_team)
+           )
+        ''' if current else ''}
         ORDER BY team_abbr
         """,
         {},

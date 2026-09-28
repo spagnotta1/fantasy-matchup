@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { AlertTriangle, Sparkles, Trash2, X } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
@@ -10,7 +11,9 @@ import { PlayerSearchField } from '@/components/domain/PlayerSearchField'
 import { ProjectionValue } from '@/components/domain/ProjectionValue'
 import { eligiblePositions, type LineupRow } from '@/features/simulations/lineupFormat'
 import { slotStatus, type BoardIndex, type SlotStatus } from '@/features/simulations/availability'
+import { knownFinal, type KnownFinal } from '@/features/simulations/finalScores'
 import { cn } from '@/utils/cn'
+import { formatPoints, headlinePoints } from '@/utils/format'
 import type { LineupSlot, Player } from '@/api/schemas'
 
 /**
@@ -40,6 +43,9 @@ export function LineupBuilder({
   onChange,
   onAutofill,
   disabled = false,
+  side = 'opponent',
+  autofill,
+  finals = NO_FINALS,
 }: {
   title: string
   description: string
@@ -61,11 +67,43 @@ export function LineupBuilder({
    */
   onAutofill: () => void
   disabled?: boolean
+  /**
+   * Whose lineup this is. "You" carries the one warm colour the palette keeps
+   * for that meaning (`--app-you`), on the card's edge and nowhere else here.
+   */
+  side?: 'you' | 'opponent'
+  /**
+   * What autofill does for this side, in words. Your side fills from My team
+   * and the opponent from the best players left, so one fixed label would be
+   * wrong for one of them — the button must say which it is.
+   */
+  autofill?: {
+    label: string
+    short: string
+    description: ReactNode
+    /** Extra reasons to wait, beyond the board, e.g. the roster resolving. */
+    pending?: boolean
+  }
+  /**
+   * Unofficial final scores from the live feed. A starter whose game is over
+   * shows what they scored in place of the projection — the number the
+   * simulation will use for them.
+   */
+  finals?: Map<string, KnownFinal>
 }) {
+  const fill = autofill ?? {
+    label: `Autofill ${title.toLowerCase()}`,
+    short: 'Autofill',
+    description: 'Fill it with the highest-projected players still available, then swap anyone you like.',
+  }
+  const fillPending = board.pending || Boolean(fill.pending)
   const filled = rows.filter((row) => row.player !== null).length
   const usedIds = rows.map((row) => row.player?.player_id).filter((id): id is string => Boolean(id))
   const statuses = rows.map((row) => slotStatus(row, board, projectedPositions, week))
   const unavailable = statuses.filter((status) => status.kind === 'unavailable').length
+  // An empty chart leads with a full-width autofill; the header's small one
+  // steps aside while it shows, so a side never offers the same action twice.
+  const emptyChart = filled === 0 && !fillPending
 
   const setRow = (key: string, player: Player | null) => {
     onChange(rows.map((row) => (row.key === key ? { ...row, player } : row)))
@@ -78,7 +116,17 @@ export function LineupBuilder({
     : undefined
 
   return (
-    <Card>
+    // Not `overflow-hidden`: the last row's player search opens a dropdown
+    // below the card, and clipping it hid every result. The strip and the
+    // body's field gradient are rounded to the card's corners instead.
+    <Card className="relative">
+      <span
+        aria-hidden
+        className={cn(
+          'absolute inset-x-0 top-0 h-1 rounded-t-[calc(var(--radius-card)-1px)]',
+          side === 'you' ? 'bg-you' : 'bg-accent',
+        )}
+      />
       <CardHeader
         as="h2"
         title={title}
@@ -94,6 +142,7 @@ export function LineupBuilder({
               {filled}/{rows.length}
               {unavailable > 0 && <span className="sr-only">, {unavailable} cannot be simulated</span>}
             </Badge>
+            {!emptyChart && (
             <Button
               size="sm"
               variant="ghost"
@@ -102,12 +151,13 @@ export function LineupBuilder({
               // truncated board is still ranked, so autofill still picks the
               // best available players from it; only the "no projection"
               // claim needs the whole slate.
-              disabled={disabled || board.pending || filled === rows.length}
-              title="Fill empty slots with the highest-projected available players"
+              disabled={disabled || fillPending || filled === rows.length}
+              title={fill.label}
             >
               <Sparkles aria-hidden className="size-3.5" />
-              Autofill
+              {fill.short}
             </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -121,7 +171,29 @@ export function LineupBuilder({
         }
       />
 
-      <CardBody className="space-y-2 p-3 sm:p-4">
+      {/*
+        The depth chart: the slots on a strip of field, one yard line to a
+        row. An empty chart leads with the fastest way to fill it — autofill —
+        rather than fourteen empty search boxes and a button in the corner.
+      */}
+      <CardBody
+        className="space-y-2 rounded-b-[calc(var(--radius-card)-1px)] p-3 sm:p-4"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, color-mix(in oklch, var(--color-field) 70%, transparent), transparent 70%)',
+        }}
+      >
+        {emptyChart && (
+          <div className="border-line-strong mb-3 flex flex-col items-start gap-3 rounded-[var(--radius-control)] border border-dashed px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-ink-secondary min-w-0 flex-1 text-sm">
+              An empty depth chart. {fill.description}
+            </p>
+            <Button size="sm" variant="primary" onClick={onAutofill} disabled={disabled}>
+              <Sparkles aria-hidden className="size-3.5" />
+              {fill.label}
+            </Button>
+          </div>
+        )}
         {rows.map((row, index) => (
           <SlotRow
             key={row.key}
@@ -130,6 +202,15 @@ export function LineupBuilder({
             status={statuses[index] ?? { kind: 'empty' }}
             excludeIds={usedIds}
             alsoOnOtherSide={row.player ? otherLineupIds.includes(row.player.player_id) : false}
+            final={
+              row.player
+                ? knownFinal(
+                    row.player.player_id,
+                    statuses[index]?.kind === 'ready' ? statuses[index].projection : undefined,
+                    finals,
+                  )
+                : null
+            }
             disabled={disabled}
             note={note}
             onSelect={(player) => setRow(row.key, player)}
@@ -147,6 +228,7 @@ function SlotRow({
   status,
   excludeIds,
   alsoOnOtherSide,
+  final,
   disabled,
   note,
   onSelect,
@@ -157,6 +239,7 @@ function SlotRow({
   status: SlotStatus
   excludeIds: string[]
   alsoOnOtherSide: boolean
+  final: KnownFinal | null
   disabled: boolean
   note?: (player: Player) => string | null
   onSelect: (player: Player) => void
@@ -169,10 +252,12 @@ function SlotRow({
     <div className="flex items-center gap-3">
       <span
         className={cn(
-          'flex h-9 w-14 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-xs font-semibold',
+          'flex h-9 w-14 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-xs font-bold tracking-wide',
           blocked
             ? 'bg-caution-soft text-caution-text'
-            : 'bg-surface-sunken text-ink-secondary',
+            : row.player
+              ? 'bg-accent text-on-accent'
+              : 'border-line-strong text-ink-secondary border border-dashed',
         )}
       >
         {row.slot}
@@ -215,7 +300,9 @@ function SlotRow({
           )}
 
           <span className="shrink-0 text-right">
-            {projection ? (
+            {final && !blocked ? (
+              <FinalValue final={final} projected={headlinePoints(projection?.prediction.points).value} />
+            ) : projection ? (
               <ProjectionValue points={projection.prediction.points} />
             ) : blocked ? (
               <Badge tone="caution" icon={<AlertTriangle className="size-3" />}>
@@ -253,6 +340,34 @@ function SlotRow({
         </div>
       )}
     </div>
+  )
+}
+
+const NO_FINALS = new Map<string, KnownFinal>()
+
+/**
+ * A finished game's score, where the projection would otherwise be.
+ *
+ * The label sits beside the number rather than in a footnote because it
+ * changes what the number is: a result, not a projection — and, until the
+ * official line is loaded, an unofficial one. The projection stays visible
+ * underneath, since it is still what the model said beforehand.
+ */
+function FinalValue({ final, projected }: { final: KnownFinal; projected: number | null }) {
+  return (
+    <span className="flex flex-col items-end leading-tight">
+      <span className="tnum text-ink text-base font-semibold tracking-tight">
+        {formatPoints(final.points)}
+      </span>
+      <span className="text-ink-muted text-[11px] whitespace-nowrap">
+        <span className="text-positive-text font-medium">Final</span>
+        {final.official ? '' : ' · unofficial'}
+        {/* The projection gives way first on a phone, where the name needs the room. */}
+        {projected !== null && (
+          <span className="tnum hidden sm:inline"> · proj {formatPoints(projected)}</span>
+        )}
+      </span>
+    </span>
   )
 }
 
