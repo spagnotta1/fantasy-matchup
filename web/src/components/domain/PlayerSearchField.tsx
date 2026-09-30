@@ -71,8 +71,8 @@ export function PlayerSearchField({
     setHighlight(0)
   }, [debounced])
 
-  // Close when focus leaves the whole control rather than on input blur:
-  // clicking a result blurs the input before the click lands.
+  // Close when focus leaves the whole control rather than on input blur, so
+  // anything inside the control that does take focus never dismisses it.
   useEffect(() => {
     const onOutside = (event: Event) => {
       if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
@@ -138,9 +138,13 @@ export function PlayerSearchField({
       />
 
       {open && searching && !disabled && (
+        // Keep focus on the input. Pressing the list's scrollbar otherwise
+        // blurs it, the browser hands focus to the nearest focusable ancestor
+        // (`<main>`), and the outside-focus handler closes the list mid-drag.
         <ul
           role="listbox"
           aria-label={label}
+          onMouseDown={(event) => event.preventDefault()}
           className={cn(
             'bg-surface-raised border-line absolute z-40 max-h-72 w-full min-w-56 overflow-y-auto rounded-[var(--radius-card)] border shadow-overlay',
             size === 'sm' ? 'top-11' : 'top-[4.25rem]',
