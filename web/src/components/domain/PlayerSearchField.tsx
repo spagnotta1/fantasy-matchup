@@ -61,6 +61,7 @@ export function PlayerSearchField({
   const [highlight, setHighlight] = useState(0)
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(term), DEBOUNCE_MS)
@@ -97,14 +98,21 @@ export function PlayerSearchField({
     setOpen(false)
   }
 
+  // Only keyboard movement scrolls. Doing it on every highlight change would
+  // also fire on hover, and the list would jump under a wheel-scrolling mouse.
+  const moveHighlight = (next: number) => {
+    setHighlight(next)
+    listRef.current?.querySelectorAll('[role="option"]')[next]?.scrollIntoView({ block: 'nearest' })
+  }
+
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (!open || results.length === 0) return
     if (event.key === 'ArrowDown') {
       event.preventDefault()
-      setHighlight((current) => (current + 1) % results.length)
+      moveHighlight((highlight + 1) % results.length)
     } else if (event.key === 'ArrowUp') {
       event.preventDefault()
-      setHighlight((current) => (current - 1 + results.length) % results.length)
+      moveHighlight((highlight - 1 + results.length) % results.length)
     } else if (event.key === 'Enter') {
       event.preventDefault()
       const player = results[highlight]
@@ -142,6 +150,7 @@ export function PlayerSearchField({
         // blurs it, the browser hands focus to the nearest focusable ancestor
         // (`<main>`), and the outside-focus handler closes the list mid-drag.
         <ul
+          ref={listRef}
           role="listbox"
           aria-label={label}
           onMouseDown={(event) => event.preventDefault()}
