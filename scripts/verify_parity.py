@@ -17,7 +17,7 @@ import duckdb
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1] / "src"))
 
-from nflfp import db, pg  # noqa: E402
+from nflfp import duck, pg  # noqa: E402
 
 # name -> (sql, tolerance). Tolerance is 0 for anything that must match bit for
 # bit: row counts, join coverage, sums. Floating-point aggregates like corr()
@@ -88,10 +88,10 @@ def matches(a, b, tol: float) -> bool:
 
 
 def main() -> int:
-    duck = duckdb.connect(str(db.db_path()), read_only=True)
+    duck = duckdb.connect(str(duck.db_path()), read_only=True)
     failures = 0
 
-    print(f"duckdb   : {db.db_path()}")
+    print(f"duckdb   : {duck.db_path()}")
     print(f"postgres : {pg.safe_dsn()}\n")
     print(f"{'check':<24} {'duckdb':<26} {'postgres':<26} ok")
     print("-" * 84)

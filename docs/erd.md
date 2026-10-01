@@ -336,7 +336,7 @@ that.
 | `p75_points` | FLOAT | yes | — | P75 |
 | `ceiling_points` | FLOAT | yes | — | P90 |
 | `standard_deviation` | FLOAT | yes | — | SD of the held-out outcome distribution, for simulators wanting a moment rather than quantiles |
-| `confidence` | FLOAT | yes | — | 0–1. How much information the model had, not how good it is |
+| `confidence` | FLOAT | yes | — | 0–1. Relative width of the P10–P90 range: `1 − (P90 − P10) / (2 · max(predicted, 4))`. Width against the projection — not evidence, not accuracy. Not shown as confidence; see `docs/simulation-readiness.md`, "Range evidence" |
 | `boom_probability` | FLOAT | yes | — | P(points ≥ `boom_threshold`) |
 | `bust_probability` | FLOAT | yes | — | P(points ≤ `bust_threshold`) |
 | `boom_threshold` | FLOAT | yes | — | Position-dependent boom line. Stored because the probability is meaningless without it — the unit on the measurement |

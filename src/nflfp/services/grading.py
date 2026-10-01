@@ -3,8 +3,8 @@
 The database stores ``matchup_score`` as a number and never a letter, and
 :mod:`nflfp.db.models.projection` says why: "the grade is derived above the
 database so the thresholds live in one place." **This module is that one
-place.** Nothing else in the codebase may hard-code a grade boundary, a
-confidence adjective, or a start/sit cutoff.
+place.** Nothing else in the codebase may hard-code a grade boundary, an
+evidence caveat, or a start/sit cutoff.
 
 Why a grade is a rank percentile
 --------------------------------
@@ -201,40 +201,113 @@ def grade_matchup(
 
 
 # ---------------------------------------------------------------------------
-# Confidence
+# Range evidence
 # ---------------------------------------------------------------------------
+#
+# This replaced a four-band "confidence" adjective cut from the stored
+# ``ProjectionPoints.confidence``. That number is ``1 - (P90 - P10) / (2 *
+# max(predicted, 4))`` — the *width* of the range relative to the projection —
+# and it was being described to users as "how much data backs this". Those are
+# different things. On the published 2026 week 3 PPR board the bands read
+# very_low for 529 of 667 players, low for 84, moderate for 54 and high for
+# nobody, while the ranges themselves cover 80.3% of held-out outcomes against a
+# nominal 80%: a red "Very low" beside a range the evidence supports. An
+# overstated caveat teaches a reader to discount a number that has earned its
+# place, which is the same failure as an overstated verdict.
+#
+# What is reported instead is what was measured: whether anything about *this*
+# projection puts its range outside the conditions that coverage was earned
+# under. Width is not graded at all; the range is drawn on screen and is its
+# own statement. See docs/simulation-readiness.md, "Range evidence".
 
-#: ``ProjectionPoints.confidence`` measures **how much information the model
-#: had**, not how good the projection is — a confidently-projected bad player is
-#: still a bad player. The adjectives below are chosen to describe evidence
-#: rather than quality for that reason.
-CONFIDENCE_BANDS: tuple[tuple[str, float], ...] = (
-    ("high", 0.70),
-    ("moderate", 0.45),
-    ("low", 0.20),
-    ("very_low", 0.0),
-)
+#: Nominal coverage of the P10-P90 range, the size of a full trailing window,
+#: and the ``(scoring profile, position)`` cells in which a projection made on
+#: a shorter history was measured to hold too few outcomes, with what it held.
+#: Quarterbacks: 0.718 over 309 held-out weeks, 2019-2025 — one measurement in
+#: three profiles, since a quarterback's points do not depend on the reception
+#: format. Standard-scoring running backs: 0.750 over 775. The other eight
+#: measured cells sit between 0.777 and 0.817, inside the backtest's own
+#: tolerance, and carry no caveat; ``ppr_te_premium`` has no recorded outcomes
+#: to measure against and so carries none either. Restated here rather than
+#: imported so the business layer takes no dependency on the prediction engine;
+#: ``tests/test_services_grading.py`` asserts all three against
+#: ``nflfp.predict.foundation``.
+RANGE_NOMINAL_COVERAGE = 0.80
+FULL_WINDOW_GAMES = 4
+THIN_HISTORY_COVERAGE: dict[tuple[str, str], float] = {
+    ("standard", "QB"): 0.718,
+    ("half_ppr", "QB"): 0.718,
+    ("ppr", "QB"): 0.718,
+    ("standard", "RB"): 0.750,
+}
 
 
-def confidence_label(confidence: float | None, *, extrapolated: bool = False) -> str:
-    """Describe how much evidence stands behind a projection.
+@dataclass(frozen=True)
+class RangeEvidence:
+    """What stands behind a projection's floor-to-ceiling range.
+
+    ``label`` is the field to branch on: ``established``, ``thin_history``,
+    ``extrapolated`` or ``unknown``. ``note`` is the caveat in plain language,
+    present only when there is one — an established range needs no apology.
+    """
+
+    label: str
+    note: str | None = None
+
+
+def range_evidence(
+    *,
+    has_range: bool,
+    extrapolated: bool = False,
+    games_in_window: int | None = None,
+    position: str | None = None,
+    scoring_profile: str | None = None,
+) -> RangeEvidence:
+    """Say whether a range was earned under the conditions this projection is in.
 
     Args:
-        confidence: Stored 0-1 confidence, or ``None``.
+        has_range: Whether a floor and ceiling are stored at all.
         extrapolated: True when the projection exceeded anything seen while
-            fitting the residual distribution. That caps the label regardless of
-            the stored number: an interval nobody has observed is not a
-            high-confidence interval, whatever the model's own bookkeeping says.
+            fitting the residual distribution. Reported first: a range nobody
+            has observed at this level is the weaker claim of the two.
+        games_in_window: Games in the player's trailing four-game window, from
+            the same feature row the projection was scored from. ``None`` means
+            the row was not found, which is not the same as a thin history and
+            is not reported as one.
+        position: The player's position.
+        scoring_profile: The profile the range is expressed in. A short history
+            is caveated only in a ``(profile, position)`` cell where it was
+            measured to matter; everywhere else it is an established range.
     """
-    if confidence is None:
-        return "unknown"
-    label = next(
-        (name for name, minimum in CONFIDENCE_BANDS if confidence >= minimum),
-        "very_low",
-    )
-    if extrapolated and label in ("high", "moderate"):
-        return "moderate" if label == "high" else "low"
-    return label
+    if not has_range:
+        return RangeEvidence("unknown")
+    if extrapolated:
+        return RangeEvidence(
+            "extrapolated",
+            "This projection is higher than any in the history the range was "
+            "built from, so the floor and ceiling are borrowed from the highest "
+            "projections that were.",
+        )
+    measured = THIN_HISTORY_COVERAGE.get((scoring_profile or "", position or ""))
+    if (
+        measured is not None
+        and games_in_window is not None
+        and games_in_window < FULL_WINDOW_GAMES
+    ):
+        if games_in_window == 0:
+            history = "No recent games"
+        else:
+            history = f"Only {games_in_window} recent game" + (
+                "" if games_in_window == 1 else "s"
+            )
+        return RangeEvidence(
+            "thin_history",
+            f"{history} to go on. In testing, ranges for {position}s with fewer "
+            f"than {FULL_WINDOW_GAMES} held about {measured * 100:.0f} in 100 "
+            f"results instead of {RANGE_NOMINAL_COVERAGE * 100:.0f}, so the real "
+            "range is wider than shown.",
+        )
+    return RangeEvidence("established")
 
 
 # ---------------------------------------------------------------------------

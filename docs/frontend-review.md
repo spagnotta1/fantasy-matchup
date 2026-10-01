@@ -18,7 +18,7 @@ next. Cosmetic changes were not made for their own sake.
 | The "N of N matchups are not graded" notice appeared on Injuries and Usage, which show no grades. | Clarity | Fixed. It appears only on screens that draw a grade chip. |
 | Thresholds read "chance of 20.0+" in five places. | Polish, but reads as a measurement | Fixed. Shown as "20+" everywhere. |
 | No page connected the roster to the rest of the app: My team, Simulation and Compare each started cold. | Workflow | Fixed on the dashboard (below), the player page (Add to my team, Compare) and My team (a primary "Estimate my chance of winning"). |
-| The Confidence column read "Low" or "Very low" on nearly every row early in the season. | Information | Replaced by "Chance of 20+" on the board, cards and team page. Confidence remains on the player page and in the sort menu. |
+| The Confidence column read "Low" or "Very low" on nearly every row early in the season. | Information | Replaced by "Chance of 20+" on the board, cards and team page. Since retired everywhere: the label graded range *width* and called it evidence, so the player page and Compare now say what the range is based on, and the sort option is gone (`docs/simulation-readiness.md`, "Range evidence"). |
 | The draft pages showed the global Half PPR scoring above their own PPR setting. | Clarity | Fixed. The global controls are hidden on the draft pages, which never read them. |
 
 ## Page by page

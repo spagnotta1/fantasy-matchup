@@ -164,27 +164,40 @@ def model_ref(row: Row) -> ModelRef | None:
 def point_distribution(row: Row) -> PointDistribution:
     """Map a ``projection_points`` row onto its domain object.
 
-    The two derived labels — confidence and shape — are attached here rather
-    than computed by every caller, which is what keeps the thresholds in
+    The two derived labels — range evidence and shape — are attached here
+    rather than computed by every caller, which is what keeps the thresholds in
     :mod:`nflfp.services.grading` genuinely single-sourced.
+
+    ``games_in_window_l4`` rides on the same joined row as the usage block, and
+    for an upcoming week it comes from the slate the model scored — so the
+    history length the evidence label reads is the one the projection used.
     """
     extrapolated = bool(row.get("extrapolated") or False)
-    confidence = _f(row, "confidence")
+    floor = _f(row, "floor_points")
+    ceiling = _f(row, "ceiling_points")
     median = _f(row, "median_points")
     p25 = _f(row, "p25_points")
     p75 = _f(row, "p75_points")
+    evidence = grading.range_evidence(
+        has_range=floor is not None and ceiling is not None,
+        extrapolated=extrapolated,
+        games_in_window=_i(row, "games_in_window_l4"),
+        position=_s(row, "position"),
+        scoring_profile=_s(row, "scoring_profile"),
+    )
     return PointDistribution(
         scoring_profile=str(row.get("scoring_profile") or ""),
         expected=_f(row, "expected_points"),
         predicted=_f(row, "predicted_points") or 0.0,
-        floor=_f(row, "floor_points"),
+        floor=floor,
         p25=p25,
         median=median,
         p75=p75,
-        ceiling=_f(row, "ceiling_points"),
+        ceiling=ceiling,
         standard_deviation=_f(row, "standard_deviation"),
-        confidence=confidence,
-        confidence_label=grading.confidence_label(confidence, extrapolated=extrapolated),
+        confidence=_f(row, "confidence"),
+        evidence=evidence.label,
+        evidence_note=evidence.note,
         boom_probability=_f(row, "boom_probability"),
         bust_probability=_f(row, "bust_probability"),
         boom_threshold=_f(row, "boom_threshold"),

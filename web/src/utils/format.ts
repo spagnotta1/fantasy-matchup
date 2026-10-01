@@ -120,7 +120,7 @@ export function formatScoringProfile(profile: string | null | undefined): string
     .join(' ')
 }
 
-/** `very_low` -> `Very low`. Confidence labels arrive as identifiers. */
+/** `boom_or_bust` -> `Boom or bust`. Labels arrive as identifiers. */
 export function formatLabel(value: string | null | undefined): string {
   if (!value) return EM_DASH
   const spaced = value.replace(/_/g, ' ')

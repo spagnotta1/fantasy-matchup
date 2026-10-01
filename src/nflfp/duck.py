@@ -1,4 +1,9 @@
-"""DuckDB connection helpers."""
+"""DuckDB connection helpers.
+
+Named ``duck`` rather than ``db``: ``nflfp.db`` is the SQLAlchemy package, and a
+module of the same name beside it is shadowed by the package — every caller
+of ``db.connect()`` failed with an ``AttributeError`` while it was.
+"""
 
 from __future__ import annotations
 

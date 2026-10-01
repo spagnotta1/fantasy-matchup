@@ -150,9 +150,15 @@ export const pointsSchema = z.object({
   p75: maybeNumber,
   ceiling: maybeNumber,
   standard_deviation: maybeNumber,
-  /** 0-1: how much information the model had, not how good the player is. */
+  /**
+   * 0-1: how wide the range is against the projection. Lineage only — it is not
+   * evidence and not accuracy, and it is never shown as confidence.
+   */
   confidence: maybeNumber,
-  confidence_label: z.string(),
+  /** `established | thin_history | extrapolated | unknown` — what backs the range. */
+  evidence: z.string(),
+  /** The caveat, stating what was measured. Present only when there is one. */
+  evidence_note: maybeString,
   boom_probability: maybeNumber,
   bust_probability: maybeNumber,
   boom_threshold: maybeNumber,

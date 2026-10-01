@@ -109,8 +109,13 @@ class PointDistribution:
     p75: float | None = None
     ceiling: float | None = None
     standard_deviation: float | None = None
+    #: Relative width of the P10-P90 range, as stored. Lineage only: it says how
+    #: wide the range is against the projection, not how well-evidenced it is.
     confidence: float | None = None
-    confidence_label: str = "unknown"
+    #: ``established | thin_history | extrapolated | unknown`` — see
+    #: :func:`~nflfp.services.grading.range_evidence`.
+    evidence: str = "unknown"
+    evidence_note: str | None = None
     boom_probability: float | None = None
     bust_probability: float | None = None
     boom_threshold: float | None = None

@@ -574,6 +574,32 @@ rather than softened. Week 1 has no defensive history at all, so every Week 1
 matchup is ungraded — correct, and much better than a confident letter derived
 from last season's defence.
 
+### What stands behind a range, and what does not get said
+
+Every projection carries `evidence` and, when there is a caveat, an
+`evidence_note`. It answers one question: is anything about *this* projection
+outside the conditions its range's coverage was earned under?
+
+| `evidence` | when |
+|---|---|
+| `established` | the normal case — the range was built from `samples` held-out player-weeks at this position and projection level |
+| `thin_history` | fewer than four games in the trailing window, **in a cell where that was measured to matter**: quarterbacks (P10–P90 coverage 0.718, n = 309) and standard-scoring running backs (0.750, n = 775) |
+| `extrapolated` | the projection is above anything the residual distribution was fitted on |
+| `unknown` | no floor or ceiling stored |
+
+This replaced a "confidence" adjective cut from the stored
+`projection_points.confidence`, which is the range's *width* relative to the
+projection and was being shown as "how much data backs this". It read
+`very_low` for 529 of the 667 players on the 2026 week 3 PPR board and `high`
+for none, beside ranges that hold 80.3% of held-out outcomes against a nominal
+80%. Width is no longer graded: the range is drawn on screen and is its own
+statement. The stored column is still served, described as what it is.
+
+Short-history receivers and tight ends measured 0.777–0.817, inside the
+backtest's tolerance, and carry no caveat. The measurement, the splits that
+were tried and rejected, and the limitations are in
+`docs/simulation-readiness.md` under "Range evidence".
+
 ### Context that is reported, never applied
 
 The brief asks for injury impact and weather impact. The honest answer is that
@@ -1452,6 +1478,36 @@ and fails on conditional bias: +0.57 points in the 20-25 band (n=368), over the
 0.25 limit. It is registered and not promoted. The full report is in
 `artifacts/challenger_lightgbm_components_report.txt`.
 
+**That failure is not a demonstrated defect, and it has not been engineered
+away.** `scripts/acceptance_power.py` puts an error bar on the line that
+failed, by resampling whole weeks of the same walk-forward predictions:
+
+| 20–25 band | n | bias | standard error | clears ≤ 0.25 in |
+|---|---|---|---|---|
+| `shrinkage_eb` | 254 | +0.09 | 0.48 | 30.0% of resamples |
+| `lightgbm_components` | 368 | +0.57 | 0.46 | 10.7% of resamples |
+
+The band is 331 quarterbacks and 37 running backs. Its standard error is
+nearly twice the limit, so the challenger's +0.57 is 1.2 standard errors from
+zero, and the incumbent's +0.09 is its quarterbacks at −0.64 below 22.5 points
+and +2.35 above, which happen to offset. A band counts as reliable from 30 observations; at the top
+of the range that admits bands the limit cannot resolve.
+
+One calibration variant was declared before it was run — position-wise linear
+recentring of the raw projection, refit each week from earlier weeks — and run
+once on each model. The challenger moved to +0.51 and still fails; the
+incumbent moved to +0.89 and got worse. It is not adopted. No further variants
+were tried: a forty-second replay makes it easy to try ten and keep the one
+that passes, and that is selection on the test set.
+
+What the challenger does carry that is real: a +0.19 bias in the 0–5 band, 4.6
+standard errors from zero, inside the limit. The incumbent has +0.09 there, 2.5
+from zero.
+
+So the challenger stays unpromoted under `ACCEPTANCE` as written, and whether
+the conditional-bias criterion should require a bias to be distinguishable from
+zero before it fails a model is a decision about the freeze, not a result.
+
 ## Scoring
 
 `src/nflfp/scoring.py` defines league rules as data. `player_week` exposes one
@@ -1566,6 +1622,10 @@ Nothing here is asserted without a check that fails loudly:
 | Frozen model passes its own bar | `ACCEPTANCE` vs `VALIDATION` | passes |
 | Better centre, worse spread rejected | CRPS +0.5 | rejected on CRPS |
 | Foundation is still registered | `predict.available()` | `shrinkage_eb` present |
+| Conditional-bias criterion, with its error | `scripts/acceptance_power.py lightgbm_components` | 20–25 band se 0.46–0.48 against a 0.25 limit; incumbent clears in 30.0% of week-resamples, challenger 10.7% |
+| Play-level features, one variable wide | `scripts/pbp_feature_eval.py --pbp-db data/pbp.duckdb` | CRPS −0.0044 ± 0.0020 (0.16%); width 12.817 → 12.819; not built |
+| DuckDB commands resolve their helpers | `pytest tests/test_duck.py` | `ingest`, `explore` reach `nflfp.duck` (was shadowed by the `nflfp.db` package) |
+| Range caveat matches its measurement | frozen backtest by history length × position × profile; `pytest tests/test_services_grading.py` | short-history QB 0.718, standard RB 0.750 caveated; other 8 cells 0.777–0.817, not |
 | Alembic can't touch the warehouse | `pytest tests/test_migrations.py` | guard excludes all 8 `raw_*` + 3 views |
 | Migration ≡ ORM models | autogenerate after `upgrade head` | 0 diffs against the live database |
 | Migration round trip | `upgrade head` then `downgrade base` | app tables gone, ETL run log preserved |
@@ -1720,10 +1780,33 @@ All eight layers are done. What remains is modelling and scale, not structure.
    already carries opponent strength, pace and trend; a gradient booster on the
    same walk-forward harness is the obvious next comparison, judged by
    `ACCEPTANCE` in `nflfp/predict/foundation.py`.
-4. **Play-level features** — success rate, explosive-play rate and pressure
-   rate need `raw_pbp`, which is opt-in and not loaded. Those feature
-   definitions already declare the dependency and skip themselves until it
-   exists.
+4. **Play-level features** — **measured, and not built.** Success rate,
+   explosive-play rate and a sack-or-hit rate need `raw_pbp`, which is opt-in.
+   Before building them into the warehouse, the contract and both slates,
+   `scripts/pbp_feature_eval.py` asked whether they help: 29 lagged
+   play-by-play features (red-zone and goal-line carries, end-zone and deep
+   targets, aDOT, CPOE, success and explosive rates, team pass rate over
+   expected, the same allowed by the opponent) added to `lightgbm_components`
+   with nothing else changed, on the frozen harness over 2019–2025.
+
+   | | `lightgbm_components` | + play-level |
+   |---|---|---|
+   | CRPS | 2.8151 | 2.8107 |
+   | P10–P90 width | 12.817 | 12.819 |
+   | worst calibration bin | 0.051 | 0.036 |
+   | MAE QB / RB / TE / WR | 6.162 / 4.299 / 3.078 / 4.016 | 6.149 / 4.293 / 3.076 / 4.017 |
+
+   Paired on the same player-weeks, CRPS improves by 0.0044 (standard error
+   0.0020 from resampling weeks; 95% interval −0.0084 to −0.0004) — about
+   0.16%, detectable and small. Absolute error improves by 0.0033 ± 0.0035,
+   which is not distinguishable from zero. The range does not narrow. The
+   trees do use the features (14.1% of split gain, mostly non-scramble
+   dropbacks), but largely in place of box-score columns that already carried
+   the same information. The feature list was fixed before evaluation and
+   nothing was pruned after. On this evidence the warehouse work is not worth
+   doing for accuracy; no play-level feature view exists, and none of the
+   existing views references `raw_pbp`. Charted pressure (PFR, FTN) is a
+   different load and was not tested.
 5. **The Matchup Simulation Engine** — **built**, stateless, at
    `POST /api/v1/simulations`, and documented in
    `docs/simulation-readiness.md`. Lineup payloads in, two score distributions

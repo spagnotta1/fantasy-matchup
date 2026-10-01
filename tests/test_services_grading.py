@@ -110,25 +110,82 @@ class TestGradeMatchup:
         assert grade.reason is not None and "outside" in grade.reason
 
 
-class TestConfidenceLabel:
+class TestRangeEvidence:
+    @staticmethod
+    def _evidence(**overrides):
+        arguments = {
+            "has_range": True,
+            "games_in_window": 4,
+            "position": "QB",
+            "scoring_profile": "half_ppr",
+        }
+        return grading.range_evidence(**{**arguments, **overrides})
+
+    def test_a_range_with_a_full_window_carries_no_caveat(self):
+        evidence = self._evidence()
+        assert evidence.label == "established" and evidence.note is None
+
+    def test_unknown_without_a_range(self):
+        evidence = self._evidence(has_range=False, games_in_window=1)
+        assert evidence.label == "unknown" and evidence.note is None
+
+    def test_a_short_history_is_caveated_with_what_was_measured(self):
+        evidence = self._evidence(games_in_window=1)
+        assert evidence.label == "thin_history"
+        # The number on screen is the measurement, not an adjective for it.
+        assert evidence.note.startswith("Only 1 recent game to go on.")
+        assert "QBs with fewer than 4" in evidence.note
+        assert "72 in 100" in evidence.note and "instead of 80" in evidence.note
+
     @pytest.mark.parametrize(
-        "confidence,expected",
-        [(0.95, "high"), (0.6, "moderate"), (0.3, "low"), (0.05, "very_low")],
+        "games,opening", [(0, "No recent games"), (2, "Only 2 recent games"), (3, "Only 3")]
     )
-    def test_bands(self, confidence, expected):
-        assert grading.confidence_label(confidence) == expected
+    def test_every_window_short_of_four_games_is_a_short_history(self, games, opening):
+        evidence = self._evidence(games_in_window=games)
+        assert evidence.label == "thin_history" and evidence.note.startswith(opening)
 
-    def test_unknown_without_a_value(self):
-        assert grading.confidence_label(None) == "unknown"
+    @pytest.mark.parametrize(
+        "profile,position",
+        [("half_ppr", "RB"), ("half_ppr", "TE"), ("ppr", "WR"), ("standard", "WR")],
+    )
+    def test_a_cell_that_measured_calibrated_is_not_caveated(self, profile, position):
+        # Short-history RB/TE/WR ranges hold 0.777-0.817 outside standard-scoring
+        # running backs: inside the backtest's tolerance. Caveating them would
+        # overstate a limitation, which is the failure this label replaced.
+        evidence = self._evidence(
+            games_in_window=1, position=position, scoring_profile=profile
+        )
+        assert evidence.label == "established" and evidence.note is None
 
-    def test_extrapolation_caps_the_label(self):
-        # An interval built by extrapolating past everything ever observed is
-        # not a high-confidence interval, whatever the model's bookkeeping says.
-        assert grading.confidence_label(0.95, extrapolated=True) == "moderate"
-        assert grading.confidence_label(0.6, extrapolated=True) == "low"
+    def test_standard_scoring_running_backs_are_the_other_measured_cell(self):
+        evidence = self._evidence(games_in_window=2, position="RB", scoring_profile="standard")
+        assert evidence.label == "thin_history" and "75 in 100" in evidence.note
 
-    def test_extrapolation_does_not_promote_a_low_label(self):
-        assert grading.confidence_label(0.05, extrapolated=True) == "very_low"
+    def test_an_unmeasured_profile_is_not_given_a_borrowed_caveat(self):
+        # ppr_te_premium has no recorded outcomes to backtest against. Absent a
+        # measurement there is no caveat; one is not carried over from PPR.
+        evidence = self._evidence(games_in_window=1, scoring_profile="ppr_te_premium")
+        assert evidence.label == "established"
+
+    def test_an_absent_usage_row_is_not_a_short_history(self):
+        # None means the join found nothing. That is missing data, and missing
+        # data is not reported as a measured weakness.
+        assert self._evidence(games_in_window=None).label == "established"
+
+    def test_extrapolation_outranks_a_short_history(self):
+        # A range nobody has observed at this level is the weaker claim.
+        evidence = self._evidence(extrapolated=True, games_in_window=1)
+        assert evidence.label == "extrapolated" and evidence.note
+
+    def test_the_caveat_matches_the_frozen_record(self):
+        # The business layer restates these rather than importing the prediction
+        # engine, so this is the test that stops the caveat a user reads from
+        # drifting away from the measurement that justifies it.
+        from nflfp.predict import foundation
+
+        assert grading.THIN_HISTORY_COVERAGE == foundation.undercovered_short_history()
+        assert grading.FULL_WINDOW_GAMES == foundation.FULL_WINDOW_GAMES
+        assert grading.RANGE_NOMINAL_COVERAGE == foundation.VALIDATION.nominal_p10_p90
 
 
 class TestStartSitVerdict:

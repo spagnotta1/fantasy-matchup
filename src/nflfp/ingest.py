@@ -16,7 +16,7 @@ import argparse
 import sys
 import time
 
-from . import db
+from . import duck
 from .sources import (
     DATASETS,
     DATASETS_BY_NAME,
@@ -79,8 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         selected = [d for d in DATASETS if d.core or args.all]
 
-    con = db.connect()
-    print(f"database : {db.db_path()}")
+    con = duck.connect()
+    print(f"database : {duck.db_path()}")
     print(f"seasons  : {args.start}-{args.end}")
     print(f"datasets : {len(selected)}\n")
 

@@ -80,9 +80,11 @@ class TestPointDistribution:
                 "ceiling_points": 24.0,
                 "confidence": 0.82,
                 "extrapolated": False,
+                "games_in_window_l4": 4,
             }
         )
-        assert distribution.confidence_label == "high"
+        assert distribution.evidence == "established"
+        assert distribution.evidence_note is None
         assert distribution.shape == "steady"
         assert distribution.headline == 11.4
 
@@ -101,16 +103,51 @@ class TestPointDistribution:
         )
         assert distribution.headline == 9.0
 
-    def test_extrapolation_caps_the_confidence_label(self):
+    def test_extrapolation_is_reported_as_the_range_evidence(self):
         distribution = assemble.point_distribution(
             {
                 "scoring_profile": "ppr",
                 "predicted_points": 30.0,
+                "floor_points": 14.0,
+                "ceiling_points": 41.0,
                 "confidence": 0.9,
                 "extrapolated": True,
             }
         )
-        assert distribution.confidence_label == "moderate"
+        assert distribution.evidence == "extrapolated"
+        assert distribution.evidence_note
+
+    def test_a_one_game_window_reaches_the_evidence_label(self):
+        # The history length, the position and the profile all ride on the
+        # joined row, and the caveat needs all three.
+        row = {
+            "scoring_profile": "ppr",
+            "position": "QB",
+            "predicted_points": 6.0,
+            "floor_points": 0.5,
+            "ceiling_points": 13.0,
+            "games_in_window_l4": 1,
+        }
+        assert assemble.point_distribution(row).evidence == "thin_history"
+        # The same window for a receiver measured inside tolerance: no caveat.
+        assert assemble.point_distribution({**row, "position": "WR"}).evidence == (
+            "established"
+        )
+
+    def test_no_stored_range_is_unknown_not_established(self):
+        distribution = assemble.point_distribution(
+            {"scoring_profile": "ppr", "predicted_points": 9.0, "games_in_window_l4": 4}
+        )
+        assert distribution.evidence == "unknown"
+
+    def test_the_stored_relative_width_is_passed_through_unlabelled(self):
+        # It is the width of the range against the projection. It used to be
+        # cut into "very low … high" and shown as confidence; it is now lineage.
+        distribution = assemble.point_distribution(
+            {"scoring_profile": "ppr", "predicted_points": 9.0, "confidence": 0.03}
+        )
+        assert distribution.confidence == 0.03
+        assert not hasattr(distribution, "confidence_label")
 
 
 class TestPlayerProjection:

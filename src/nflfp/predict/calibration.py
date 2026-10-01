@@ -37,6 +37,11 @@ from dataclasses import dataclass
 #: evidence of miscalibration.
 MIN_BIN_FOR_MAX = 30
 
+#: How far observed interval coverage may sit from nominal and still be reported
+#: as "calibrated". Named because the frozen record's reading of which
+#: history lengths are under-covered uses the same line the report draws.
+COVERAGE_TOLERANCE = 0.03
+
 #: Reporting bands for projection magnitude. The top band is open-ended and is
 #: the one that matters: it is where phase 3a failed.
 PROJECTION_BANDS: tuple[tuple[float, float], ...] = (
@@ -146,7 +151,7 @@ class CoverageResult:
 
     @property
     def verdict(self) -> str:
-        if abs(self.gap) <= 0.03:
+        if abs(self.gap) <= COVERAGE_TOLERANCE:
             return "calibrated"
         return "too narrow" if self.gap < 0 else "too wide"
 

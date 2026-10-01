@@ -1,0 +1,141 @@
+{
+  "seasons": [
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "profile": "half_ppr",
+  "features": [
+    "pbp_rz_carries_l4",
+    "pbp_gl_carries_l4",
+    "pbp_rush_success_rate_l4",
+    "pbp_explosive_rush_rate_l4",
+    "pbp_rz_targets_l4",
+    "pbp_ez_targets_l4",
+    "pbp_deep_targets_l4",
+    "pbp_adot_l4",
+    "pbp_target_success_rate_l4",
+    "pbp_explosive_rec_rate_l4",
+    "pbp_dropbacks_l4",
+    "pbp_rz_pass_attempts_l4",
+    "pbp_ez_pass_attempts_l4",
+    "pbp_scrambles_l4",
+    "pbp_deep_attempt_rate_l4",
+    "pbp_cpoe_l4",
+    "pbp_pass_success_rate_l4",
+    "pbp_sack_hit_rate_l4",
+    "pbp_team_plays_l4",
+    "pbp_team_rz_plays_l4",
+    "pbp_team_pass_oe_l4",
+    "pbp_team_success_rate_l4",
+    "pbp_team_epa_per_play_l4",
+    "pbp_opp_rz_plays_allowed_l4",
+    "pbp_opp_pass_success_allowed_l4",
+    "pbp_opp_rush_success_allowed_l4",
+    "pbp_opp_explosive_rate_allowed_l4",
+    "pbp_opp_sack_hit_rate_l4",
+    "pbp_opp_epa_per_play_allowed_l4"
+  ],
+  "reference": {
+    "crps": 2.8151,
+    "coverage_p10_p90": 0.7991,
+    "width_p10_p90": 12.817,
+    "max_calibration_error": 0.0509,
+    "max_conditional_bias": 0.5679,
+    "mae_by_position": {
+      "QB": 6.1623,
+      "RB": 4.299,
+      "TE": 3.0777,
+      "WR": 4.0163
+    },
+    "passed": false,
+    "failures": [
+      "conditional bias 0.568 exceeds 0.25 points"
+    ]
+  },
+  "candidate": {
+    "crps": 2.8107,
+    "coverage_p10_p90": 0.8007,
+    "width_p10_p90": 12.819,
+    "max_calibration_error": 0.0363,
+    "max_conditional_bias": 0.6478,
+    "mae_by_position": {
+      "QB": 6.1491,
+      "RB": 4.2926,
+      "TE": 3.076,
+      "WR": 4.0169
+    },
+    "passed": false,
+    "failures": [
+      "conditional bias 0.648 exceeds 0.25 points"
+    ]
+  },
+  "paired": {
+    "CRPS, all": {
+      "mean": -0.00438,
+      "se": 0.00204,
+      "n": 38061
+    },
+    "CRPS, QB": {
+      "mean": -0.02101,
+      "se": 0.01243,
+      "n": 4247
+    },
+    "CRPS, RB": {
+      "mean": -0.00772,
+      "se": 0.00363,
+      "n": 10024
+    },
+    "CRPS, TE": {
+      "mean": -0.00252,
+      "se": 0.00246,
+      "n": 7904
+    },
+    "CRPS, WR": {
+      "mean": 0.00125,
+      "se": 0.00267,
+      "n": 15886
+    },
+    "abs error, all": {
+      "mean": -0.00325,
+      "se": 0.00349,
+      "n": 40294
+    }
+  },
+  "reach": {
+    "pbp_rz_carries_l4": 0.969,
+    "pbp_gl_carries_l4": 0.969,
+    "pbp_rush_success_rate_l4": 0.4839,
+    "pbp_explosive_rush_rate_l4": 0.4839,
+    "pbp_rz_targets_l4": 0.969,
+    "pbp_ez_targets_l4": 0.969,
+    "pbp_deep_targets_l4": 0.969,
+    "pbp_adot_l4": 0.8218,
+    "pbp_target_success_rate_l4": 0.8218,
+    "pbp_explosive_rec_rate_l4": 0.8218,
+    "pbp_dropbacks_l4": 0.969,
+    "pbp_rz_pass_attempts_l4": 0.969,
+    "pbp_ez_pass_attempts_l4": 0.969,
+    "pbp_scrambles_l4": 0.969,
+    "pbp_deep_attempt_rate_l4": 0.1243,
+    "pbp_cpoe_l4": 0.1229,
+    "pbp_pass_success_rate_l4": 0.1268,
+    "pbp_sack_hit_rate_l4": 0.1268,
+    "pbp_team_plays_l4": 0.9344,
+    "pbp_team_rz_plays_l4": 0.9344,
+    "pbp_team_pass_oe_l4": 0.9344,
+    "pbp_team_success_rate_l4": 0.9344,
+    "pbp_team_epa_per_play_l4": 0.9344,
+    "pbp_opp_rz_plays_allowed_l4": 0.9343,
+    "pbp_opp_pass_success_allowed_l4": 0.9343,
+    "pbp_opp_rush_success_allowed_l4": 0.9343,
+    "pbp_opp_explosive_rate_allowed_l4": 0.9343,
+    "pbp_opp_sack_hit_rate_l4": 0.9343,
+    "pbp_opp_epa_per_play_allowed_l4": 0.9343
+  },
+  "gain_share_play_level": 0.1405
+}

@@ -204,7 +204,7 @@ export function Tooltip({ content, children, side = 'top', align = 'center', cla
  * The standard "what does this number mean?" affordance.
  *
  * This product shows a lot of numbers that are easy to misread — a matchup
- * grade is a percentile, confidence is not quality — and an info icon beside
+ * grade is a percentile, a wide range is not a bad player — and an info icon beside
  * them is how that gets said without cluttering the layout.
  */
 export function InfoTip({ label, content }: { label: string; content: ReactNode }) {
