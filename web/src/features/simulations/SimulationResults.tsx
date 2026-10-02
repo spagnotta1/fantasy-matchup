@@ -12,6 +12,7 @@ import { SwingFactors } from '@/features/simulations/SwingFactors'
 import { groupNotices } from '@/features/simulations/notices'
 import { ShareImage, ShareMatchup } from '@/features/simulations/ShareMatchup'
 import { useCountUp } from '@/hooks/useCountUp'
+import { CORRELATION_MODES } from '@/hooks/useSimulation'
 import { formatPercent, formatPoints, formatScoringProfile } from '@/utils/format'
 import type {
   MatchupSimulation,
@@ -25,20 +26,129 @@ import type { NoticeGroup } from '@/features/simulations/notices'
 const RECONCILIATION_TOLERANCE = 0.02
 
 /**
- * The result.
+ * The result, in two parts.
  *
- * Ordered by what a manager asks, in order: how likely am I to win, what do the
- * two scores look like, how much do the ranges overlap, where does the gap come
- * from, who could move it, and what did this not account for. The assumptions
- * are last but not optional — they are on the same screen as the probability,
- * not behind a link.
+ * A finished run used to be read in the order it was built: both lineups,
+ * fourteen rows, then the settings, and only then the answer, a screen and a
+ * half down a desktop and three down a phone. The answer now comes first.
+ *
+ * `SimulationSummary` is the first screen: the estimated win probability, the
+ * two score ranges that explain it, and where the gap is by position. One
+ * surface, not three cards and four tiles — it is read as one thing, the way a
+ * box score is. The page puts it above the lineups, which fold to a line each
+ * under it.
+ *
+ * `SimulationDetails` is everything else, below the lineups and the run
+ * controls, in the order it always had: what the engine flagged about each
+ * lineup, the totals and how they reconcile, who could swing it, and what the
+ * run assumed. Nothing the old result showed is gone, and every notice is
+ * still shown once.
  *
  * Nothing here recomputes the outcome. The win probability, both score
  * distributions and every per-player figure come from the response; the only
  * arithmetic in this subtree is subtracting one published number from another
  * to describe a gap, and each place it happens says so.
  */
-export function SimulationResults({
+export function SimulationSummary({
+  result,
+  labelA,
+  labelB,
+}: {
+  result: MatchupSimulation
+  labelA: string
+  labelB: string
+}) {
+  const { team_a: teamA, team_b: teamB } = result
+  const leaderLabel = teamA.win_probability >= teamB.win_probability ? labelA : labelB
+  const leaderProbability = Math.max(teamA.win_probability, teamB.win_probability)
+  const mode = CORRELATION_MODES.find((entry) => entry.value === result.simulation.correlation_mode)
+
+  return (
+    // A query container: the three parts sit side by side or one under the
+    // other by the room the card has, not the window. A laptop with the
+    // sidebar open has less than a tablet.
+    <Card data-simulation-summary="" className="animate-rise @container">
+      <div className="border-line flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b px-5 py-3">
+        <h2 className="text-ink text-section">Result</h2>
+        {/* What was asked, from the response: the week and format it scored,
+            how many weeks it played out, and how. */}
+        <p className="text-ink-muted text-detail">
+          Week {result.week} · {formatScoringProfile(result.scoring_profile)} ·{' '}
+          {result.simulation.iterations.toLocaleString()} simulated weeks ·{' '}
+          {mode?.label ?? result.simulation.correlation_mode}
+        </p>
+      </div>
+
+      <div className="grid @[44rem]:grid-cols-2">
+        <section aria-label="Estimated win probability" className="border-line p-5 @[44rem]:border-r">
+          <WinProbability
+            labelA={labelA}
+            labelB={labelB}
+            probabilityA={teamA.win_probability}
+            probabilityB={teamB.win_probability}
+            tieProbability={teamA.tie_probability}
+            iterations={result.simulation.iterations}
+            leaderLabel={leaderLabel}
+            leaderProbability={leaderProbability}
+            assumptions={result.assumptions}
+            result={result}
+          />
+        </section>
+
+        <section
+          aria-labelledby="simulation-scores"
+          className="border-line border-t p-5 @[44rem]:border-t-0"
+        >
+          <SummaryHeading
+            id="simulation-scores"
+            title="Where the scores land"
+            // "Above" where the parts are stacked, beside where they are not:
+            // the sentence no longer says which.
+            description="Both lineups on one chart. The overlap is why the result is a chance, not a certainty."
+          />
+          <ScoreDistribution labelA={labelA} teamA={teamA} labelB={labelB} teamB={teamB} />
+        </section>
+
+        <section
+          aria-labelledby="simulation-gaps"
+          className="border-line border-t p-5 @[44rem]:col-span-2"
+        >
+          {/* No line under this heading: the sentence that belongs here is the
+              one under the bars, which also says what the gaps are not. */}
+          <SummaryHeading id="simulation-gaps" title="Where the gap is" />
+          <PositionalEdges
+            labelA={labelA}
+            labelB={labelB}
+            playersA={teamA.players}
+            playersB={teamB.players}
+          />
+        </section>
+      </div>
+
+      <div className="border-line flex flex-wrap items-start justify-end gap-2 border-t px-5 py-3">
+        <ShareImage result={result} labelA={labelA} labelB={labelB} />
+        <ShareMatchup />
+      </div>
+    </Card>
+  )
+}
+
+/** A part of the summary: its name, that it is calculated, and a line on reading it. */
+function SummaryHeading({ id, title, description }: { id: string; title: string; description?: string }) {
+  return (
+    <div className="mb-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 id={id} className="text-ink text-body font-semibold">
+          {title}
+        </h3>
+        <ProvenanceBadge provenance="derived" />
+      </div>
+      {description && <p className="text-ink-muted text-detail mt-0.5">{description}</p>}
+    </div>
+  )
+}
+
+export function SimulationDetails({
   result,
   meta,
   labelA,
@@ -55,48 +165,26 @@ export function SimulationResults({
   const { team_a: teamA, team_b: teamB } = result
   const notices = groupNotices(meta.notices, { a: labelA, b: labelB })
   const runNotes = notices.find((group) => group.key === 'run')?.notices ?? []
-  const leaderLabel = teamA.win_probability >= teamB.win_probability ? labelA : labelB
-  const leaderProbability = Math.max(teamA.win_probability, teamB.win_probability)
 
   return (
-    <div className="animate-rise space-y-6">
-      <WinProbability
-        labelA={labelA}
-        labelB={labelB}
-        probabilityA={teamA.win_probability}
-        probabilityB={teamB.win_probability}
-        tieProbability={teamA.tie_probability}
-        iterations={result.simulation.iterations}
-        leaderLabel={leaderLabel}
-        leaderProbability={leaderProbability}
-        assumptions={result.assumptions}
-        result={result}
-      />
-
+    <div className="space-y-6">
       {/*
         Every notice the engine returns is still shown, each once. The ones
         that name a lineup's own players — a designation, a stack — sit here,
-        right under the result they qualify. The run-wide ones (independence,
-        no kickers, no injury adjustment) used to be repeated here as a third
-        alert box and again in the assumptions panel; they now live only in
-        the panel, and the headline carries a one-sentence summary of them.
+        first under the lineups they are about. The run-wide ones
+        (independence, no kickers, no injury adjustment) live only in the
+        assumptions panel, and the headline carries a one-sentence summary of
+        them.
       */}
       <LineupNotes groups={notices.filter((group) => group.key !== 'run')} />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label={`${labelA} — simulated`}
-          emphasis="primary"
-          value={formatPoints(teamA.expected_score)}
-          unit="pts"
-          detail={`Median ${formatPoints(teamA.median_score)} · ${formatScoringProfile(result.scoring_profile)}`}
-        />
-        <StatCard
-          label={`${labelB} — simulated`}
-          value={formatPoints(teamB.expected_score)}
-          unit="pts"
-          detail={`Median ${formatPoints(teamB.median_score)}`}
-        />
+      {/*
+        Two tiles, where there were four. Each lineup's simulated average and
+        median are in the summary now, beside its range ("116.4 pts on
+        average", "Middle 115.3"), with the scoring format in its heading;
+        printing them again here was the same four numbers twice.
+      */}
+      <div className="grid gap-3 sm:grid-cols-2">
         <StatCard
           label="Expected margin"
           value={formatPoints(Math.abs(result.score_differential))}
@@ -114,36 +202,10 @@ export function SimulationResults({
 
       <Reconciliation labelA={labelA} players={teamA.players} />
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <CardHeader
-            as="h2"
-            title="Where the scores land"
-            description="Both lineups on one chart. The overlap is why the result above is a chance, not a certainty."
-            action={<ProvenanceBadge provenance="derived" />}
-          />
-          <CardBody>
-            <ScoreDistribution labelA={labelA} teamA={teamA} labelB={labelB} teamB={teamB} />
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader
-            as="h2"
-            title="Where the gap is"
-            description="Average simulated points at each position, one lineup against the other."
-            action={<ProvenanceBadge provenance="derived" />}
-          />
-          <CardBody>
-            <PositionalEdges
-              labelA={labelA}
-              labelB={labelB}
-              playersA={teamA.players}
-              playersB={teamB.players}
-            />
-          </CardBody>
-        </Card>
-
+      {/* `min-w-0` on each card: a grid item is otherwise as wide as its
+          widest unbroken line, which on a 360px phone was wider than the
+          phone. */}
+      <div className="grid gap-6 xl:grid-cols-2 [&>*]:min-w-0">
         <Card>
           <CardHeader
             as="h2"
@@ -216,7 +278,11 @@ function AdjustAndRerun({ onAdjust }: { onAdjust: () => void }) {
  * "Estimated win probability", never "you win". The iteration count sits under
  * it because it is what the percentage *is* — the share of ten thousand
  * simulated weeks — which is a more honest reading than a bare percentage and
- * costs one line.
+ * costs one line. The limits that qualify the number stay directly under it,
+ * in the same part of the summary: a limit belongs beside the number it limits.
+ *
+ * The figure is 36px, not the 60px it was. It is the first thing in a readout,
+ * and it does not need to be a poster to be first.
  */
 function WinProbability({
   labelA,
@@ -249,21 +315,22 @@ function WinProbability({
   const shownA = useCountUp(probabilityA, 900, 0.5)
   const shownB = useCountUp(probabilityB, 900, 0.5)
   return (
-    <Card className="overflow-hidden">
-      <CardBody className="p-5 sm:p-6">
+    <>
         <div className="flex items-end justify-between gap-6">
           <div className="min-w-0">
             <p className="text-ink-muted text-caption font-medium tracking-wide uppercase">
               {labelA} — estimated win probability
             </p>
-            <p className="text-you tnum mt-1 text-5xl leading-none font-bold tracking-tight sm:text-6xl">
+            <p className="text-you tnum mt-1 text-4xl leading-none font-bold tracking-tight">
               <span aria-hidden>{formatPercent(shownA)}</span>
               <span className="sr-only">{formatPercent(probabilityA)}</span>
             </p>
           </div>
-          <div className="min-w-0 text-right">
+          {/* Not shrunk: squeezed, the label ran out past the bar's end. The
+              longer label on the left wraps instead. */}
+          <div className="shrink-0 text-right">
             <p className="text-ink-muted text-caption font-medium tracking-wide uppercase">{labelB}</p>
-            <p className="text-ink-secondary tnum mt-1 text-3xl leading-none font-semibold tracking-tight">
+            <p className="text-ink-secondary tnum mt-1 text-2xl leading-none font-semibold tracking-tight">
               <span aria-hidden>{formatPercent(shownB)}</span>
               <span className="sr-only">{formatPercent(probabilityB)}</span>
             </p>
@@ -271,7 +338,7 @@ function WinProbability({
         </div>
 
         <div
-          className="bg-surface-sunken mt-4 flex h-4 overflow-hidden rounded-full"
+          className="bg-surface-sunken mt-3 flex h-3 overflow-hidden rounded-full"
           role="img"
           aria-label={`${labelA} wins ${formatPercent(probabilityA)} of simulated weeks, ${labelB} wins ${formatPercent(probabilityB)}.`}
         >
@@ -279,10 +346,7 @@ function WinProbability({
           <div className="bg-chart-series/30" style={{ width: `${shownB * 100}%` }} />
         </div>
 
-        {/* A column on a phone: as a wrapping row the button kept its line and the
-            sentence beside it shrank to a few words a line. */}
-        <div className="mt-3 flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <p className="text-ink-secondary min-w-0 flex-1 text-sm leading-relaxed">
+          <p className="text-ink-secondary text-detail mt-3 leading-relaxed">
             Across {iterations.toLocaleString()} simulated weeks, {leaderLabel} finished ahead in{' '}
             {formatPercent(leaderProbability)} of them.
             {tieProbability > 0 && (
@@ -298,13 +362,7 @@ function WinProbability({
               </span>
             )}
           </p>
-          <div className="flex flex-wrap items-start gap-2">
-            <ShareImage result={result} labelA={labelA} labelB={labelB} />
-            <ShareMatchup />
-          </div>
-        </div>
-      </CardBody>
-    </Card>
+    </>
   )
 }
 

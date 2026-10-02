@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { AlertTriangle, Sparkles, Trash2, X } from 'lucide-react'
+import { useId, type ReactNode } from 'react'
+import { AlertTriangle, ChevronDown, Sparkles, Trash2, X } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button, IconButton } from '@/components/ui/Button'
@@ -14,7 +14,7 @@ import { slotStatus, type BoardIndex, type SlotStatus } from '@/features/simulat
 import { knownFinal, type KnownFinal } from '@/features/simulations/finalScores'
 import { cn } from '@/utils/cn'
 import { formatPoints, headlinePoints } from '@/utils/format'
-import type { LineupSlot, Player } from '@/api/schemas'
+import type { Injury, LineupSlot, Player } from '@/api/schemas'
 
 /**
  * One side's starting lineup.
@@ -30,6 +30,20 @@ import type { LineupSlot, Player } from '@/api/schemas'
  * otherwise show, while there is still an obvious thing to do about it. See
  * `availability.ts` for why that check refuses to guess when the board is not
  * fully in hand.
+ *
+ * ## Folded to a line
+ *
+ * Once a matchup has been run, the answer is the subject of the page and the
+ * fourteen rows that produced it are not. Given `disclosure`, the builder is
+ * a card that folds to one line — whose lineup, how many slots are filled, who
+ * is in it, and any starter carrying an injury designation — with a button
+ * that opens it again. Folded is not gone: the body stays mounted and hidden,
+ * so opening it shows the lineup exactly as it was left, and everything the
+ * builder does when open it still does.
+ *
+ * The button is a real disclosure: one button, in the same place open or shut
+ * so it keeps the focus when pressed, saying which state it is in
+ * (`aria-expanded`) and what it opens (`aria-controls`).
  */
 export function LineupBuilder({
   title,
@@ -46,6 +60,7 @@ export function LineupBuilder({
   side = 'opponent',
   autofill,
   finals = NO_FINALS,
+  disclosure,
 }: {
   title: string
   description: string
@@ -90,7 +105,15 @@ export function LineupBuilder({
    * simulation will use for them.
    */
   finals?: Map<string, KnownFinal>
+  /**
+   * Makes the builder foldable, and says whether it is open. Left out, the
+   * builder is always open and looks as it always has: before a first run
+   * there is nothing else on the page for it to make room for.
+   */
+  disclosure?: { open: boolean; onToggle: () => void }
 }) {
+  const bodyId = useId()
+  const folded = disclosure ? !disclosure.open : false
   const fill = autofill ?? {
     label: `Autofill ${title.toLowerCase()}`,
     short: 'Autofill',
@@ -115,11 +138,65 @@ export function LineupBuilder({
     ? (player: Player) => (board.byPlayer.has(player.player_id) ? null : 'No projection')
     : undefined
 
+  // Starters carrying a designation. A folded lineup still says so by name: a
+  // designation is a caveat on the result above it, and folding the rows away
+  // must not fold that away with them.
+  const flagged = rows.flatMap((row, index) => {
+    const status = statuses[index]
+    const injury = status?.kind === 'ready' ? status.projection.context.injury : null
+    return row.player && injury?.is_questionable_or_worse ? [{ player: row.player, injury }] : []
+  })
+
+  const countBadge = (
+    <Badge
+      tone={unavailable > 0 ? 'caution' : filled === rows.length ? 'positive' : 'neutral'}
+      icon={unavailable > 0 ? <AlertTriangle className="size-3" /> : undefined}
+    >
+      {filled}/{rows.length}
+      <span className="sr-only">
+        {' '}
+        slots filled{unavailable > 0 ? `, ${unavailable} cannot be simulated` : ''}
+      </span>
+    </Badge>
+  )
+
+  const headerActions = (
+    <>
+      {!emptyChart && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onAutofill}
+          // Gated on the board *arriving*, not on it being complete. A
+          // truncated board is still ranked, so autofill still picks the
+          // best available players from it; only the "no projection"
+          // claim needs the whole slate.
+          disabled={disabled || fillPending || filled === rows.length}
+          title={fill.label}
+        >
+          <Sparkles aria-hidden className="size-3.5" />
+          {fill.short}
+        </Button>
+      )}
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => onChange(rows.map((row) => ({ ...row, player: null })))}
+        disabled={disabled || filled === 0}
+      >
+        <Trash2 aria-hidden className="size-3.5" />
+        <span className="sr-only">Clear {title}</span>
+      </Button>
+    </>
+  )
+
   return (
     // Not `overflow-hidden`: the last row's player search opens a dropdown
     // below the card, and clipping it hid every result. The strip and the
     // body's field gradient are rounded to the card's corners instead.
-    <Card className="relative">
+    // `min-w-0`: the folded summary is one unbroken line of names, and a grid
+    // item is otherwise as wide as its longest line.
+    <Card data-lineup={side} className="relative min-w-0">
       <span
         aria-hidden
         className={cn(
@@ -127,49 +204,53 @@ export function LineupBuilder({
           side === 'you' ? 'bg-you' : 'bg-accent',
         )}
       />
-      <CardHeader
-        as="h2"
-        title={title}
-        description={description}
-        action={
-          <div className="flex items-center gap-2">
-            <Badge
-              tone={
-                unavailable > 0 ? 'caution' : filled === rows.length ? 'positive' : 'neutral'
-              }
-              icon={unavailable > 0 ? <AlertTriangle className="size-3" /> : undefined}
-            >
-              {filled}/{rows.length}
-              {unavailable > 0 && <span className="sr-only">, {unavailable} cannot be simulated</span>}
-            </Badge>
-            {!emptyChart && (
+      {disclosure ? (
+        // One row, the same elements open or shut, so the disclosure button is
+        // never re-created and keeps the focus through a press. On a phone the
+        // summary takes the second line; from 640px everything is on one.
+        <div
+          className={cn(
+            'flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-3 pb-2.5 sm:px-5',
+            !folded && 'border-line border-b',
+          )}
+        >
+          <h2 className="text-ink text-section shrink-0">{title}</h2>
+          {countBadge}
+          <LineupSummary
+            // Folded, who is in it. Open, the rows say that, and the line says
+            // what the lineup is instead.
+            text={folded ? starterNames(rows) : description}
+            flagged={folded ? flagged : []}
+          />
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {!folded && headerActions}
             <Button
               size="sm"
-              variant="ghost"
-              onClick={onAutofill}
-              // Gated on the board *arriving*, not on it being complete. A
-              // truncated board is still ranked, so autofill still picks the
-              // best available players from it; only the "no projection"
-              // claim needs the whole slate.
-              disabled={disabled || fillPending || filled === rows.length}
-              title={fill.label}
+              variant="secondary"
+              aria-expanded={!folded}
+              aria-controls={bodyId}
+              onClick={disclosure.onToggle}
             >
-              <Sparkles aria-hidden className="size-3.5" />
-              {fill.short}
-            </Button>
-            )}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => onChange(rows.map((row) => ({ ...row, player: null })))}
-              disabled={disabled || filled === 0}
-            >
-              <Trash2 aria-hidden className="size-3.5" />
-              <span className="sr-only">Clear {title}</span>
+              Edit lineup
+              {/* Two builders, two buttons: each says whose it is. */}
+              <span className="sr-only">, {title}</span>
+              <ChevronDown aria-hidden className={cn('transition-transform', !folded && 'rotate-180')} />
             </Button>
           </div>
-        }
-      />
+        </div>
+      ) : (
+        <CardHeader
+          as="h2"
+          title={title}
+          description={description}
+          action={
+            <div className="flex items-center gap-2">
+              {countBadge}
+              {headerActions}
+            </div>
+          }
+        />
+      )}
 
       {/*
         The depth chart: the slots on a strip of field, one yard line to a
@@ -177,6 +258,9 @@ export function LineupBuilder({
         rather than fourteen empty search boxes and a button in the corner.
       */}
       <CardBody
+        id={bodyId}
+        // Hidden, not unmounted: an open search and a half-typed name survive.
+        hidden={folded}
         className="space-y-2 rounded-b-[calc(var(--radius-card)-1px)] p-3 sm:p-4"
         style={{
           backgroundImage:
@@ -343,6 +427,36 @@ function SlotRow({
 }
 
 const NO_FINALS = new Map<string, KnownFinal>()
+
+/** The starters, in lineup order, as one line. Empty slots are not named. */
+function starterNames(rows: LineupRow[]): string {
+  const names = rows.flatMap((row) => (row.player ? [row.player.name] : []))
+  return names.length > 0 ? names.join(', ') : 'No starters yet'
+}
+
+/**
+ * The line beside a foldable builder's title: any designated starters, whole,
+ * then the text, which gives way first where the line runs out.
+ */
+function LineupSummary({
+  text,
+  flagged,
+}: {
+  text: string
+  flagged: { player: Player; injury: Injury }[]
+}) {
+  return (
+    <p className="text-ink-muted text-detail order-last flex min-w-0 basis-full items-center gap-x-3 sm:order-none sm:flex-1 sm:basis-0">
+      {flagged.map(({ player, injury }) => (
+        <span key={player.player_id} className="text-ink-secondary flex shrink-0 items-center gap-1.5 font-medium">
+          {player.name}
+          <InjuryBadge injury={injury} />
+        </span>
+      ))}
+      <span className="truncate">{text}</span>
+    </p>
+  )
+}
 
 /**
  * A finished game's score, where the projection would otherwise be.

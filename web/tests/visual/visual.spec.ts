@@ -62,6 +62,8 @@ interface Subjects {
   team: string
   compare: string[]
   roster: string[]
+  /** Two seven-player lineups, as the simulation's own share link carries them. */
+  matchup: string
 }
 
 interface BoardRow {
@@ -80,7 +82,13 @@ async function chooseSubjects(page: Page): Promise<Subjects> {
     board.filter((row) => row.projection.player.position === position).slice(0, count)
   const [lead] = at('RB', 1)
   if (!lead?.projection.game_id || !lead.projection.team) throw new Error('the board has no running back to show')
+  // Alternate picks down each position, so neither side is all the best players.
+  const id = (position: string, index: number) => at(position, index + 1)[index].projection.player.player_id
+  const side = (picks: [string, string, number][]) => picks.map(([slot, position, index]) => `${slot}:${id(position, index)}`).join(',')
+  const yours = side([['QB', 'QB', 0], ['RB', 'RB', 0], ['RB', 'RB', 2], ['WR', 'WR', 0], ['WR', 'WR', 2], ['TE', 'TE', 0], ['FLEX', 'RB', 4]])
+  const theirs = side([['QB', 'QB', 1], ['RB', 'RB', 1], ['RB', 'RB', 3], ['WR', 'WR', 1], ['WR', 'WR', 3], ['TE', 'TE', 1], ['FLEX', 'WR', 4]])
   return {
+    matchup: `a=${yours}&b=${theirs}&sim=10000&mode=independent&seed=7`,
     recordedAt: new Date().toISOString(),
     playerId: lead.projection.player.player_id,
     gameId: lead.projection.game_id,
@@ -119,6 +127,12 @@ interface Screen {
   path: (subjects: Subjects) => string
   /** Seed My team, for screens that read it. */
   roster?: boolean
+  /**
+   * A button to press once the page has loaded, and what must then be on the
+   * page: for a screen that only exists after an action, such as a finished
+   * simulation.
+   */
+  press?: { button: string; then: string }
   /** The first screenful only, for a page too long to be worth a full picture. */
   foldOnly?: boolean
   /** Also photographed in the dark theme. */
@@ -152,6 +166,15 @@ const SCREENS: Screen[] = [
   { name: 'injuries', path: () => '/reports/injuries', dark: true, tablet: true },
   { name: 'compare', path: (s) => `/compare?players=${s.compare.join(',')}`, dark: true, tablet: true },
   { name: 'simulation', path: () => '/simulation', roster: true },
+  // A finished run: the answer first, both lineups folded under it. Its shape
+  // changes between a laptop and a phone, so it is held at all three widths.
+  {
+    name: 'simulation-result',
+    path: (s) => `/simulation?${s.matchup}`,
+    press: { button: 'Run simulation', then: '[data-simulation-summary]' },
+    dark: true,
+    tablet: true,
+  },
   { name: 'track-record', path: () => '/track-record' },
   { name: 'draft-board', path: () => '/draft-board' },
   { name: 'specimens', path: () => '/specimens', dark: true },
@@ -190,6 +213,15 @@ async function open(page: Page, screen: Screen, theme: 'light' | 'dark') {
   await expect(page.locator('main')).toBeVisible()
   await expect(page.locator('main [role="status"]')).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
+
+  if (screen.press) {
+    await page.getByRole('button', { name: screen.press.button, exact: true }).click()
+    await expect(page.locator(screen.press.then)).toBeVisible({ timeout: 45_000 })
+    await page.waitForLoadState('networkidle')
+    // The page scrolls itself to what the press produced. A full-page picture
+    // is taken from the top, and the sticky header belongs at the top of it.
+    await page.evaluate(() => window.scrollTo(0, 0))
+  }
 }
 
 for (const screen of SCREENS) {

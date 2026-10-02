@@ -33,7 +33,7 @@ npm run dev          # http://localhost:5173
 | `npm test` | unit tests (Vitest) for the pure logic under `src/` |
 | `npm run contract-check` | drive every endpoint against a running API |
 | `npm run test:e2e` | Playwright against a local build and the local API |
-| `npm run test:visual` | compare fifteen screens against committed screenshots |
+| `npm run test:visual` | compare sixteen screens against committed screenshots |
 
 ## How this is served in production
 
@@ -624,6 +624,65 @@ card is wide enough. Label and value used to be up to 1,100px apart.
 The order of the sections is unchanged and deliberate: nearest the model
 first. See the note at the top of `pages/PlayerDetailPage.tsx`.
 
+## The simulation result
+
+`/simulation` is two pages in one address. Before a run it is the two lineup
+builders, the run controls and what a run will produce. Once a run is asked
+for, it is read from the top down as an answer:
+
+| | what | where it is drawn |
+|---|---|---|
+| 1 | the result: estimated win probability, the two score ranges, the position gaps | `SimulationSummary`, one card, first on the page |
+| 2 | each lineup, folded to a line | `LineupBuilder` with `disclosure` |
+| 3 | the run controls | as before |
+| 4 | the rest: what the engine flagged about each lineup, the margin and the added-up projections, the swing players, the assumptions | `SimulationDetails` |
+
+A finished run used to be read in the order it was built, with the answer
+under both builders and the controls. On a 1440px screen all of 1 to 3 is now
+in the first screenful; on a 412px phone the estimate and both ranges are,
+with the gaps starting at its foot.
+
+**The summary is one surface, not a row of cards.** The estimate and the
+ranges sit side by side from 44rem of the card's own width (a query container,
+so a laptop with the sidebar open is judged by the room it has), and the gaps
+run under both, two positions to a line. Narrower, the three are stacked in
+that order. The figure is 36px; it was 60px.
+
+**Nothing the old result showed is gone, and each notice is still shown
+once.** Two of the four tiles are: each lineup's simulated average and median
+are in the summary now, beside its range ("116.4 pts on average", "Middle
+115.3"), and printing them again was the same numbers twice. The limits that
+qualify the estimate (no kickers or defences, players simulated on their own,
+no injury adjustment) are still directly under it, in the same part of the
+card.
+
+**The numbers beside a position's bar are outside it.** They were printed
+inside, where the bar ran over them: the larger a lead, the less legible the
+number that made it. Each column of rows is headed with whose number is on
+which side.
+
+**A lineup folds to a line and is not removed.** The line says whose it is,
+how many slots are filled, who is in it, and names any starter carrying an
+injury designation with the designation, which is never the part that is cut
+short. "Edit lineup" is a disclosure button: one button, in the same place open
+or shut so it keeps the focus through a press, with `aria-expanded` and
+`aria-controls`. The body stays mounted and hidden, so an opened lineup is
+exactly as it was left.
+
+**The lineups fold when the run starts, not when it comes back.** The waiting
+card is where the result will be and holds some of its height, so the page the
+answer lands in is already there and grows under it instead of collapsing. A
+refused run opens the lineups again, under the refusal: it is a thing to fix
+in a lineup. Loading an earlier run from the history goes back to building.
+
+**Three pieces of copy moved by a word.** "The overlap is why the result above
+is a chance" lost "above", because on a wide screen the estimate is beside the
+chart. The position rows gained "Gap" and each side's name as column heads.
+Each range line gained "pts on average". No statistical claim was reworded.
+
+Not done here: the ranges are still the simulation's own bars and not the
+field strip. That is P2.7, the chart kit.
+
 ## Three decisions in the Phase 3 views
 
 **Tier bands are drawn only where a tier means something.** `/rankings/{position}`
@@ -652,7 +711,7 @@ check that the sampler drew from the stored distributions. Under the current run
 they differ by roughly 18% — same root cause as the missing `expected` above,
 since `projection_sum` adds raw model output while the sampler draws from the
 stored quantile curve, whose mean is higher. Showing both without explaining the
-gap would be worse than showing either alone, so `SimulationResults` renders a
+gap would be worse than showing either alone, so `SimulationDetails` renders a
 reconciliation notice and it disappears on a calibrated run.
 
 **"Swing" is a published range, not a ±.** The spec shape for this panel is
@@ -765,7 +824,7 @@ a cold start):
 E2E_BASE_URL=https://<the-deployed-origin> npm run test:e2e
 ```
 
-Thirteen specs, by what they protect:
+Fourteen specs, by what they protect:
 
 | spec | what breaks without it |
 |---|---|
@@ -779,6 +838,7 @@ Thirteen specs, by what they protect:
 | `board.spec.ts` | the board at every width: a range strip on every row, 40px rows and the remembered 48px choice, the toolbar and column header staying in view, the row as the link, headers that explain themselves, the table giving way to the list by measured room, nothing in a list row printed over anything else at 412, 390 and 360px on a graded and an ungraded week, an injury designation on the board |
 | `player.spec.ts` | the player page: the bar following the page down with the name and the projection in it, each section link landing its section under the bar with the focus, the week stepper keeping the scroll position and the focus and saying why it stops at the last week, a projection tick for every game that had one, the table's difference column, a season choice the usage trend follows, earlier seasons loaded on request, a week with no projection; axe in both themes; no overflow at 1024, 820, 412, 390 and 360px; the one-line bar and 44px targets on a phone |
 | `compare.spec.ts` | the comparison and the way to it: every range strip starting at one edge at one width, on a table and on a phone's list, with the scale named in the heading; one best mark per row and never the word; two players side by side on a phone with nothing to scroll, three scrolling in the table's own frame with the metric held; ticks on the board and My team living in the URL, crossing a position tab and surviving Back; a press beside a box ticking it without opening the player or moving the page; six as the most; the bar following the page and clearing the phone's navigation; axe in both themes; no overflow at 1024, 820, 390 and 360px |
+| `simulation.spec.ts` | a finished simulation read from the top: the result first with the estimate, both ranges and the gaps in it, and the lineups, the controls and the rest under it in that order; the summary printing what the API returned; each lineup folded to a line that names its starters, opening and shutting from the keyboard with the focus kept and its players intact; the lineups folding as the run starts and the answer landing where the wait was; running again and "Adjust and run again"; a refused run opening the lineups; loading an earlier run; axe and the heading outline in both themes; at 1440, 1024, 820, 768, 412, 390 and 360px no overflow, nothing past the screen's edge, both ranges on one scale, every gap's numbers printed beside its bar; a 44px disclosure on a phone |
 | `shell.spec.ts` | the sidebar's two groups and its foot, the page a reader is on being marked (a team's page marks Matchups), the rail folding to named icons and staying folded, the header no longer repeating the sidebar; every old address arriving with its filters, Reports and its two views, Teams as a view of Matchups, the palette listing every page; on a phone the slate chip saying the week and the scoring format, and the bottom bar keeping its five |
 | `primitives.spec.ts` | the shared `Button`, `DataTable` and `FilterToolbar` on `/specimens`: sorting from the keyboard, the row link, the sticky header, row heights, target sizes, a loading button keeping its width and focus, a filter choice becoming a select only where it does not fit |
 | `tables.spec.ts` | Live, Usage, Injuries, Teams and the draft board on the shared table and toolbar: filters working together and living in the URL, a filter leaving the sort alone, the row as the link, row groups announced as headings, a Live refresh keeping focus, scroll and filters, an empty filter told apart from no data, loading and failed requests; and all six screens (My team included) at 1440, 1024, 820, 768, 412, 390 and 360px: no page overflow, no clipped or wrapped control, no dropped column, the player column held while a table scrolls in its frame, and at the three phone widths the list in its place with every column of the table in each row, nothing printed over anything else, one link per row; every toolbar control 44px on a phone |
@@ -787,7 +847,10 @@ Thirteen specs, by what they protect:
 of routes at 1440, 820 and Pixel 7 widths in both themes (or at any width in
 pixels: `--widths 1024,768,360`, with `--roster` to seed My team), flagging sideways
 overflow and console errors, for looking at a change rather than asserting on
-it. The whole verification sequence, with this in it, is the `frontend-verify`
+it. It prints each page's height and, where a page is too wide, the elements
+that make it so. `--press "Run simulation"` presses that button first, for a
+screen that only exists after an action, and `--fold` also saves the first
+screenful. The whole verification sequence, with this in it, is the `frontend-verify`
 skill in `.claude/skills`.
 
 `token-contrast.mjs` is the one to run when touching the palette. It parses the
@@ -802,13 +865,16 @@ and the default worker count measures contention rather than the app.
 
 ### Screenshots
 
-`tests/visual` holds a picture of fifteen screens — dashboard, board, the
+`tests/visual` holds a picture of sixteen screens — dashboard, board, the
 board with two players ticked to compare, player, game, team, My team, Live,
-usage, injuries, compare, the simulation builder, the track record, the draft
-board and the specimen page — at 1440px and 412px, with the dashboard, both
-boards, player page, Live, injuries, compare and specimens also in the dark
-theme. The six screens whose tables change shape between a laptop and a phone
-(team, My team, Live, usage, injuries, compare) are also held at 820px. A token or primitive change touches every page, including the
+usage, injuries, compare, the simulation builder, a finished simulation, the
+track record, the draft board and the specimen page — at 1440px and 412px,
+with the dashboard, both boards, player page, Live, injuries, compare, the
+finished simulation and specimens also in the dark theme. The seven screens
+whose layout changes shape between a laptop and a phone (team, My team, Live,
+usage, injuries, compare, the finished simulation) are also held at 820px. A
+screen that only exists after an action names the button to press (`press` in
+`SCREENS`): the finished simulation opens a matchup link and runs it. A token or primitive change touches every page, including the
 ones nobody opened; these turn that into image diffs to approve.
 
 ```bash

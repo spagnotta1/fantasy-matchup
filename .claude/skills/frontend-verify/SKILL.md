@@ -74,6 +74,18 @@ moved.
   tablet.
 - `--roster id,id,...` seeds My team (and Live's "My team" rows) from
   `subjects.json`'s `roster`.
+- A screen that only exists after an action: `--press "Run simulation"` presses
+  that button once the page has loaded and waits for what it started. A
+  finished simulation is `--route "simulation?<matchup>" --press "Run simulation"`,
+  with `<matchup>` from `subjects.json`.
+- `--fold` also saves the first screenful (`<name>.fold.png`), taken where the
+  page was left. Use it when the question is what a reader sees without
+  scrolling.
+- Every line prints the page's height, and an overflow line names the
+  innermost elements that reach past the screen.
+- A visible browser has a 15px scrollbar that a phone does not, so `--widths 360`
+  lays the page out at 345px. An overflow there that `--headless` does not show
+  is a page that only just fits at 360px: worth fixing, not a false alarm.
 
 For a first or risky change, look at more than the default routes. Every
 route at all three widths is about four minutes.
