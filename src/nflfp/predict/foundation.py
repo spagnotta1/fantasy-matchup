@@ -236,6 +236,42 @@ def undercovered_short_history() -> dict[tuple[str, str], float]:
 
 
 @dataclass(frozen=True)
+class LineupCoverage:
+    """How often a simulated lineup total's interval held the realised total.
+
+    Measured at the lineup level, with every player drawn independently, on
+    held-out historical lineups. This is the number that says what ignoring
+    correlation costs, and it is why a caveat about correlated players may not
+    claim the interval is too narrow.
+    """
+
+    profile: str
+    lineups: int
+    matchups: int
+    nominal_80: float
+    coverage_80: float
+    nominal_90: float
+    coverage_90: float
+
+
+#: The independent sampler at the shipped tail factors, over every held-out
+#: matchup. Source: docs/simulation-readiness.md, "Phase 6D", "All held-out
+#: matchups". Any sentence shown to a user about what independence costs a
+#: lineup total quotes these, and the tests pin it to them. Half-PPR only: it
+#: is the one profile Phase 6D scored (see that section's limitations), so the
+#: figure is quoted as a measurement of the sampler, not re-derived per profile.
+LINEUP_INDEPENDENCE = LineupCoverage(
+    profile="half_ppr",
+    lineups=2_878,
+    matchups=1_439,
+    nominal_80=0.800,
+    coverage_80=0.7943,
+    nominal_90=0.900,
+    coverage_90=0.8919,
+)
+
+
+@dataclass(frozen=True)
 class AcceptanceCriteria:
     """What a challenger must demonstrate before it replaces the foundation.
 

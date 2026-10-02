@@ -320,14 +320,22 @@ def weather_context(row: Row) -> WeatherContext:
     reports context with an explicit reason. The read is unconditional, which
     is the whole extension point: an engine that starts writing the column
     flips ``applied_to_projection`` here with no further change.
+
+    The rain chance changes unit here and nowhere else. ``weather_forecasts``
+    stores it as the provider sends it, 0-100; every other share this service
+    reports is a 0-1 fraction, and a percentage read as a fraction is how
+    "62" became "6200%" on screen and tripped ``is_adverse`` at a 1% chance.
     """
     multiplier = _f(row, "weather_multiplier")
+    stored_rain_chance = _f(row, "precipitation_probability")
     return WeatherContext(
         is_indoor=_b(row, "is_indoor"),
         temperature_f=_f(row, "temperature_f"),
         wind_mph=_f(row, "wind_mph"),
         wind_gust_mph=_f(row, "wind_gust_mph"),
-        precipitation_probability=_f(row, "precipitation_probability"),
+        precipitation_probability=(
+            None if stored_rain_chance is None else stored_rain_chance / 100.0
+        ),
         snowfall_in=_f(row, "snowfall_in"),
         roof_uncertain=bool(row.get("roof_uncertain") or False),
         source=_s(row, "weather_source"),

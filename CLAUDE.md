@@ -115,8 +115,10 @@ python scripts/phase8e_evaluate.py --seasons 2020 2021 2022 2023 2024 2025
 # Frontend (web/)
 npm run build                                 # tsc -b && vite build
 npm run lint                                  # oxlint
-npm run contract-check                        # API contract
-npm run test:e2e                              # playwright
+npm test                                      # vitest, pure logic, no server
+npm run contract-check                        # API contract, needs the local API
+npm run test:e2e                              # playwright, local build + local API
+npm run test:visual                           # screenshots vs committed baselines
 npm run test:contrast                         # token contrast
 ```
 

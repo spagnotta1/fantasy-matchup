@@ -359,6 +359,111 @@ class TestPlayerQueries:
         with pytest.raises(ValueError):
             await repository.search_players(warehouse, query="   ")
 
+
+class TestSearchRelevance:
+    """Which player comes first when a term matches several.
+
+    The search box is the fastest way to a player page, and the first result is
+    the one Enter opens. It used to be decided by whether the term began the
+    *full* name, so a quarterback who last played in 2009 and whose first name
+    began with the term outranked this week's RB1, whose surname did.
+    """
+
+    async def _add(
+        self,
+        session,
+        player_id: str,
+        name: str,
+        *,
+        position: str = "RB",
+        last_season: int | None = SEASON,
+        status: str = "ACT",
+    ) -> None:
+        await session.execute(
+            text(
+                "INSERT INTO raw_players (gsis_id, display_name, football_name,"
+                " position, latest_team, status, last_season, years_of_experience)"
+                " VALUES (:i, :n, :f, :p, 'KC', :st, :s, 4)"
+            ),
+            {
+                "i": player_id,
+                "n": name,
+                "f": name.split()[0],
+                "p": position,
+                "st": status,
+                "s": last_season,
+            },
+        )
+
+    async def _names(self, session, query: str, **kwargs) -> list[str]:
+        rows = await repository.search_players(session, query=query, **kwargs)
+        return [row["display_name"] for row in rows]
+
+    async def test_a_current_surname_match_beats_a_retired_first_name_match(self, warehouse):
+        # The reported case, with invented names: the term starts one player's
+        # first name and the other's surname. Both are whole-word matches, so
+        # the one who is still playing comes first.
+        await self._add(warehouse, "00-0001001", "Gilbert Hamden", position="QB", last_season=2009)
+        await self._add(warehouse, "00-0001002", "Jamal Gilbertson")
+        assert await self._names(warehouse, "gil") == ["Jamal Gilbertson", "Gilbert Hamden"]
+
+    async def test_a_historical_player_is_still_found(self, warehouse):
+        # Ranked lower, never hidden: looking up a retired player is legitimate.
+        await self._add(warehouse, "00-0001001", "Gilbert Hamden", position="QB", last_season=2009)
+        assert await self._names(warehouse, "hamden") == ["Gilbert Hamden"]
+
+    async def test_an_exact_name_comes_first_whatever_the_season(self, warehouse):
+        await self._add(warehouse, "00-0001003", "Sam Howell", last_season=2019)
+        await self._add(warehouse, "00-0001004", "Sam Howellington")
+        assert await self._names(warehouse, "sam howell") == ["Sam Howell", "Sam Howellington"]
+
+    async def test_the_start_of_any_word_beats_a_match_inside_one(self, warehouse):
+        # "stone" starts a name in one and is buried in the other. The whole-word
+        # match wins even though the other player is the current one.
+        await self._add(warehouse, "00-0001005", "Stone Walker", last_season=2012)
+        await self._add(warehouse, "00-0001006", "Bo Blackstone")
+        assert await self._names(warehouse, "stone") == ["Stone Walker", "Bo Blackstone"]
+
+    async def test_a_hyphenated_or_apostrophised_surname_counts_as_a_word(self, warehouse):
+        await self._add(warehouse, "00-0001007", "Jax Smith-Njigbo", position="WR")
+        await self._add(warehouse, "00-0001008", "Benji Oldman", position="WR")
+        await self._add(warehouse, "00-0001009", "Aidan O'Connor", position="QB")
+        await self._add(warehouse, "00-0001010", "Falcon Bacon", position="QB")
+        assert (await self._names(warehouse, "nji"))[0] == "Jax Smith-Njigbo"
+        assert (await self._names(warehouse, "con"))[0] == "Aidan O'Connor"
+
+    async def test_recent_seasons_come_first_among_equal_matches(self, warehouse):
+        await self._add(warehouse, "00-0001011", "Old Taylorson", last_season=2001)
+        await self._add(warehouse, "00-0001012", "Mid Taylorson", last_season=2019)
+        await self._add(warehouse, "00-0001013", "New Taylorson")
+        assert await self._names(warehouse, "taylorson") == [
+            "New Taylorson",
+            "Mid Taylorson",
+            "Old Taylorson",
+        ]
+
+    async def test_a_rostered_player_precedes_one_cut_in_the_same_season(self, warehouse):
+        await self._add(warehouse, "00-0001014", "Abe Winslowe", status="CUT")
+        await self._add(warehouse, "00-0001015", "Zed Winslowe")
+        assert await self._names(warehouse, "winslowe", active_only=False) == [
+            "Zed Winslowe",
+            "Abe Winslowe",
+        ]
+
+    async def test_the_limit_keeps_the_most_relevant(self, warehouse):
+        # The palette asks for a handful. They must be the right handful.
+        for index in range(8):
+            await self._add(
+                warehouse, f"00-00020{index:02d}", f"Gideon Retired{index}", last_season=1990 + index
+            )
+        await self._add(warehouse, "00-0002099", "Marcus Gideonson")
+        assert (await self._names(warehouse, "gid", limit=3))[0] == "Marcus Gideonson"
+
+    async def test_position_context_still_filters(self, warehouse):
+        await self._add(warehouse, "00-0001016", "Gabe Passer", position="QB")
+        await self._add(warehouse, "00-0001017", "Gabe Runner", position="RB")
+        assert await self._names(warehouse, "gabe", positions=["QB"]) == ["Gabe Passer"]
+
     async def test_history_joins_the_stored_projection(self, warehouse):
         rows = await repository.fetch_player_history(
             warehouse, player_id="00-0000001", scoring_profile="half_ppr", limit=5

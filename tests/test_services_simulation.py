@@ -469,6 +469,60 @@ class TestAssumptions:
         assert "injury" in joined
         assert "matchup_score is NULL" in joined
 
+    def test_the_independence_note_quotes_the_recorded_measurement(self):
+        # The same Phase 6D numbers the same-game lineup caveat quotes. Two
+        # sentences on one result card must not disagree about what was
+        # measured, and neither may drift from the record.
+        from nflfp.predict.foundation import LINEUP_INDEPENDENCE
+
+        joined = " ".join(simulation.SimulationAssumptions.current().notes())
+        assert f"{LINEUP_INDEPENDENCE.coverage_80:.4f}" in joined
+        assert f"{LINEUP_INDEPENDENCE.nominal_80:.3f}" in joined
+        assert f"{LINEUP_INDEPENDENCE.lineups:,}" in joined
+        assert "too narrow" not in joined
+
+
+class TestSharedGameNotice:
+    """Games spanning both lineups are named by their teams, never by key."""
+
+    def _projection(self, player_id: str, team: str, opponent: str, is_home: bool):
+        from nflfp.services.dto import PlayerProjection, PlayerRef, PointDistribution
+
+        return PlayerProjection(
+            player=PlayerRef(player_id=player_id, name=player_id, position="WR", team=team),
+            season=2026,
+            week=4,
+            team=team,
+            opponent=opponent,
+            is_home=is_home,
+            game_id="2026_04_ATL_NO",
+            points=PointDistribution(scoring_profile="half_ppr", expected=12.0, predicted=12.0),
+        )
+
+    def test_a_shared_game_reads_away_at_home(self):
+        from types import SimpleNamespace
+
+        by_id = {
+            "a": self._projection("a", "NO", "ATL", True),
+            "b": self._projection("b", "ATL", "NO", False),
+        }
+        labels = simulation._shared_game_labels(
+            SimpleNamespace(player_ids=("a",)), SimpleNamespace(player_ids=("b",)), by_id
+        )
+        assert labels == ("ATL at NO",)
+
+    def test_lineups_in_different_games_share_nothing(self):
+        from dataclasses import replace
+        from types import SimpleNamespace
+
+        by_id = {
+            "a": self._projection("a", "NO", "ATL", True),
+            "b": replace(self._projection("b", "KC", "LV", False), game_id="2026_04_KC_LV"),
+        }
+        assert simulation._shared_game_labels(
+            SimpleNamespace(player_ids=("a",)), SimpleNamespace(player_ids=("b",)), by_id
+        ) == ()
+
     def test_a_fully_supported_build_has_fewer_notes(self):
         # The notes are derived from the flags, so a future build with a kicker
         # model stops claiming a kicker gap without an edit.

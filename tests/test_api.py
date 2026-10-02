@@ -300,7 +300,11 @@ class TestProjectionEndpoints:
         body = response.json()
         assert body["data"] == []
         assert body["meta"]["model"] is None
-        assert any("not an error" in n for n in body["meta"]["notices"])
+        # The absence is reported, and names the week it is about. The wording
+        # is the plain-language copy of 2026-09-25; what is pinned is that an
+        # empty board says why it is empty.
+        expected = f"Projections for {SEASON} week {UPCOMING_WEEK + 1} are not out yet."
+        assert expected in body["meta"]["notices"]
 
     async def test_a_missing_projection_is_a_404_with_a_code(self, client):
         response = await client.get(

@@ -10,6 +10,8 @@ permanent kind is distinguishable from the kind worth waiting out.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from sqlalchemy import text
 
@@ -183,6 +185,52 @@ class TestCorrelationGroups:
         assert len(caveats) == 1
         assert "share an offence" in caveats[0]
         assert "target competition" in caveats[0]
+
+    def test_the_same_game_caveat_quotes_the_measurement(self):
+        # The caveat used to say an independent sum reports an interval that is
+        # "too narrow". That was the expectation before Phase 6C; Phase 6D
+        # measured the independent sampler's lineup interval at nominal. An
+        # overstated limitation teaches a reader to discount a number the
+        # evidence supports, so the sentence quotes what was measured instead.
+        caveats = rosters.lineup_caveats(
+            [player("a", team="KC"), player("b", team="BUF")]
+        )
+        assert len(caveats) == 1
+        assert "too narrow" not in caveats[0]
+        assert "correlated" in caveats[0]
+        assert "0.7943" in caveats[0]
+        assert "0.800" in caveats[0]
+        assert "2,878" in caveats[0]
+
+    def test_the_quoted_measurement_is_the_recorded_one(self):
+        # Restated in the business layer rather than imported, so this is what
+        # stops the sentence drifting from the record it cites.
+        from nflfp.predict.foundation import LINEUP_INDEPENDENCE
+
+        assert rosters.INDEPENDENT_LINEUPS_MEASURED == LINEUP_INDEPENDENCE.lineups
+        assert rosters.INDEPENDENT_COVERAGE_80 == LINEUP_INDEPENDENCE.coverage_80
+        assert rosters.LINEUP_NOMINAL_80 == LINEUP_INDEPENDENCE.nominal_80
+
+    def test_a_game_is_named_by_its_teams_not_its_id(self):
+        # "2025_10_KC_BUF" is a warehouse key. A reader knows the game as two
+        # teams.
+        home = replace(player("a", team="BUF"), opponent="KC", is_home=True)
+        away = replace(player("b", team="KC"), opponent="BUF", is_home=False)
+        caveats = rosters.lineup_caveats([home, away])
+        assert "2025_10_KC_BUF" not in caveats[0]
+        assert "(KC at BUF)" in caveats[0]
+
+    def test_a_game_label_reads_away_at_home(self):
+        away = player("a", team="KC")
+        away = replace(away, opponent="BUF", is_home=False)
+        assert rosters.game_label(away) == "KC at BUF"
+        home = replace(away, team="BUF", opponent="KC", is_home=True)
+        assert rosters.game_label(home) == "KC at BUF"
+
+    def test_a_game_with_no_known_sides_has_no_label(self):
+        # Better to drop the parenthesis than to print the key or guess a side.
+        unknown = replace(player("a", team="KC"), opponent=None)
+        assert rosters.game_label(unknown) is None
 
     def test_an_uncorrelated_lineup_owes_nothing(self):
         assert rosters.lineup_caveats(

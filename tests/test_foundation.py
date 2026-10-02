@@ -96,6 +96,20 @@ class TestValidationRecord:
             shortfall = VALIDATION.nominal_p10_p90 - coverage
             assert (key in flagged) == (shortfall > COVERAGE_TOLERANCE)
 
+    def test_the_lineup_record_is_the_phase_6d_measurement(self):
+        # docs/simulation-readiness.md, "Phase 6D", "All held-out matchups".
+        # Every sentence a user reads about what independence costs a lineup
+        # total quotes this record, so the record itself is pinned here.
+        from nflfp.predict.foundation import LINEUP_INDEPENDENCE
+
+        assert LINEUP_INDEPENDENCE.lineups == 2_878
+        assert LINEUP_INDEPENDENCE.matchups == 1_439
+        assert LINEUP_INDEPENDENCE.coverage_80 == 0.7943
+        assert LINEUP_INDEPENDENCE.coverage_90 == 0.8919
+        # At nominal, on the near side: the measurement that retired "too narrow".
+        assert abs(LINEUP_INDEPENDENCE.coverage_80 - LINEUP_INDEPENDENCE.nominal_80) < 0.01
+        assert abs(LINEUP_INDEPENDENCE.coverage_90 - LINEUP_INDEPENDENCE.nominal_90) < 0.01
+
     def test_it_states_what_was_excluded(self):
         joined = " ".join(VALIDATION.notes).lower()
         assert "market" in joined

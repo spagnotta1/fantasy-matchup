@@ -121,7 +121,9 @@ async def search(
 
     Args:
         session: Open async session.
-        query: Partial name. Prefix matches rank above substring matches.
+        query: Partial name. An exact name ranks first, then the start of any
+            word in it, then a match inside a word; recent seasons first
+            within each. See :func:`repository.search_players`.
         limit: Maximum results, capped at :data:`MAX_SEARCH_RESULTS`.
         positions: Restrict to these positions.
         active_only: Exclude retired and inactive players. Default ``True``

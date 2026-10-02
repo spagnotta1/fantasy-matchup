@@ -694,7 +694,8 @@ client reads every time, not a caveat in a guide it reads once.
     "provenance": "context",
     "weather": { "applied_to_projection": false, "multiplier": null,
                  "unapplied_reason": "The frozen model excludes weather...",
-                 "wind_mph": 14.0, "is_adverse": false }
+                 "wind_mph": 14.0, "precipitation_probability": 0.35,
+                 "is_adverse": false }
   }
 }
 ```
@@ -1547,6 +1548,9 @@ Nothing here is asserted without a check that fails loudly:
 | Upcoming-week context | usage / injury blocks, 2026 wk 2 | usage 636/639 (was 22), injury reports 62 (was 0) |
 | Track record | `/track-record`, half-PPR, 2018–2026 | P10–P90 coverage 0.791, P25–P75 0.497, 45,974 player-weeks |
 | Board render cost | Playwright, 4× CPU throttle, `/players` | 18,447 → 4,010 DOM nodes; 1,343 → 745 ms blocking |
+| Rain chance unit | `/projections`, 2026 wk 3, 539 outdoor rows | all within 0–1 (warehouse stores 0–100); adverse flag raised only at 20+ mph or 60%+ |
+| Range widths are shared | distinct `ceiling − median` per position, run 146, 3 profiles | 2–24 widths across 90–269 players; 2%–9% have a width of their own |
+| Search relevance | `/search?q=gib`, fantasy positions | the current surname match first, the 2009 first-name match second |
 | Live scoring ≡ official line | `/live` vs `player_week`, 3 completed weeks | 833/858 exact; the rest are 2-pt conversions and 1 blocked-punt TD |
 | Warmer hits the browser's keys | `jobs run warm_cache`, key test | 43 paths incl. every profile's board as the client requests it |
 | Python ≡ SQL scoring | both renderers, 5 profiles | exact over 20,000 player-weeks |
