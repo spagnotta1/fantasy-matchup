@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { NavLink, useSearchParams } from 'react-router-dom'
 
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -23,15 +24,26 @@ import { cn } from '@/utils/cn'
  * It draws no rule of its own. It sits at the foot of the board's sticky bar,
  * whose bottom border is the line the active tab's underline lands on.
  *
- * A tab carries one thing across: the players ticked to compare. Search, team
- * and sort belong to the board they were set on and are dropped, as before. A
- * selection is the reader's, not the board's — a flex decision is a running
- * back against a wide receiver, ticked on two tabs.
+ * A tab carries everything in the URL across but the search term. The players
+ * ticked to compare are the reader's, not the board's — a flex decision is a
+ * running back against a wide receiver, ticked on two tabs. The sort, team and
+ * layout are settings: a reader sorting by matchup grade wants every position
+ * sorted that way, not to choose it again on each tab. The search is the one
+ * thing dropped, because a name typed on one board rarely matches the next
+ * (`RankingsPage` clears it on a change of position).
  */
 export function PositionTabs({ active, className }: { active: string | null; className?: string }) {
   const { data, isPending } = usePositions()
   const [searchParams] = useSearchParams()
-  const search = compareSearch(parsePlayerIds(searchParams.get(COMPARE_PARAM)))
+  const search = useMemo(() => {
+    const params = new URLSearchParams(searchParams)
+    params.delete('query')
+    // Normalised as the compare screen reads it: de-duplicated and capped.
+    const compare = compareSearch(parsePlayerIds(searchParams.get(COMPARE_PARAM)))
+    params.delete(COMPARE_PARAM)
+    const rest = params.toString()
+    return [compare.slice(1), rest].filter(Boolean).join('&')
+  }, [searchParams])
   // One underline that slides between tabs. Changing position is a param
   // change on a mounted page (see `routes.tsx`), which is what lets it slide
   // rather than reappear.

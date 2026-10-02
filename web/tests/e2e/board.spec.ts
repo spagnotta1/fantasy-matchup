@@ -125,6 +125,34 @@ test.describe('on a wide screen', () => {
     expect(values).toEqual([...values].sort((a, b) => b - a))
   })
 
+  test('the sort and the team follow the reader to another position, the search does not', async ({ page }) => {
+    await openBoard(page)
+    const tabs = page.getByRole('navigation', { name: 'Position' })
+    const sort = page.getByLabel(/^sort by$/i).filter({ visible: true }).first()
+    const team = page.getByLabel(/^team$/i).filter({ visible: true }).first()
+    const search = page.getByRole('searchbox', { name: /search players/i })
+
+    await sort.selectOption('matchup')
+    await expect(page).toHaveURL(/sort=matchup/)
+    const teamValue = await team.locator('option').nth(1).getAttribute('value')
+    await team.selectOption(teamValue)
+    await search.fill('a')
+    await expect(page).toHaveURL(/query=a/)
+
+    await tabs.getByRole('link', { name: 'WR', exact: true }).click()
+    await expect(page).toHaveURL(/\/rankings\/WR\?/)
+    await expect(sort).toHaveValue('matchup')
+    await expect(team).toHaveValue(teamValue!)
+    await expect(page.getByRole('columnheader', { name: /Matchup/ })).toHaveAttribute('aria-sort', 'descending')
+    await expect(search).toHaveValue('')
+    expect(page.url()).not.toMatch(/query=/)
+
+    // And back out to every position.
+    await tabs.getByRole('link', { name: 'All', exact: true }).click()
+    await expect(page).toHaveURL(/\/rankings\?/)
+    await expect(sort).toHaveValue('matchup')
+  })
+
   test('the table gives way to the list before its rows would wrap', async ({ page }) => {
     // The sidebar takes 240px, so a 1,100px window has less room than an
     // 820px tablet. The board measures the room it has, not the window.
