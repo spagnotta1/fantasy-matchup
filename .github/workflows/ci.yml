@@ -1,9 +1,10 @@
 name: CI
 
-# What runs here needs no production data: the backend's unit tests, its
-# database tests against an empty Postgres (they build their own throwaway
-# schemas), and the frontend's build, lint, unit tests, token contrast audit
-# and screenshot comparison (which replays recorded API responses).
+# What runs here needs no production data: the backend's unit tests, the
+# database tests that work on an empty, migrated Postgres (most build their own
+# throwaway schemas), and the frontend's build, lint, unit tests, token
+# contrast audit and screenshot comparison (which replays recorded API
+# responses).
 #
 # What does not run here, and why: the Playwright end-to-end suite and the
 # contract check both drive a live API with a published slate behind it. They
@@ -58,7 +59,21 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest -m integration
+      # The tables, on an empty database. Most database tests build a throwaway
+      # schema of their own; the job runner's write to the real run log.
+      - run: alembic upgrade head
+      # Deselected: the tests that read a loaded warehouse (raw games, the
+      # training set, a published run). There is no data here to read, so they
+      # can only fail, and failing they say nothing about the change. They run
+      # locally against the mirror (`pytest` with DATABASE_URL set), which is
+      # also where a new test of that kind belongs on this list.
+      - run: >-
+          pytest -m integration
+          --deselect tests/test_api_draft.py
+          --deselect tests/test_api_trade.py
+          --deselect tests/test_predict.py::TestAgainstRealData
+          --deselect tests/test_predict_3b.py::TestHeldOutBacktest
+          --deselect tests/test_scoring.py::test_python_and_sql_renderers_agree
 
   web:
     name: Frontend build, lint and unit tests
