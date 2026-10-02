@@ -17,6 +17,8 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Select } from '@/components/ui/Select'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/feedback/States'
+import { CompareBar } from '@/components/domain/CompareBar'
+import { CompareTick } from '@/components/domain/CompareTick'
 import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { PlayerCell } from '@/components/domain/PlayerCell'
@@ -25,6 +27,7 @@ import { PlayerSearchField } from '@/components/domain/PlayerSearchField'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { useSlate } from '@/app/slate-context'
+import { useCompareSelection, type CompareSelection } from '@/hooks/useCompareSelection'
 import { useMyLineup } from '@/hooks/useMyLineup'
 import { boardCeiling } from '@/utils/board'
 import { cn } from '@/utils/cn'
@@ -51,6 +54,11 @@ const FANTASY_POSITIONS = ['QB', 'RB', 'WR', 'TE']
  * than dropped: anyone ruled out (the designation is a hard caveat; they keep
  * their projection, they just do not play) and anyone with no projection this
  * week (a bye, an inactive listing, or a run that does not cover them).
+ *
+ * Every lineup and bench row opens with a tick box, and a bar at the foot of
+ * the screen goes to the comparison of whoever is ticked: the starter and the
+ * bench player a manager is choosing between are on this page, two tables
+ * apart. The ticks are in the link (`?compare=`) beside the roster.
  */
 export default function MyTeamPage() {
   const slate = useSlate()
@@ -74,6 +82,7 @@ export default function MyTeamPage() {
     simulateHref,
     writeLineup,
   } = useMyLineup()
+  const compare = useCompareSelection()
   const [copied, setCopied] = useState(false)
 
   const benchSlot = (index: number) =>
@@ -289,6 +298,7 @@ export default function MyTeamPage() {
                 }
               })}
               scaleMax={scaleMax}
+              compare={compare}
               onRemove={(id) => setIds(ids.filter((x) => x !== id))}
             />
             {openSlots > 0 && (
@@ -331,12 +341,17 @@ export default function MyTeamPage() {
                   }
                 })}
                 scaleMax={scaleMax}
+                compare={compare}
                 onRemove={(id) => setIds(ids.filter((x) => x !== id))}
               />
             </Card>
           )}
         </Refreshing>
       )}
+
+      {/* Outside `Refreshing`, which makes what it wraps inert while a week
+          loads: the bar is the way out of a selection, and stays usable. */}
+      <CompareBar selection={compare} />
     </>
   )
 }
@@ -354,11 +369,13 @@ function RosterTable({
   caption,
   rows,
   scaleMax,
+  compare,
   onRemove,
 }: {
   caption: string
   rows: { slot: string; entry: RankedProjection | undefined; move?: MoveControl; emptyNote?: string }[]
   scaleMax: number
+  compare: CompareSelection
   onRemove: (playerId: string) => void
 }) {
   // A finished week prints "actual 18.4" beside each projection, which needs
@@ -380,16 +397,27 @@ function RosterTable({
     //
     // The layout is fixed, so the table can never be wider than its card: the
     // player column takes what is left and the name wraps inside it.
+    //
+    // The tick box is a column at every width. It is how two of these rows
+    // reach the comparison, and a phone is where a start/sit call is made.
+    // Under a finger it is 44px, most of which the slot column gives up: a
+    // slot badge needs 48px and had 72, and the name beside it needs every
+    // pixel a 360px phone has.
     <Table className="@container" caption={caption} layout="fixed">
       <TableHead>
-        <ColumnHeader className="w-18 @max-2xl:pr-0">Slot</ColumnHeader>
+        <ColumnHeader className="w-9 pointer-coarse:w-11">
+          <span className="sr-only">Compare</span>
+        </ColumnHeader>
+        <ColumnHeader className="w-12 px-0">Slot</ColumnHeader>
         <ColumnHeader>Player</ColumnHeader>
         <ColumnHeader className="hidden w-26 @2xl:table-cell">Matchup</ColumnHeader>
         <ColumnHeader className="hidden w-52 @[60rem]:table-cell">Range</ColumnHeader>
         <ColumnHeader
           numeric
           aria-label="Projection"
-          className={cn('w-20', hasActuals ? '@2xl:w-40' : '@2xl:w-26')}
+          // On the two-line layout a bare projection needs 64px, and the
+          // 16px it does not use is what the tick box cost the name.
+          className={hasActuals ? 'w-20 @2xl:w-40' : 'w-16 @2xl:w-26'}
         >
           <span className="@2xl:hidden">Proj.</span>
           <span className="@max-2xl:hidden">Projection</span>
@@ -416,7 +444,20 @@ function RosterTable({
                   last && entry && '@2xl:[&>*]:border-b-0',
                 )}
               >
-                <TableCell className="@max-2xl:pr-0">
+                <TableCell className="relative p-0">
+                  {entry && (
+                    <CompareTick
+                      name={entry.projection.player.name}
+                      ticked={compare.has(entry.projection.player.player_id)}
+                      full={compare.full}
+                      onToggle={() => compare.toggle(entry.projection.player.player_id)}
+                      // The whole cell: 44px across under a finger. Laid
+                      // over it, so it adds nothing to the row's height.
+                      className="absolute inset-0"
+                    />
+                  )}
+                </TableCell>
+                <TableCell className="px-0">
                   {/* Squared: a slot is a mark in a column, not a status. */}
                   <Badge tone={slot === 'BN' ? 'neutral' : 'accent'} className="rounded-chip">
                     {slot}
@@ -498,7 +539,7 @@ function RosterTable({
                 // The second line of the two-line layout: the matchup and the
                 // row's two actions under the player, full width.
                 <TableRow className="@2xl:hidden">
-                  <TableCell colSpan={3} className="pt-0 pb-2.5">
+                  <TableCell colSpan={4} className="pt-0 pb-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <span data-matchup className="inline-flex">
                         <MatchupGradeChip

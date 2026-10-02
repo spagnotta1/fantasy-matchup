@@ -5,6 +5,7 @@ import { makeEntry, makeProjection, perPlayerRangeBoard, sharedRangeBoard } from
 import {
   boardCeiling,
   entryPoints,
+  fieldScaleMax,
   gameLine,
   groupByTier,
   hasBandedIntervals,
@@ -111,6 +112,20 @@ describe('boardCeiling', () => {
       boardCeiling([makeEntry(1, { ceiling: 28 }), makeEntry(2, { ceiling: null, median: null }), makeEntry(3, { ceiling: 33.5 })]),
     ).toBe(33.5)
     expect(boardCeiling([])).toBe(0)
+  })
+})
+
+describe('fieldScaleMax', () => {
+  it('ends a strip on the yard line above the highest ceiling', () => {
+    expect(fieldScaleMax(30.9)).toBe(35)
+    expect(fieldScaleMax(33.5)).toBe(35)
+    expect(fieldScaleMax(35)).toBe(35)
+    expect(fieldScaleMax(35.1)).toBe(40)
+  })
+
+  it('is never shorter than one yard line, so an empty scale still draws', () => {
+    expect(fieldScaleMax(0)).toBe(5)
+    expect(fieldScaleMax(2.4)).toBe(5)
   })
 })
 

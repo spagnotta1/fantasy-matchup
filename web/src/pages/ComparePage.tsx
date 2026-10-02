@@ -11,12 +11,14 @@ import { CalibrationNotice } from '@/components/domain/CalibrationNotice'
 import { ComparisonGrid } from '@/features/comparison/ComparisonGrid'
 import { HeadToHeadCard } from '@/features/comparison/HeadToHead'
 import { PlayerPicker } from '@/features/comparison/PlayerPicker'
+import { RangeRuler } from '@/features/comparison/RangeRuler'
 import {
   MAX_COMPARISON_PLAYERS,
   MIN_COMPARISON_PLAYERS,
   useComparison,
   useStartSit,
 } from '@/hooks/useCompare'
+import { parsePlayerIds } from '@/hooks/useCompareSelection'
 import { usePlayers } from '@/hooks/useProjections'
 import type { Player } from '@/api/schemas'
 
@@ -28,6 +30,12 @@ const PLAYERS_PARAM = 'players'
  * The selection lives in the query string, which is what makes a comparison
  * shareable — "who do I start" is a question people ask each other, and a link
  * that reopens the same six players in the same format is most of the answer.
+ * It is also how a list hands its ticked players over: the board and My team
+ * link here with the selection already in the address (`CompareBar`), so the
+ * search box is for adding one more, not for starting from nothing.
+ *
+ * Top to bottom the page goes from the glance to the detail: every range on
+ * one ruler, then the numbers side by side, then each pair head to head.
  *
  * Two things this screen refuses to do. It does not compute a winner from the
  * two projections: the win probability comes from `/compare`, which integrates
@@ -37,16 +45,10 @@ const PLAYERS_PARAM = 'players'
 export default function ComparePage() {
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const playerIds = useMemo(() => {
-    const raw = searchParams.get(PLAYERS_PARAM)
-    if (!raw) return []
-    // De-duplicated and capped here rather than at the request: an over-long
-    // URL should open a working screen, not a 422.
-    return [...new Set(raw.split(',').map((id) => id.trim()).filter(Boolean))].slice(
-      0,
-      MAX_COMPARISON_PLAYERS,
-    )
-  }, [searchParams])
+  // De-duplicated and capped, the way a list's ticks are: an over-long URL
+  // should open a working screen, not a 422.
+  const rawPlayers = searchParams.get(PLAYERS_PARAM)
+  const playerIds = useMemo(() => parsePlayerIds(rawPlayers), [rawPlayers])
 
   const setPlayerIds = useCallback(
     (next: string[]) => {
@@ -96,7 +98,7 @@ export default function ComparePage() {
             // Directly under the page's h1 with no section between, so h2.
             titleAs="h2"
             title="Pick two players to compare"
-            description={`Search above to add players — two at a minimum, ${MAX_COMPARISON_PLAYERS} at most. For each pair we estimate how often one player outscores the other.`}
+            description={`Search above to add players, or tick them on Rankings or My team — two at a minimum, ${MAX_COMPARISON_PLAYERS} at most. For each pair we estimate how often one player outscores the other.`}
           />
         </Card>
       ) : comparison.isPending ? (
@@ -117,6 +119,8 @@ export default function ComparePage() {
           <div className="space-y-6">
           <CalibrationNotice projections={entries.map((entry) => entry.projection)} />
           <NoticeList notices={comparison.data.meta.notices} />
+
+          <RangeRuler entries={entries} />
 
           <ComparisonGrid entries={entries} />
 

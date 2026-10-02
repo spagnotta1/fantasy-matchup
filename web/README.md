@@ -33,7 +33,7 @@ npm run dev          # http://localhost:5173
 | `npm test` | unit tests (Vitest) for the pure logic under `src/` |
 | `npm run contract-check` | drive every endpoint against a running API |
 | `npm run test:e2e` | Playwright against a local build and the local API |
-| `npm run test:visual` | compare eleven screens against committed screenshots |
+| `npm run test:visual` | compare fifteen screens against committed screenshots |
 
 ## How this is served in production
 
@@ -404,7 +404,7 @@ what is missing rather than the selection being overridden.
 
 | room the board has | drawing | a row |
 |---|---|---|
-| 912px or more | a table (`ProjectionTable`, on the shared table parts) | one line, 40px; 48px with "Roomy" |
+| 948px or more | a table (`ProjectionTable`, on the shared table parts) | one line, 40px; 48px with "Roomy" |
 | less | a list (`ProjectionList`) | two lines, about 65px |
 | any, by choice | cards (`ProjectionCards`, `?view=cards`) | one player at a time |
 
@@ -443,6 +443,63 @@ ruled-out player's projection with nothing beside it.
 **Row height is a preference, not a filter.** "Compact" and "Roomy" are kept in
 this browser's storage with the theme, not in the URL with the sort: a shared
 link should not set the row height of whoever opens it.
+
+**A table row opens with a tick box**, for choosing players to compare; see
+"Compare" below. Its 36px column is why the table is drawn from 948px of room
+and not 912px: the player column keeps the 270px a name and a game need.
+
+## Compare
+
+`/compare?players=…` answers "which of these do I start", and it is reached
+from a list, not from a search box.
+
+**Every range is on one ruler** (`features/comparison/RangeRuler`). The
+players are rows and their strips share a left edge, a width and a scale, so a
+floor is further right or it is not. They used to be columns, each strip on
+its own axis. The scale runs from zero to the yard line above the highest
+ceiling among the players being compared (`fieldScaleMax`), and the heading
+says so: "Range, 0 to 35 points". It is the board's row on purpose, the mark a
+reader already learned on Rankings.
+
+| room the ruler has | drawing |
+|---|---|
+| 640px or more | a table: player (with the matchup grade), range, chance of 20+, projection |
+| less | the board's two-line row (`ProjectionLine`), strips still lined up |
+
+**The numbers are side by side at every width** (`ComparisonGrid`, on the
+shared table parts). On a phone it used to become one list per player, so two
+floors were compared by scrolling between them. Two players now fit a 412px
+phone as they are. With more, or on a narrower phone, the table scrolls
+sideways in its own frame with the metric column held at the left.
+
+**A row's best number is marked once, by weight and a small dot.** It was a
+tinted cell and the word BEST, which ran seven times down one column when one
+player led most rows and read as a verdict on the player. A tie marks nobody,
+and neither does a row with no winner (matchup, opponent, what the range is
+based on). The line under the table still says what the mark is not: a
+recommendation.
+
+**Players are ticked on a list** (`useCompareSelection`, `CompareTick`,
+`CompareBar`). Every row of the board's table and of My team's two tables
+opens with a tick box, and a bar at the foot of the screen names who is
+ticked and goes to their comparison. One ticked player is not a comparison,
+so the button is disabled and says to tick one more; at six, the most the
+endpoint takes, the empty boxes are disabled where they stand.
+
+- The ticks are in the list's own URL, `?compare=id,id`, written like a
+  filter (in place, without scrolling the page). They survive a reload and
+  Back from the comparison, and the board's position tabs carry them, so a
+  running back and a wide receiver can be ticked on two boards for one flex
+  decision. Search, team and sort are still dropped by a tab.
+- The box shows its tick at once and the URL catches up. The router applies a
+  change of address as a transition, and a box bound straight to it stayed
+  empty until the board had re-rendered.
+- A press on the box's cell ticks the box; it does not follow the row's link.
+- The bar sits above the phone's navigation bar, and outside the part of My
+  team that goes inert while a week loads.
+- The board's phone list and its cards have no box. A row there is one link,
+  and a link cannot hold a second control. The bar is still drawn for them, so
+  a selection that arrived in a link can be used or cleared.
 
 ## The shell
 
@@ -708,7 +765,7 @@ a cold start):
 E2E_BASE_URL=https://<the-deployed-origin> npm run test:e2e
 ```
 
-Twelve specs, by what they protect:
+Thirteen specs, by what they protect:
 
 | spec | what breaks without it |
 |---|---|
@@ -721,6 +778,7 @@ Twelve specs, by what they protect:
 | `search.spec.ts` | the first result being the player meant: projected players first, exact names first, retired players still listed |
 | `board.spec.ts` | the board at every width: a range strip on every row, 40px rows and the remembered 48px choice, the toolbar and column header staying in view, the row as the link, headers that explain themselves, the table giving way to the list by measured room, nothing in a list row printed over anything else at 412, 390 and 360px on a graded and an ungraded week, an injury designation on the board |
 | `player.spec.ts` | the player page: the bar following the page down with the name and the projection in it, each section link landing its section under the bar with the focus, the week stepper keeping the scroll position and the focus and saying why it stops at the last week, a projection tick for every game that had one, the table's difference column, a season choice the usage trend follows, earlier seasons loaded on request, a week with no projection; axe in both themes; no overflow at 1024, 820, 412, 390 and 360px; the one-line bar and 44px targets on a phone |
+| `compare.spec.ts` | the comparison and the way to it: every range strip starting at one edge at one width, on a table and on a phone's list, with the scale named in the heading; one best mark per row and never the word; two players side by side on a phone with nothing to scroll, three scrolling in the table's own frame with the metric held; ticks on the board and My team living in the URL, crossing a position tab and surviving Back; a press beside a box ticking it without opening the player or moving the page; six as the most; the bar following the page and clearing the phone's navigation; axe in both themes; no overflow at 1024, 820, 390 and 360px |
 | `shell.spec.ts` | the sidebar's two groups and its foot, the page a reader is on being marked (a team's page marks Matchups), the rail folding to named icons and staying folded, the header no longer repeating the sidebar; every old address arriving with its filters, Reports and its two views, Teams as a view of Matchups, the palette listing every page; on a phone the slate chip saying the week and the scoring format, and the bottom bar keeping its five |
 | `primitives.spec.ts` | the shared `Button`, `DataTable` and `FilterToolbar` on `/specimens`: sorting from the keyboard, the row link, the sticky header, row heights, target sizes, a loading button keeping its width and focus, a filter choice becoming a select only where it does not fit |
 | `tables.spec.ts` | Live, Usage, Injuries, Teams and the draft board on the shared table and toolbar: filters working together and living in the URL, a filter leaving the sort alone, the row as the link, row groups announced as headings, a Live refresh keeping focus, scroll and filters, an empty filter told apart from no data, loading and failed requests; and all six screens (My team included) at 1440, 1024, 820, 768, 412, 390 and 360px: no page overflow, no clipped or wrapped control, no dropped column, the player column held while a table scrolls in its frame, and at the three phone widths the list in its place with every column of the table in each row, nothing printed over anything else, one link per row; every toolbar control 44px on a phone |
@@ -744,12 +802,13 @@ and the default worker count measures contention rather than the app.
 
 ### Screenshots
 
-`tests/visual` holds a picture of fourteen screens — dashboard, board, player,
-game, team, My team, Live, usage, injuries, compare, the simulation builder,
-the track record, the draft board and the specimen page — at 1440px and 412px,
-with the dashboard, board, player page, Live, injuries and specimens also in
-the dark theme. The five screens whose tables change shape between a laptop
-and a phone (team, My team, Live, usage, injuries) are also held at 820px. A token or primitive change touches every page, including the
+`tests/visual` holds a picture of fifteen screens — dashboard, board, the
+board with two players ticked to compare, player, game, team, My team, Live,
+usage, injuries, compare, the simulation builder, the track record, the draft
+board and the specimen page — at 1440px and 412px, with the dashboard, both
+boards, player page, Live, injuries, compare and specimens also in the dark
+theme. The six screens whose tables change shape between a laptop and a phone
+(team, My team, Live, usage, injuries, compare) are also held at 820px. A token or primitive change touches every page, including the
 ones nobody opened; these turn that into image diffs to approve.
 
 ```bash

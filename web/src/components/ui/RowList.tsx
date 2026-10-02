@@ -40,7 +40,7 @@ import { cn } from '@/utils/cn'
  * ## When
  *
  * `useRowList` (`hooks/useRowList`) measures the room a table has and says
- * which to draw. The board keeps its own rule, a table from 912px.
+ * which to draw. The board keeps its own rule, a table from 948px.
  */
 
 export function RowList({

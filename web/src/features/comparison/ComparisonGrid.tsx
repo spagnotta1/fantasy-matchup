@@ -1,12 +1,18 @@
 import { Link } from 'react-router-dom'
 
-import { Badge } from '@/components/ui/Badge'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
+import {
+  ColumnHeader,
+  RowHeaderCell,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@/components/ui/DataTable'
 import { EvidenceChip } from '@/components/domain/EvidenceChip'
 import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
-import { OutcomeRange } from '@/components/domain/ProjectionValue'
-import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { cn } from '@/utils/cn'
 import { formatPercent, formatPoints } from '@/utils/format'
@@ -138,6 +144,10 @@ const METRICS: Metric[] = [
   },
 ]
 
+/** The metric column at its narrowest, and each player's column, in rem. */
+const METRIC_COLUMN = 6.5
+const PLAYER_COLUMN = 8.5
+
 /**
  * The players side by side.
  *
@@ -145,17 +155,28 @@ const METRICS: Metric[] = [
  * is reading *across*: floor against floor, ceiling against ceiling. Cards put
  * the two numbers a manager is comparing at opposite ends of the screen.
  *
- * The first column is sticky, so with five or six players the labels stay put
- * while the columns scroll. Below `sm` the same data stacks per player, where a
- * six-column scroll is unusable.
+ * It is side by side on a phone too. It used to stack there, one list per
+ * player, which is the card layout by another name: comparing two floors meant
+ * scrolling between them. Now two players fit a phone as they are, and with
+ * more the table scrolls sideways inside its own frame with the metric column
+ * held at the left (`freezeFirstColumn`), so a number never loses its label.
+ *
+ * The ranges are not here. They are the ruler above this table
+ * (`RangeRuler`), where they share an axis; a strip per column cannot.
+ *
+ * ## The best number in a row
+ *
+ * Marked once per row, by weight and a small dot. It was a tinted cell and the
+ * word BEST, and when one player led most rows the word ran down a column
+ * seven times and read as a verdict on the player. The mark is now as quiet as
+ * what it says: this number is the largest (or, for bust risk, the smallest)
+ * in its row. Weight and a dot are both there without colour, and a screen
+ * reader is told in words.
  */
 export function ComparisonGrid({ entries }: { entries: ComparisonEntry[] }) {
-  // One scale for every range bar, so the widths mean something relative to
-  // each other rather than each filling its own cell.
-  const scaleMax = entries.reduce((max, entry) => Math.max(max, entry.ceiling ?? 0), 0)
-
   return (
-    <Card className="overflow-hidden">
+    // `clip`, not `hidden`, so the column header can stick to the page.
+    <Card className="overflow-clip">
       <CardHeader
         as="h2"
         title="Side by side"
@@ -163,132 +184,75 @@ export function ComparisonGrid({ entries }: { entries: ComparisonEntry[] }) {
         action={<ProvenanceBadge provenance="model" />}
       />
 
-      <div className="hidden overflow-x-auto sm:block">
-        <table className="w-full border-collapse text-sm">
-          <caption className="sr-only">
-            Selected players compared across projection, outcome range, matchup and recent usage.
-          </caption>
-          <thead>
-            <tr className="border-line border-b">
-              <th
-                scope="col"
-                className="bg-surface text-ink-muted sticky left-0 z-10 w-40 px-4 py-3 text-left text-caption font-medium tracking-wide uppercase"
-              >
-                Metric
-              </th>
-              {entries.map((entry) => (
-                <th
-                  key={entry.projection.player.player_id}
-                  scope="col"
-                  className="min-w-40 px-4 py-3 text-left"
-                >
-                  <PlayerColumnHeader entry={entry} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-line border-b">
-              <th
-                scope="row"
-                className="bg-surface text-ink-secondary sticky left-0 z-10 px-4 py-3 text-left text-sm font-normal"
-              >
-                Range
-                <span className="text-ink-muted ml-1 text-detail">floor to ceiling</span>
-              </th>
-              {entries.map((entry) => (
-                <td key={entry.projection.player.player_id} className="px-4 py-3">
-                  <OutcomeRange
-                    floor={entry.floor}
-                    p25={entry.projection.prediction.points.p25}
-                    median={entry.projection.prediction.points.median}
-                    p75={entry.projection.prediction.points.p75}
-                    ceiling={entry.ceiling}
-                    threshold={entry.projection.prediction.points.boom_threshold}
-                    scaleMax={scaleMax}
-                  />
-                </td>
-              ))}
-            </tr>
-
-            {METRICS.map((metric) => {
-              const leader = leaderId(metric, entries)
-              return (
-                <tr key={metric.label} className="border-line border-b last:border-b-0">
-                  <th
-                    scope="row"
-                    className="bg-surface text-ink-secondary sticky left-0 z-10 px-4 py-3 text-left text-sm font-normal"
-                  >
-                    {metric.label}
-                    {metric.hint && <span className="text-ink-muted ml-1 text-detail">{metric.hint}</span>}
-                  </th>
-                  {entries.map((entry) => (
-                    <td
-                      key={entry.projection.player.player_id}
-                      className={cn(
-                        'px-4 py-3',
-                        leader === entry.projection.player.player_id && 'bg-accent-soft/40',
-                      )}
-                    >
-                      <MetricCell
-                        metric={metric}
-                        entry={entry}
-                        isLeader={leader === entry.projection.player.player_id}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Stacked on a phone. Same numbers, one player at a time. */}
-      <div className="divide-line divide-y sm:hidden">
-        {entries.map((entry) => (
-          <div key={entry.projection.player.player_id} className="p-4">
-            <PlayerColumnHeader entry={entry} />
-            <div className="mt-3">
-              <OutcomeRange
-                floor={entry.floor}
-                p25={entry.projection.prediction.points.p25}
-                median={entry.projection.prediction.points.median}
-                p75={entry.projection.prediction.points.p75}
-                ceiling={entry.ceiling}
-                threshold={entry.projection.prediction.points.boom_threshold}
-                scaleMax={scaleMax}
-              />
-            </div>
-            <dl className="mt-3 space-y-1.5">
-              {METRICS.map((metric) => (
-                <div
-                  key={metric.label}
-                  className="border-line flex items-center justify-between gap-4 border-b py-1 last:border-b-0"
-                >
-                  <dt className="text-ink-secondary text-sm">{metric.label}</dt>
-                  <dd className="shrink-0">
+      <Table
+        // A query container, so the metric column can size to the table.
+        className="@container"
+        caption="Selected players compared across projection, matchup and recent usage"
+        layout="fixed"
+        minWidth={`${METRIC_COLUMN + entries.length * PLAYER_COLUMN}rem`}
+        freezeFirstColumn
+      >
+        <TableHead>
+          <ColumnHeader className="w-[clamp(6.5rem,20cqw,13rem)] align-bottom">Metric</ColumnHeader>
+          {entries.map((entry) => (
+            <ColumnHeader
+              key={entry.projection.player.player_id}
+              // A name is not a column label: it wraps rather than widening
+              // its column past the others.
+              className="py-1.5 align-bottom whitespace-normal"
+            >
+              <PlayerColumnHeader entry={entry} />
+            </ColumnHeader>
+          ))}
+        </TableHead>
+        <TableBody>
+          {METRICS.map((metric) => {
+            const leader = leaderId(metric, entries)
+            return (
+              <TableRow key={metric.label}>
+                <RowHeaderCell className="text-ink-secondary">
+                  {/* Two items, so in a narrow column the hint goes under the
+                      label whole and does not break in the middle of it. */}
+                  <span className="flex flex-wrap items-baseline gap-x-1.5">
+                    <span>{metric.label}</span>
+                    {metric.hint && <span className="text-ink-muted text-chip">{metric.hint}</span>}
+                  </span>
+                </RowHeaderCell>
+                {entries.map((entry) => (
+                  <TableCell key={entry.projection.player.player_id}>
                     <MetricCell
                       metric={metric}
                       entry={entry}
-                      isLeader={leaderId(metric, entries) === entry.projection.player.player_id}
+                      isLeader={leader === entry.projection.player.player_id}
                     />
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        ))}
-      </div>
+                  </TableCell>
+                ))}
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
 
       <CardBody className="border-line border-t py-3">
         <p className="text-ink-muted text-detail leading-relaxed">
-          The highlighted cell is just the best number in that row, not a recommendation. The
-          gap between two projections is usually much smaller than how much either player&apos;s
-          score can swing — the head-to-head chances below take that into account.
+          <BestMark className="mr-1.5 align-middle" />
+          The dot marks the best number in that row, not a recommendation. The gap between two
+          projections is usually much smaller than how much either player&apos;s score can swing —
+          the head-to-head chances below take that into account.
         </p>
       </CardBody>
     </Card>
+  )
+}
+
+/** The dot beside a row's best number. Decorative: the words are beside it. */
+function BestMark({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden
+      data-best-mark=""
+      className={cn('bg-accent inline-block size-1.5 shrink-0 rounded-full', className)}
+    />
   )
 }
 
@@ -305,20 +269,22 @@ function MetricCell({
 
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="tnum text-ink text-sm font-medium">{rendered}</span>
-      {/* A label, not only a background tint — the highlight must survive a
-          reader who cannot see the colour. */}
+      <span className={cn('tnum text-ink', isLeader && 'font-semibold')}>{rendered}</span>
+      {/* Weight and a dot, neither of which needs colour to be seen, and the
+          words for a reader who sees neither. After the number, so the numbers
+          of a column still start on one edge. */}
       {isLeader && (
-        <Badge tone="accent" className="uppercase">
-          Best
-        </Badge>
+        <>
+          <BestMark />
+          <span className="sr-only">best in this row</span>
+        </>
       )}
     </span>
   )
 }
 
 /**
- * Which player leads a row, or nobody.
+ * Which player leads a row, or nobody: at most one mark per row.
  *
  * Returns null on a tie as well as on an unrankable row. Two identical values
  * marked "best" twice says nothing, and marking the first of them says
@@ -351,26 +317,27 @@ function leaderId(metric: Metric, entries: ComparisonEntry[]): string | null {
   return best && !tied ? best.id : null
 }
 
+/**
+ * Who a column is. The name and what places the player, without a headshot:
+ * the ruler above has one, and 32px is a quarter of a phone's column. A
+ * designation stays, beside the name, because every number under it is that
+ * player's.
+ */
 function PlayerColumnHeader({ entry }: { entry: ComparisonEntry }) {
   const { player } = entry.projection
 
   return (
-    <span className="flex items-center gap-2">
-      <PlayerAvatar player={player} size="sm" />
-      <span className="min-w-0">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <Link
-            to={`/players/${encodeURIComponent(player.player_id)}`}
-            className="text-ink hover:text-accent-text block truncate text-sm font-medium transition-colors"
-          >
-            {player.name}
-          </Link>
-          <InjuryBadge injury={entry.projection.context.injury} />
-        </span>
-        <span className="text-ink-muted block truncate text-detail font-normal">
-          {[player.position, entry.projection.team].filter(Boolean).join(' · ')}
-        </span>
+    <span className="flex flex-col items-start gap-0.5">
+      <Link
+        to={`/players/${encodeURIComponent(player.player_id)}`}
+        className="text-ink hover:text-accent-text text-body rounded-sm font-semibold transition-colors"
+      >
+        {player.name}
+      </Link>
+      <span className="text-ink-muted text-chip font-normal whitespace-nowrap">
+        {[player.position, entry.projection.team].filter(Boolean).join(' · ')}
       </span>
+      <InjuryBadge injury={entry.projection.context.injury} />
     </span>
   )
 }

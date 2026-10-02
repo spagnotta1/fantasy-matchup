@@ -182,6 +182,19 @@ export function groupByTier(entries: RankedProjection[]): TierGroup[] {
 }
 
 /** The largest ceiling on the board, so range bars share one scale. */
+/** Yard lines on the field, in points. */
+export const YARD_LINE_POINTS = 5
+
+/**
+ * Where a range strip's scale ends, given the highest ceiling it has to hold:
+ * the next whole yard line, so the rules land on 5, 10, 15… rather than
+ * wherever that ceiling happens to fall. One function, so a heading that says
+ * "0 to 35 points" and the strips under it cannot disagree.
+ */
+export function fieldScaleMax(highest: number): number {
+  return Math.max(YARD_LINE_POINTS, Math.ceil(highest / YARD_LINE_POINTS) * YARD_LINE_POINTS)
+}
+
 export function boardCeiling(entries: RankedProjection[]): number {
   return entries.reduce((max, entry) => {
     const ceiling = entry.projection.prediction.points.ceiling
