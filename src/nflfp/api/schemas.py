@@ -441,7 +441,10 @@ class WeatherOut(ContextBlock):
     temperature_f: float | None = None
     wind_mph: float | None = None
     wind_gust_mph: float | None = None
-    precipitation_probability: float | None = None
+    precipitation_probability: float | None = Field(
+        default=None,
+        description="Chance of rain or snow as a 0-1 fraction. Null on observed history.",
+    )
     snowfall_in: float | None = None
     roof_uncertain: bool = False
     source: str | None = Field(

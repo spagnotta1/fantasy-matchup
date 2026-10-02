@@ -441,7 +441,12 @@ class TestRefusals:
         broken[-1] = {"player_id": "00-0009999", "slot": "DST"}
         response = await simulate(client, team_b=broken)
         assert response.status_code == 422
-        assert "team-week fact table" in response.json()["message"]
+        # As for the kicker: the reason and the blockers from the position
+        # registry, in the plain-language wording of 2026-09-25.
+        message = response.json()["message"]
+        assert "sacks, takeaways" in message
+        assert "Blocked on" in message
+        assert "team-level defensive data for each game" in message
 
     async def test_a_kicker_in_the_flex_is_refused_rather_than_dropped(self, client):
         # The same gap wearing a different label, and the case that would

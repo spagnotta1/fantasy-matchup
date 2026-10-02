@@ -18,8 +18,11 @@ import { cn } from '@/utils/cn'
  * API gave: a manager looking for kickers learns they do not exist yet instead
  * of assuming the filter is broken. The day a kicker model ships, this grows a
  * tab with no change here.
+ *
+ * It draws no rule of its own. It sits at the foot of the board's sticky bar,
+ * whose bottom border is the line the active tab's underline lands on.
  */
-export function PositionTabs({ active }: { active: string | null }) {
+export function PositionTabs({ active, className }: { active: string | null; className?: string }) {
   const { data, isPending } = usePositions()
   // One underline that slides between tabs. Changing position is a param
   // change on a mounted page (see `routes.tsx`), which is what lets it slide
@@ -28,22 +31,22 @@ export function PositionTabs({ active }: { active: string | null }) {
 
   if (isPending) {
     return (
-      <div className="mb-4 flex gap-2" aria-hidden>
+      <div className={cn('flex gap-2 pb-1.5', className)} aria-hidden>
         {Array.from({ length: 6 }, (_, index) => (
-          <Skeleton key={index} className="h-9 w-16 rounded-[var(--radius-control)]" />
+          <Skeleton key={index} className="rounded-control h-6 w-12" />
         ))}
       </div>
     )
   }
 
   return (
-    <nav aria-label="Position" className="border-line mb-5 -mx-1 overflow-x-auto border-b px-1">
-      <ul ref={ref} className="relative flex min-w-max items-center gap-1 pb-px">
+    <nav aria-label="Position" className={cn('-mx-1 overflow-x-auto px-1', className)}>
+      <ul ref={ref} className="relative flex min-w-max items-center gap-1">
         {underline && (
           <li
             aria-hidden
             className="bg-accent pointer-events-none absolute h-0.5 rounded-full"
-            style={{ ...underline, top: undefined, height: undefined, bottom: 1 }}
+            style={{ ...underline, top: undefined, height: undefined, bottom: 0 }}
           />
         )}
         <li>
@@ -66,7 +69,7 @@ export function PositionTabs({ active }: { active: string | null }) {
               <Tooltip content={`${position.label} is not projected yet. ${position.reason ?? ''}`}>
                 <span
                   aria-disabled="true"
-                  className="text-ink-muted/70 inline-flex h-9 cursor-not-allowed items-center rounded-t-[var(--radius-control)] px-3 text-sm font-medium line-through"
+                  className={cn(TAB, 'text-ink-muted/70 cursor-not-allowed line-through')}
                 >
                   {position.position}
                 </span>
@@ -78,6 +81,10 @@ export function PositionTabs({ active }: { active: string | null }) {
     </nav>
   )
 }
+
+/** 32px, the toolbar height, and 44px under a finger: these are the page's navigation. */
+const TAB =
+  'h-control-sm pointer-coarse:h-touch rounded-t-control text-body inline-flex items-center px-3 font-medium'
 
 function TabLink({
   to,
@@ -101,7 +108,8 @@ function TabLink({
       aria-current={active ? 'page' : undefined}
       data-active={active}
       className={cn(
-        'inline-flex h-9 items-center rounded-t-[var(--radius-control)] px-3 text-sm font-medium transition-colors',
+        TAB,
+        'transition-colors',
         // The underline is drawn as a bottom border on the tab itself so it
         // sits on the nav's border rather than floating above it.
         'border-b-2',

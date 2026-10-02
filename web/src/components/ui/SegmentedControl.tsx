@@ -26,6 +26,11 @@ interface SegmentedControlProps<T extends string> {
  * Built as a radio group rather than buttons: the semantics are exactly a radio
  * group's, which buys arrow-key navigation and the correct screen-reader
  * announcement ("2 of 4 selected") for free.
+ *
+ * The height is the track's, not the option's: 32px, the same as every other
+ * toolbar control, so a segmented control beside a select or a button sits on
+ * one line with it. It used to be 38px — a 32px option plus the track around
+ * it — which matched nothing.
  */
 export function SegmentedControl<T extends string>({
   label,
@@ -46,14 +51,16 @@ export function SegmentedControl<T extends string>({
       role="radiogroup"
       aria-label={label}
       className={cn(
-        'bg-surface-sunken border-line relative inline-flex items-center gap-0.5 rounded-[var(--radius-control)] border p-0.5',
+        'bg-surface-sunken border-line rounded-control relative inline-flex items-stretch gap-0.5 border p-0.5',
+        size === 'sm' ? 'h-control-xs' : 'h-control-sm',
+        'pointer-coarse:h-touch',
         className,
       )}
     >
       {pill && (
         <span
           aria-hidden
-          className="bg-surface shadow-card absolute rounded-[calc(var(--radius-control)-2px)]"
+          className="bg-surface absolute rounded-[calc(var(--radius-control)-2px)]"
           style={pill}
         />
       )}
@@ -65,9 +72,9 @@ export function SegmentedControl<T extends string>({
             data-active={selected}
             className={cn(
               'relative inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] font-medium transition-colors',
-              size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3 text-sm',
+              size === 'sm' ? 'text-caption px-2.5' : 'text-detail px-3',
               selected
-                ? cn('text-ink', !pill && 'bg-surface shadow-card')
+                ? cn('text-ink', !pill && 'bg-surface')
                 : 'text-ink-muted hover:text-ink-secondary',
               'focus-within:outline-focus focus-within:outline-2 focus-within:outline-offset-2',
             )}

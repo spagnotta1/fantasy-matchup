@@ -116,6 +116,39 @@ for (const pos of ['QB', 'RB', 'WR', 'TE']) {
   await check(`rankings/${pos}`, () => projections.getPositionRankings(pos, { ...slate, limit: 1000 }))
 }
 
+// The rain chance is a 0-1 fraction on the wire. The warehouse stores 0-100,
+// and when the two met unconverted the UI printed "6200%" and every outdoor
+// game with any rain forecast was flagged as bad weather. A value above 1, or
+// an adverse flag raised below the documented thresholds, is that bug back.
+if (board?.data) {
+  const outdoor = board.data
+    .map((entry) => entry.projection.context.weather)
+    .filter((weather) => weather && !weather.is_indoor)
+  const overUnit = outdoor.filter((weather) => (weather.precipitation_probability ?? 0) > 1)
+  const falseAlarms = outdoor.filter(
+    (weather) =>
+      weather.is_adverse &&
+      (weather.wind_mph ?? 0) < 20 &&
+      (weather.precipitation_probability ?? 0) < 0.6,
+  )
+  results.push({
+    name: 'rain chance is a 0-1 fraction',
+    ok: overUnit.length === 0,
+    note:
+      overUnit.length === 0
+        ? `${outdoor.length} outdoor rows, all within 0-1`
+        : `${overUnit.length} rows above 1, e.g. ${overUnit[0].precipitation_probability}`,
+  })
+  results.push({
+    name: 'bad-weather flag matches its thresholds',
+    ok: falseAlarms.length === 0,
+    note:
+      falseAlarms.length === 0
+        ? 'flag raised only at 20+ mph wind or a 60%+ rain chance'
+        : `${falseAlarms.length} rows flagged below both thresholds`,
+  })
+}
+
 // K and DST are *expected* to be refused. The API recognises both positions and
 // declines to project them, with a reason — that refusal is a documented part
 // of the contract, not an outage, and the frontend renders it as its own state

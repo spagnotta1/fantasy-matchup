@@ -24,6 +24,13 @@ interface TooltipProps {
    * then clamped inside the viewport.
    */
   align?: 'center' | 'end'
+  /**
+   * Whether the wrapper is itself a tab stop. On by default: most triggers are
+   * a chip or an icon, which a keyboard could not otherwise reach. Turn it off
+   * around something already focusable — a button — so the pair is one stop,
+   * not two; focus on the child still opens the bubble.
+   */
+  focusable?: boolean
   className?: string
 }
 
@@ -70,7 +77,14 @@ const EDGE = 8
  *
  * Never the only home for information that matters. This is for elaboration.
  */
-export function Tooltip({ content, children, side = 'top', align = 'center', className }: TooltipProps) {
+export function Tooltip({
+  content,
+  children,
+  side = 'top',
+  align = 'center',
+  focusable = true,
+  className,
+}: TooltipProps) {
   const id = useId()
   const triggerRef = useRef<HTMLSpanElement>(null)
   const bubbleRef = useRef<HTMLSpanElement>(null)
@@ -160,7 +174,7 @@ export function Tooltip({ content, children, side = 'top', align = 'center', cla
     >
       <span
         ref={triggerRef}
-        tabIndex={0}
+        tabIndex={focusable ? 0 : undefined}
         // Only while the bubble is mounted: an `aria-describedby` pointing at
         // an element that is not in the document describes nothing.
         aria-describedby={visible ? id : undefined}
@@ -189,7 +203,7 @@ export function Tooltip({ content, children, side = 'top', align = 'center', cla
             }}
             className={cn(
               'bg-surface-raised border-line text-ink pointer-events-none fixed z-50 w-max',
-              'rounded-[var(--radius-control)] border px-2.5 py-1.5 text-xs leading-relaxed font-normal shadow-overlay',
+              'rounded-control text-detail shadow-overlay border px-2.5 py-1.5 font-normal',
             )}
           >
             {content}

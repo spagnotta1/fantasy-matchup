@@ -36,11 +36,20 @@ function tokensFrom(block) {
   return out
 }
 
-// `:root { ... }` is the light theme — the first block, up to the first close.
-const lightBlock = css.slice(css.indexOf(':root {'), css.indexOf('\n}', css.indexOf(':root {')))
-// The dark theme under the media query.
-const darkStart = css.indexOf("@media (prefers-color-scheme: dark)")
-const darkBlock = css.slice(darkStart, css.indexOf('\n  }', darkStart))
+/**
+ * One theme's declarations: from the selector that opens its block to the
+ * close of that block. Throws rather than returning nothing, because an audit
+ * that silently checks zero tokens reports that everything passes.
+ */
+function themeBlock(selector) {
+  const start = css.search(selector)
+  if (start === -1) throw new Error(`no block matching ${selector} in index.css`)
+  return css.slice(start, css.indexOf('\n}', start))
+}
+
+// Each palette is defined once, scoped to the theme attribute.
+const lightBlock = themeBlock(/^:root,\r?\n\[data-theme='light'\] \{/m)
+const darkBlock = themeBlock(/^\[data-theme='dark'\] \{/m)
 
 const THEMES = [
   ['LIGHT', tokensFrom(lightBlock)],
@@ -70,6 +79,11 @@ const PAIRS = [
   ['positive-text', 'surface', 4.5],
   ['negative-text', 'negative-soft', 4.5],
   ['negative-text', 'surface', 4.5],
+  // A destructive button: its lettering on its fill, and the fill as a
+  // control against the surface it sits on.
+  ['on-danger', 'danger', 4.5],
+  ['on-danger', 'danger-hover', 4.5],
+  ['danger', 'surface', 3.0],
   ['caution-text', 'caution-soft', 4.5],
   ['caution-text', 'surface', 4.5],
   ['info-text', 'info-soft', 4.5],

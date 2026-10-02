@@ -99,7 +99,7 @@ export function ProvenanceLegendRow({ provenance, fallback }: { provenance: stri
  */
 export function NotAppliedNotice({ reason }: { reason?: string | null }) {
   return (
-    <p className="text-ink-muted border-line mt-3 border-t pt-3 text-xs leading-relaxed">
+    <p className="text-ink-muted border-line mt-3 border-t pt-3 text-detail leading-relaxed">
       <span className="text-ink-secondary font-medium">Not included in the projection.</span>{' '}
       {reason ?? 'It is here to help you make your own call.'}
     </p>

@@ -931,9 +931,23 @@ async def search_players(
 ) -> list[dict]:
     """Name search over the player dimension.
 
-    Ranked by how the match was made — prefix beats substring — and then by
-    recency of last season, because typing "jo" should surface players who are
-    currently on a roster rather than the alphabetically luckiest retiree.
+    Ranked, in order, by:
+
+    1. **How the match was made.** The whole name, then the start of any word
+       in it, then anywhere inside a word. "Any word" is the part that matters:
+       people search by surname, and a test on the start of the *full* name
+       alone ranked a quarterback named Gibran, last seen in 2009, above
+       Jahmyr Gibbs for "gib". A hyphen or an apostrophe starts a word too, so
+       "njig" finds Smith-Njigba and "conn" finds O'Connell.
+    2. **How recently they played** (``last_season``). This is the currency
+       signal, and the only reliable one: ``status`` is the *last known* roster
+       status, so thousands of players who retired decades ago still read
+       ``ACT`` and ``active_only`` does not screen them out.
+    3. **Whether they are on a roster**, among players from the same season.
+    4. Name, so the order is total and two identical requests agree.
+
+    Nobody is hidden by the ranking. A retired player is found by name; he is
+    listed after the players still playing.
 
     ``ILIKE`` with a leading wildcard cannot use a btree index. At roughly
     20,000 player rows that is a sequential scan of a small table and measures
@@ -946,8 +960,12 @@ async def search_players(
 
     clauses = ["(p.display_name ILIKE :contains OR p.football_name ILIKE :contains)"]
     params: dict[str, Any] = {
+        "term": term,
         "contains": f"%{term}%",
         "prefix": f"{term}%",
+        "after_space": f"% {term}%",
+        "after_hyphen": f"%-{term}%",
+        "after_apostrophe": f"%'{term}%",
         "limit": limit,
     }
     if positions:
@@ -960,10 +978,22 @@ async def search_players(
         session,
         f"""
         SELECT {_PLAYER_COLUMNS},
-            CASE WHEN p.display_name ILIKE :prefix THEN 0 ELSE 1 END AS match_rank
+            CASE
+                WHEN lower(p.display_name) = lower(:term) THEN 0
+                WHEN p.display_name ILIKE :prefix
+                  OR p.football_name ILIKE :prefix
+                  OR p.display_name ILIKE :after_space
+                  OR p.display_name ILIKE :after_hyphen
+                  OR p.display_name ILIKE :after_apostrophe THEN 1
+                ELSE 2
+            END AS match_rank
         FROM raw_players AS p
         WHERE {' AND '.join(clauses)}
-        ORDER BY match_rank, p.last_season DESC NULLS LAST, p.display_name
+        ORDER BY
+            match_rank,
+            p.last_season DESC NULLS LAST,
+            CASE WHEN p.status = 'ACT' THEN 0 ELSE 1 END,
+            p.display_name
         LIMIT :limit
         """,
         params,

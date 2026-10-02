@@ -73,21 +73,21 @@ export function WeekOverview() {
 
       <CardBody className="space-y-4">
         {!week.projections_published && (
-          <p className="bg-caution-soft text-caution-text rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
+          <p className="bg-caution-soft text-caution-text rounded-[var(--radius-control)] px-3 py-2 text-detail leading-relaxed">
             The schedule for this week is set, but projections are not out yet. Player lists will
             stay empty until they are.
           </p>
         )}
 
         {week.projections_published && week.projection_count === 0 && (
-          <p className="bg-caution-soft text-caution-text rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
+          <p className="bg-caution-soft text-caution-text rounded-[var(--radius-control)] px-3 py-2 text-detail leading-relaxed">
             This week&apos;s update ran but produced no projections. Nothing failed to load — there
             is simply nothing to show.
           </p>
         )}
 
         {week.model && (
-          <p className="text-ink-muted flex items-center gap-1.5 text-xs">
+          <p className="text-ink-muted flex items-center gap-1.5 text-detail">
             <Database aria-hidden className="size-3.5" />
             Projections from model run {week.model.run_id}
             {week.model.published_at ? `, published ${formatPublished(week.model.published_at)}` : ''}
@@ -98,7 +98,7 @@ export function WeekOverview() {
           <p className="text-ink-muted text-sm">No games are scheduled for this week.</p>
         ) : (
           <div>
-            <h3 className="text-ink-muted mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+            <h3 className="text-ink-muted mb-2 flex items-center gap-1.5 text-caption font-semibold tracking-wide uppercase">
               <CalendarDays aria-hidden className="size-3.5" />
               {upcoming.length > 0 ? 'Schedule' : 'Results'}
             </h3>
@@ -112,7 +112,7 @@ export function WeekOverview() {
                     {game.away_team} <span className="text-ink-muted font-normal">at</span>{' '}
                     {game.home_team}
                   </span>
-                  <span className="text-ink-muted tnum flex items-center gap-2 text-xs">
+                  <span className="text-ink-muted tnum flex items-center gap-2 text-detail">
                     {game.is_upcoming ? (
                       <>
                         <span>{formatGameDay(game.gameday)}</span>

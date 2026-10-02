@@ -434,20 +434,53 @@ def _group(kind: str, key: str, members: Sequence[PlayerProjection]) -> Correlat
     )
 
 
+#: What ignoring correlation was measured to cost a lineup total: the
+#: independent sampler's 80% interval over every held-out matchup of Phase 6D
+#: (docs/simulation-readiness.md, "All held-out matchups"). Restated here
+#: rather than imported so the business layer takes no dependency on the
+#: prediction engine; ``tests/test_services_rosters.py`` asserts all three
+#: against ``nflfp.predict.foundation.LINEUP_INDEPENDENCE``.
+INDEPENDENT_LINEUPS_MEASURED = 2_878
+INDEPENDENT_COVERAGE_80 = 0.7943
+LINEUP_NOMINAL_80 = 0.800
+
+
+def game_label(projection: PlayerProjection) -> str | None:
+    """A game as a reader knows it — "ATL at NO" — or ``None`` if a side is unknown.
+
+    ``game_id`` is a warehouse key (``2026_04_ATL_NO``) and does not belong in a
+    sentence shown to a user. The two sides are read off the projection rather
+    than parsed out of the key, so this never depends on how the key is spelled.
+    """
+    if not projection.team or not projection.opponent or projection.is_home is None:
+        return None
+    if projection.is_home:
+        return f"{projection.opponent} at {projection.team}"
+    return f"{projection.team} at {projection.opponent}"
+
+
 def lineup_caveats(projections: Sequence[PlayerProjection]) -> tuple[str, ...]:
     """Disclosures owed by anything that sums these projections.
 
     The existing head-to-head path discloses correlation for a *pair*
     (:func:`~nflfp.services.advice.start_sit`). A lineup is the same problem
-    with more pairs and a larger consequence: summing nine independent-assumed
-    curves understates the variance of a stacked roster and overstates it for a
-    committee backfield, so a floor and a ceiling built that way are both too
-    tight.
+    with more pairs: teammates and players in one game do not have independent
+    weeks, and a total that draws them independently ignores that.
 
-    Stating that is not the fix. The fix is a correlated simulation, and it is
-    named as such in ``docs/simulation-readiness.md``. Until it exists, a caller
-    that sums these curves is obliged to carry these strings.
+    What it costs has been measured, and the caveat says so rather than assert
+    a direction. This docstring and the same-game sentence used to say the
+    resulting interval was too narrow — the expectation before Phase 6C. Phase
+    6D measured the independent sampler's lineup interval at nominal
+    (:data:`INDEPENDENT_COVERAGE_80` against :data:`LINEUP_NOMINAL_80`), and an
+    overstated limitation is the same failure as an overstated verdict. The
+    dependence itself is real and is still named, with the players it applies
+    to; see ``docs/simulation-readiness.md``, "Phase 6D".
     """
+    labels = {
+        projection.game_id: game_label(projection)
+        for projection in projections
+        if projection.game_id
+    }
     caveats: list[str] = []
     for group in correlation_groups(projections):
         listed = ", ".join(group.names)
@@ -460,10 +493,15 @@ def lineup_caveats(projections: Sequence[PlayerProjection]) -> tuple[str, ...]:
                 "weeks move together."
             )
         else:
+            label = labels.get(group.key)
+            where = f" ({label})" if label else ""
             caveats.append(
-                f"{listed} are in the same game ({group.key}). Pace and game "
-                "script are shared inputs, so their outcomes are correlated "
-                "and an independent sum will report an interval that is too "
-                "narrow."
+                f"{listed} are in the same game{where}. Pace and game script "
+                "are shared inputs, so their outcomes are correlated, and a "
+                "total that treats them as independent ignores that. Where it "
+                "has been measured the cost to the range is small: 80% "
+                f"interval coverage of {INDEPENDENT_COVERAGE_80:.4f} against a "
+                f"nominal {LINEUP_NOMINAL_80:.3f} over "
+                f"{INDEPENDENT_LINEUPS_MEASURED:,} held-out lineups."
             )
     return tuple(caveats)

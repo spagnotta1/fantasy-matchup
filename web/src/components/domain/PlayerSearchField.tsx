@@ -189,12 +189,12 @@ export function PlayerSearchField({
                     <span className="text-ink block truncate text-sm font-medium">
                       {player.name}
                     </span>
-                    <span className="text-ink-muted block truncate text-xs">
+                    <span className="text-ink-muted block truncate text-detail">
                       {[player.position, player.team].filter(Boolean).join(' · ')}
                     </span>
                   </span>
                   {note?.(player) && (
-                    <span className="bg-caution-soft text-caution-text shrink-0 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium">
+                    <span className="bg-caution-soft text-caution-text shrink-0 rounded-full px-2 py-0.5 text-chip font-medium">
                       {note(player)}
                     </span>
                   )}

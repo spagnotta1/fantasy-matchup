@@ -33,7 +33,7 @@ export function MatchupMeter({
 
   return (
     <div className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-3">
-      <span className="text-ink-secondary text-xs font-semibold">{label}</span>
+      <span className="text-ink-secondary text-detail font-semibold">{label}</span>
 
       <div className="flex items-center gap-2">
         {score === null ? (
@@ -41,7 +41,7 @@ export function MatchupMeter({
           // allowed are still a fact worth reading; only the week-relative
           // grade needs three games. Saying just "too few games" eight times
           // on one screen hid the number a reader could use.
-          <span className="text-ink-muted text-xs">
+          <span className="text-ink-muted text-detail">
             {matchup.fp_allowed_l4 !== null && matchup.fp_allowed_l4 !== undefined ? (
               <>
                 <span className="text-ink-secondary tnum font-medium">
@@ -66,7 +66,7 @@ export function MatchupMeter({
                 style={{ width: `${score}%` }}
               />
             </div>
-            <span className="text-ink-muted tnum hidden w-24 shrink-0 text-right text-[0.6875rem] sm:block">
+            <span className="text-ink-muted tnum hidden w-24 shrink-0 text-right text-chip sm:block">
               {formatPoints(matchup.fp_allowed_l4)} pts/gm allowed
             </span>
           </>

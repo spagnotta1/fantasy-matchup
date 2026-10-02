@@ -56,16 +56,16 @@ export function DraftBoard({
                 key={pick.player_id}
                 className="border-line flex items-center gap-3 rounded-[var(--radius-control)] border p-2.5"
               >
-                <span className="bg-accent-soft text-accent-text flex size-9 shrink-0 flex-col items-center justify-center rounded-[var(--radius-control)] text-[0.65rem] leading-none font-semibold">
+                <span className="bg-accent-soft text-accent-text flex size-9 shrink-0 flex-col items-center justify-center rounded-[var(--radius-control)] text-chip leading-none font-semibold">
                   <span>R{pick.round_number}</span>
-                  <span className="text-[0.6rem]">#{pick.overall}</span>
+                  <span className="text-chip">#{pick.overall}</span>
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="text-ink block truncate text-sm font-medium">
                     {pick.position} {pick.name}
                   </span>
                   {index < seat.waits.length && (
-                    <span className="text-ink-muted text-xs">
+                    <span className="text-ink-muted text-detail">
                       {seat.waits[index]} picks until your next
                     </span>
                   )}
@@ -83,7 +83,7 @@ export function DraftBoard({
             role="region"
             aria-label="Draft board, scrollable"
           >
-            <table className="w-full text-xs">
+            <table className="w-full text-caption">
               <caption className="sr-only">
                 Draft board: rounds down the side, draft positions across. Your seat is{' '}
                 {seat.draft_position}.

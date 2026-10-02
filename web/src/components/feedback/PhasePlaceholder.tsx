@@ -29,7 +29,7 @@ export function PhasePlaceholder({
         </span>
         <div>
           <p className="text-ink text-sm font-semibold">Not built yet — {phase}</p>
-          <p className="text-ink-muted mt-0.5 text-xs">
+          <p className="text-ink-muted mt-0.5 text-detail">
             The route, shell and data layer are in place; the view itself lands in this phase.
           </p>
         </div>
@@ -38,7 +38,7 @@ export function PhasePlaceholder({
       <div className="grid gap-6 p-5 sm:grid-cols-2">
         <div>
           <p className="text-ink-secondary text-sm leading-relaxed">{summary}</p>
-          <h2 className="text-ink-muted mt-5 text-xs font-semibold tracking-wide uppercase">
+          <h2 className="text-ink-muted mt-5 text-caption font-semibold tracking-wide uppercase">
             What this view will do
           </h2>
           <ul className="text-ink-secondary mt-2 space-y-1.5 text-sm">
@@ -54,14 +54,14 @@ export function PhasePlaceholder({
         </div>
 
         <div>
-          <h2 className="text-ink-muted text-xs font-semibold tracking-wide uppercase">
+          <h2 className="text-ink-muted text-caption font-semibold tracking-wide uppercase">
             Backed by
           </h2>
           <ul className="mt-2 space-y-1.5">
             {endpoints.map((endpoint) => (
               <li
                 key={endpoint}
-                className="bg-surface-sunken text-ink-secondary rounded-md px-2.5 py-1.5 font-mono text-xs"
+                className="bg-surface-sunken text-ink-secondary rounded-md px-2.5 py-1.5 font-mono text-detail"
               >
                 {endpoint}
               </li>

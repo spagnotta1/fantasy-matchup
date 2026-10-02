@@ -45,7 +45,7 @@ export function TopValues({
       <div className="border-line flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5">
         <div className="min-w-0">
           <h2 className="text-ink text-lg font-extrabold tracking-tight">Top {TOP_N}</h2>
-          <p className="text-ink-muted text-xs">Rest-of-season value above the waiver wire.</p>
+          <p className="text-ink-muted text-detail">Rest-of-season value above the waiver wire.</p>
         </div>
         <div className="flex items-center gap-2">
           <ProvenanceBadge provenance="derived" />
@@ -117,7 +117,7 @@ export function TopValues({
                     onClick={() => onAdd(target, id)}
                     aria-label={`Add ${value.player.name} to ${target === 'give' ? 'You give' : 'You get'}`}
                     className={cn(
-                      'border-line rounded-[var(--radius-control)] border px-2 py-1 text-xs font-medium transition-colors',
+                      'border-line rounded-[var(--radius-control)] border px-2 py-1 text-detail font-medium transition-colors',
                       side === target
                         ? 'bg-accent text-on-accent border-transparent'
                         : 'text-ink-secondary hover:bg-surface-hover hover:text-ink disabled:opacity-40',

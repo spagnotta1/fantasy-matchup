@@ -62,7 +62,7 @@ export function ScoreDistribution({
         >
           <div className="mb-1.5 flex items-baseline justify-between gap-4 text-sm">
             <span className="text-ink truncate font-medium">{side.label}</span>
-            <span className="text-ink-muted tnum shrink-0 text-xs">
+            <span className="text-ink-muted tnum shrink-0 text-detail">
               Low {formatPoints(side.team.p10)} · Middle {formatPoints(side.team.median_score)} · High{' '}
               {formatPoints(side.team.p90)}
             </span>
@@ -103,7 +103,7 @@ export function ScoreDistribution({
         </div>
       ))}
 
-      <div className="text-ink-muted flex items-center gap-4 text-xs">
+      <div className="text-ink-muted flex items-center gap-4 text-detail">
         <span className="flex items-center gap-1.5">
           <span aria-hidden className="bg-chart-series/55 block h-2 w-6 rounded-full" />
           Half of simulated weeks land here

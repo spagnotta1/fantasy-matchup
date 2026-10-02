@@ -28,33 +28,38 @@ export function ProjectionPanel({
         description="What the model expects from this player this week."
         action={<ProvenanceBadge provenance="model" />}
       />
-      <CardBody className="space-y-6">
-        <PercentileStrip points={points} />
+      {/* The strip and the four figures side by side where the card has room
+          for both: stacked, the figures were a row of their own under a strip
+          a thousand pixels wide. */}
+      <CardBody className="@container space-y-5">
+        <div className="grid gap-x-8 gap-y-5 @4xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] @4xl:items-center">
+          <PercentileStrip points={points} />
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Figure
-            label="Boom"
-            value={formatPercent(points.boom_probability)}
-            detail={`chance of ${formatThreshold(points.boom_threshold)}+ pts`}
-          />
-          <Figure
-            label="Bust"
-            value={formatPercent(points.bust_probability)}
-            detail={`chance of under ${formatThreshold(points.bust_threshold)} pts`}
-          />
-          <Figure label="Consistency" value={points.shape === 'unknown' ? '—' : formatLabel(points.shape)} detail="steady or boom-or-bust" />
-          <Figure
-            label="Based on"
-            value={points.samples === null || points.samples === undefined ? '—' : String(points.samples)}
-            detail="past projections used to size the range"
-          />
+          <dl className="grid grid-cols-2 gap-4 @2xl:grid-cols-4 @4xl:grid-cols-2">
+            <Figure
+              label="Boom"
+              value={formatPercent(points.boom_probability)}
+              detail={`chance of ${formatThreshold(points.boom_threshold)}+ pts`}
+            />
+            <Figure
+              label="Bust"
+              value={formatPercent(points.bust_probability)}
+              detail={`chance of under ${formatThreshold(points.bust_threshold)} pts`}
+            />
+            <Figure label="Consistency" value={points.shape === 'unknown' ? '—' : formatLabel(points.shape)} detail="steady or boom-or-bust" />
+            <Figure
+              label="Based on"
+              value={points.samples === null || points.samples === undefined ? '—' : String(points.samples)}
+              detail="past projections used to size the range"
+            />
+          </dl>
         </div>
 
         <ComponentBreakdown components={components} />
 
         {/* The same sentence the hero carries, beside the range it qualifies. */}
         {points.evidence_note && (
-          <p className="bg-caution-soft text-caution-text rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
+          <p className="bg-caution-soft text-caution-text rounded-[var(--radius-control)] px-3 py-2 text-detail leading-relaxed">
             {points.evidence_note}
           </p>
         )}
@@ -86,7 +91,7 @@ function PercentileStrip({ points }: { points: Points }) {
 
   return (
     <div>
-      <div className="text-ink-muted mb-2 flex items-baseline justify-between text-xs">
+      <div className="text-ink-muted mb-2 flex items-baseline justify-between text-detail">
         <span>Likely scoring range (floor and ceiling are roughly 1-in-10 bad and good weeks)</span>
         <span>
           {formatPoints(floor)} – {formatPoints(ceiling)} pts
@@ -110,7 +115,7 @@ function PercentileStrip({ points }: { points: Points }) {
         size="lg"
       />
 
-      <dl className="text-ink-muted mt-1 flex justify-between text-[0.6875rem]">
+      <dl className="text-ink-muted mt-1 flex justify-between text-chip">
         {marks.map((mark) => (
           <div key={mark.label} className="text-center">
             <dt className="font-medium">{mark.label}</dt>
@@ -141,14 +146,14 @@ function ComponentBreakdown({ components }: { components: Components }) {
 
   return (
     <div>
-      <h3 className="text-ink-muted mb-2 text-xs font-semibold tracking-wide uppercase">
+      <h3 className="text-ink-muted mb-2 text-caption font-semibold tracking-wide uppercase">
         Projected production
       </h3>
-      <p className="text-ink-muted mb-3 text-xs leading-relaxed">
+      <p className="text-ink-muted mb-3 text-detail leading-relaxed">
         The stats the model expects. The points above are these stats run through your league&apos;s
         scoring settings.
       </p>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 sm:grid-cols-3">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 @2xl:grid-cols-3 @4xl:grid-cols-5">
         {rows.map((row) => (
           <div key={row.label} className="border-line flex justify-between border-b py-1 text-sm">
             <dt className="text-ink-secondary">{row.label}</dt>
@@ -163,9 +168,11 @@ function ComponentBreakdown({ components }: { components: Components }) {
 function Figure({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
     <div>
-      <dt className="text-ink-muted text-xs font-medium tracking-wide uppercase">{label}</dt>
+      <dt className="text-ink-muted text-caption font-medium tracking-wide uppercase">{label}</dt>
       <dd className="tnum text-ink mt-0.5 text-lg font-semibold">{value}</dd>
-      <p className="text-ink-muted text-[0.6875rem]">{detail}</p>
+      {/* A second description of the same term, not a paragraph: a list of
+          terms holds terms and their descriptions and nothing else. */}
+      <dd className="text-ink-muted text-chip">{detail}</dd>
     </div>
   )
 }

@@ -66,8 +66,11 @@ async def list_players(
     response_model=schemas.Envelope[list[schemas.PlayerOut]],
     summary="Find players by name",
     description=(
-        "Prefix matches rank above substring matches, then by recency of last "
-        "season. Search accepts unprojected positions (K, DST) — looking a "
+        "An exact name ranks first, then a match at the start of any word in "
+        "the name (so a surname counts), then a match inside a word; within "
+        "each, the most recently active players come first. Retired players "
+        "are ranked lower, never hidden. Search accepts unprojected positions "
+        "(K, DST) — looking a "
         "kicker up is reasonable even though nothing projects them."
     ),
 )

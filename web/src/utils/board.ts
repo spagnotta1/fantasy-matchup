@@ -189,10 +189,24 @@ export function boardCeiling(entries: RankedProjection[]): number {
   }, 0)
 }
 
+/**
+ * Whether any row's matchup is ungraded. One ungraded row sets the width of
+ * the grade's slot on every row of a list: see `ProjectionLine`.
+ */
+export function anyUngraded(entries: RankedProjection[]): boolean {
+  return entries.some((entry) => !entry.projection.matchup?.grade.graded)
+}
+
 /** The drawn order, as far as `useReorderAnimation` follows it. */
 export function orderSignature(entries: RankedProjection[]): string {
   return entries
     .slice(0, 40)
     .map((entry) => entry.projection.player.player_id)
     .join(',')
+}
+
+/** Where a player is playing this week: `DET @ CAR`, or `RB · DET @ CAR` on a mixed board. */
+export function gameLine(projection: Projection, withPosition: boolean) {
+  const game = `${projection.team} ${projection.is_home ? 'vs' : '@'} ${projection.opponent}`
+  return withPosition ? `${projection.player.position} · ${game}` : game
 }

@@ -89,7 +89,7 @@ export default function TrackRecordPage() {
                 ...[...record.seasons].reverse().map((s) => ({ value: String(s), label: String(s) })),
               ]}
             />
-            <p className="text-ink-muted pb-1.5 text-xs">
+            <p className="text-ink-muted pb-1.5 text-detail">
               {formatScoringProfile(record.scoring_profile)} scoring (set at the top of the page).
               Actual points use the same scoring, so it is a fair comparison.
             </p>
@@ -170,14 +170,14 @@ function CoverageBar({ value, nominal }: { value: number | null | undefined; nom
         />
         <span className="bg-ink absolute -inset-y-0.5 w-px" style={{ left: `${nominal * 100}%` }} />
       </span>
-      <span className="tnum text-ink text-xs">{formatPercent(value, 1)}</span>
+      <span className="tnum text-ink text-detail">{formatPercent(value, 1)}</span>
     </span>
   )
 }
 
 function Rate({ predicted, observed }: { predicted: number | null | undefined; observed: number | null | undefined }) {
   return (
-    <span className="tnum text-xs whitespace-nowrap">
+    <span className="tnum text-detail whitespace-nowrap">
       <span className="text-ink-secondary">{formatPercent(predicted, 1)}</span>
       <span className="text-ink-muted"> → </span>
       <span className="text-ink font-medium">{formatPercent(observed, 1)}</span>
@@ -197,7 +197,7 @@ function PositionTable({ rows }: { rows: Accuracy[] }) {
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">Accuracy by position</caption>
           <thead>
-            <tr className="border-line text-ink-muted border-b text-xs font-medium tracking-wide uppercase">
+            <tr className="border-line text-ink-muted border-b text-caption font-medium tracking-wide uppercase">
               <th scope="col" className="px-3 py-2 text-left">Pos</th>
               <th scope="col" className="px-3 py-2 text-left">80% range</th>
               <th scope="col" className="hidden px-3 py-2 text-left sm:table-cell">50% range</th>
@@ -219,7 +219,7 @@ function PositionTable({ rows }: { rows: Accuracy[] }) {
               <tr key={row.position} className="border-line border-b last:border-b-0">
                 <th scope="row" className="text-ink px-3 py-2 text-left font-semibold">
                   {row.position}
-                  <span className="text-ink-muted ml-1.5 text-xs font-normal">{row.graded.toLocaleString()}</span>
+                  <span className="text-ink-muted ml-1.5 text-detail font-normal">{row.graded.toLocaleString()}</span>
                 </th>
                 <td className="px-3 py-2">
                   <CoverageBar value={row.coverage_80} nominal={0.8} />
@@ -269,7 +269,7 @@ function BandTable({ rows }: { rows: Accuracy[] }) {
               : `${formatPoints(row.band_low, 0)}–${formatPoints(row.band_high, 0)}`
           return (
             <li key={label} className="flex items-center gap-3 px-4 py-2.5">
-              <span className="tnum text-ink w-14 text-xs font-medium">{label} pts</span>
+              <span className="tnum text-ink w-14 text-detail font-medium">{label} pts</span>
               <span
                 className="bg-surface-sunken relative h-2 flex-1 rounded-full"
                 role="img"
@@ -281,8 +281,8 @@ function BandTable({ rows }: { rows: Accuracy[] }) {
                   style={bias >= 0 ? { left: '50%', width: `${width}%` } : { right: '50%', width: `${width}%` }}
                 />
               </span>
-              <span className="tnum text-ink w-12 text-right text-xs">{formatSigned(bias, 2)}</span>
-              <span className="text-ink-muted hidden w-16 text-right text-[0.6875rem] sm:inline">
+              <span className="tnum text-ink w-12 text-right text-detail">{formatSigned(bias, 2)}</span>
+              <span className="text-ink-muted hidden w-16 text-right text-chip sm:inline">
                 {row.thin ? 'thin' : `${row.graded.toLocaleString()}`}
               </span>
             </li>
@@ -301,7 +301,7 @@ function SeasonTable({ rows, className }: { rows: Accuracy[]; className?: string
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">Accuracy by season</caption>
           <thead>
-            <tr className="border-line text-ink-muted border-b text-xs font-medium tracking-wide uppercase">
+            <tr className="border-line text-ink-muted border-b text-caption font-medium tracking-wide uppercase">
               <th scope="col" className="px-3 py-2 text-left">Season</th>
               <th scope="col" className="px-3 py-2 text-left">80% range</th>
               <th scope="col" className="hidden px-3 py-2 text-left sm:table-cell">50% range</th>
@@ -461,7 +461,7 @@ function ScorecardCard({
         }
       />
       {card.summary && (
-        <CardBody className="border-line flex flex-wrap gap-x-6 gap-y-1 border-b py-3 text-xs">
+        <CardBody className="border-line flex flex-wrap gap-x-6 gap-y-1 border-b py-3 text-detail">
           <span className="text-ink-secondary">
             80% range held for <span className="text-ink font-semibold">{formatPercent(card.summary.coverage_80, 1)}</span>
           </span>
@@ -487,7 +487,7 @@ function ScorecardCard({
 function OutcomeList({ title, outcomes, className }: { title: string; outcomes: Outcome[]; className?: string }) {
   return (
     <section className={className} aria-label={title}>
-      <h3 className="text-ink-secondary px-4 pt-4 pb-2 text-xs font-semibold tracking-wide uppercase">{title}</h3>
+      <h3 className="text-ink-secondary px-4 pt-4 pb-2 text-caption font-semibold tracking-wide uppercase">{title}</h3>
       {outcomes.length === 0 ? (
         <p className="text-ink-muted px-4 pb-4 text-sm">None this week.</p>
       ) : (
@@ -502,7 +502,7 @@ function OutcomeList({ title, outcomes, className }: { title: string; outcomes: 
                 >
                   {o.name}
                 </Link>
-                <span className="text-ink-muted block text-xs">
+                <span className="text-ink-muted block text-detail">
                   {o.position} · {o.team} {o.is_home ? 'vs' : '@'} {o.opponent}
                   {o.inside_range === false && ' · outside the 80% range'}
                 </span>
@@ -510,9 +510,9 @@ function OutcomeList({ title, outcomes, className }: { title: string; outcomes: 
               <span className="text-right">
                 <span className="tnum text-ink block text-sm font-semibold">
                   {formatPoints(o.actual)}
-                  <span className="text-ink-muted ml-1 text-xs font-normal">actual</span>
+                  <span className="text-ink-muted ml-1 text-detail font-normal">actual</span>
                 </span>
-                <span className="tnum text-ink-muted block text-xs">
+                <span className="tnum text-ink-muted block text-detail">
                   projected {formatPoints(o.projected)} · {formatSigned(o.difference)}
                 </span>
               </span>

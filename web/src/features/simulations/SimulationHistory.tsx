@@ -1,7 +1,7 @@
 import { History, RotateCcw, Trash2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
+import { Button, IconButton } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { EmptyState } from '@/components/feedback/States'
 import { formatPercent, formatPoints, formatScoringProfile } from '@/utils/format'
@@ -83,12 +83,12 @@ export function SimulationHistory({
                         {formatPoints(entry.expectedScoreB)}
                       </span>
                     </p>
-                    <p className="text-ink-muted mt-0.5 text-xs">
+                    <p className="text-ink-muted mt-0.5 text-detail">
                       {TIME_FORMAT.format(new Date(entry.ranAt))} · {entry.season} week{' '}
                       {entry.week} · {formatScoringProfile(entry.scoringProfile)} ·{' '}
                       {entry.iterations.toLocaleString()} draws · seed {entry.seed}
                     </p>
-                    <p className="text-ink-muted mt-1 truncate text-xs">
+                    <p className="text-ink-muted mt-1 truncate text-detail">
                       {entry.teamA.map((player) => player.name).join(', ')}
                     </p>
                   </div>
@@ -106,14 +106,9 @@ export function SimulationHistory({
                       <RotateCcw aria-hidden className="size-3.5" />
                       Load
                     </Button>
-                    <button
-                      type="button"
-                      onClick={() => onRemove(entry.id)}
-                      aria-label="Remove this run from history"
-                      className="text-ink-muted hover:bg-surface-hover hover:text-ink flex size-8 items-center justify-center rounded-full transition-colors"
-                    >
-                      <Trash2 aria-hidden className="size-3.5" />
-                    </button>
+                    <IconButton label="Remove this run from history" onClick={() => onRemove(entry.id)}>
+                      <Trash2 />
+                    </IconButton>
                   </div>
                 </div>
               </li>
@@ -123,7 +118,7 @@ export function SimulationHistory({
       )}
 
       <CardBody className="border-line border-t py-3">
-        <p className="text-ink-muted text-xs leading-relaxed">
+        <p className="text-ink-muted text-detail leading-relaxed">
           Each saved run keeps its lineups, its seed and the projections it used, so running it
           again gives exactly the same numbers.
         </p>

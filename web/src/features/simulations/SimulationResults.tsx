@@ -253,7 +253,7 @@ function WinProbability({
       <CardBody className="p-5 sm:p-6">
         <div className="flex items-end justify-between gap-6">
           <div className="min-w-0">
-            <p className="text-ink-muted text-xs font-medium tracking-wide uppercase">
+            <p className="text-ink-muted text-caption font-medium tracking-wide uppercase">
               {labelA} — estimated win probability
             </p>
             <p className="text-you tnum mt-1 text-5xl leading-none font-bold tracking-tight sm:text-6xl">
@@ -262,7 +262,7 @@ function WinProbability({
             </p>
           </div>
           <div className="min-w-0 text-right">
-            <p className="text-ink-muted text-xs font-medium tracking-wide uppercase">{labelB}</p>
+            <p className="text-ink-muted text-caption font-medium tracking-wide uppercase">{labelB}</p>
             <p className="text-ink-secondary tnum mt-1 text-3xl leading-none font-semibold tracking-tight">
               <span aria-hidden>{formatPercent(shownB)}</span>
               <span className="sr-only">{formatPercent(probabilityB)}</span>
@@ -337,7 +337,7 @@ function Reconciliation({ labelA, players }: { labelA: string; players: Simulate
       className="bg-caution-soft rounded-[var(--radius-card)] px-4 py-3"
       aria-label="Totals do not reconcile"
     >
-      <p className="text-caution-text text-xs leading-relaxed">
+      <p className="text-caution-text text-detail leading-relaxed">
         <span className="font-semibold">Why the two totals above differ.</span> For {labelA}
         {sampled.length < players.length ? "'s players still to play" : ''}, the simulation averages {formatPoints(simulated)} points; the players&apos; projections add up
         to {formatPoints(projected)}. This week&apos;s projections were published without the

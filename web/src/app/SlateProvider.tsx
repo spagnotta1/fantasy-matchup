@@ -156,7 +156,11 @@ export function SlateProvider({ children }: { children: ReactNode }) {
           }
           return params
         },
-        { replace: true },
+        // The page is redrawn for the new week where the reader is. Without
+        // this the router treats a new week as a new page and scrolls to its
+        // top, which is the one thing a week stepper half-way down a player
+        // page must not do.
+        { replace: true, preventScrollReset: true },
       )
     },
     [setSearchParams],

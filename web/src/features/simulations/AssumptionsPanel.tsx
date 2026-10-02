@@ -91,7 +91,7 @@ export function AssumptionsPanel({
         {assumptions.player_independence && (
           <div className="bg-caution-soft flex gap-2.5 rounded-[var(--radius-control)] px-3 py-2.5">
             <AlertTriangle aria-hidden className="text-caution-text mt-0.5 size-4 shrink-0" />
-            <p className="text-caution-text text-xs leading-relaxed">
+            <p className="text-caution-text text-detail leading-relaxed">
               <span className="font-semibold">Each player was simulated on their own.</span> In
               real games, teammates share one offence&apos;s plays and a game&apos;s pace affects both
               sides, so scores are linked — most of all a quarterback and their own receivers. Tested
@@ -109,7 +109,7 @@ export function AssumptionsPanel({
             // them breaks the list semantics for a screen reader. The <dd> is
             // indented by the glyph's width plus the gap to keep the alignment.
             <div key={flag.label} className="min-w-0">
-              <dt className="text-ink flex items-start gap-2.5 text-xs font-semibold">
+              <dt className="text-ink flex items-start gap-2.5 text-detail font-semibold">
                 <span
                   className={cn(
                     'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full',
@@ -129,7 +129,7 @@ export function AssumptionsPanel({
                   <span className="sr-only">: {flag.ok ? 'included' : 'not included'}</span>
                 </span>
               </dt>
-              <dd className="text-ink-muted ps-[1.625rem] text-xs leading-relaxed">
+              <dd className="text-ink-muted ps-[1.625rem] text-detail leading-relaxed">
                 {flag.detail}
               </dd>
             </div>
@@ -138,8 +138,8 @@ export function AssumptionsPanel({
 
         {notes.length > 0 && (
           <div className="border-line border-t pt-3">
-            <h3 className="text-ink mb-1.5 text-xs font-semibold">Notes from this run</h3>
-            <ul className="text-ink-muted list-disc space-y-1.5 pl-4 text-xs leading-relaxed">
+            <h3 className="text-ink mb-1.5 text-detail font-semibold">Notes from this run</h3>
+            <ul className="text-ink-muted list-disc space-y-1.5 pl-4 text-detail leading-relaxed">
               {notes.map((note) => (
                 <li key={note}>{note}</li>
               ))}
@@ -148,8 +148,8 @@ export function AssumptionsPanel({
         )}
 
         <div className="border-line border-t pt-3">
-          <h3 className="text-ink mb-2 text-xs font-semibold">How it was run</h3>
-          <dl className="text-ink-muted grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+          <h3 className="text-ink mb-2 text-detail font-semibold">How it was run</h3>
+          <dl className="text-ink-muted grid gap-x-6 gap-y-1 text-detail sm:grid-cols-2">
             <Detail label="Simulations" value={simulation.iterations.toLocaleString()} />
             <Detail label="Seed" value={String(simulation.seed)} />
             <Detail label="Method" value={simulation.sampling_method.replace(/_/g, ' ')} />
@@ -171,7 +171,7 @@ export function AssumptionsPanel({
               }
             />
           </dl>
-          <p className="text-ink-muted mt-2 text-xs leading-relaxed">
+          <p className="text-ink-muted mt-2 text-detail leading-relaxed">
             Running the same lineups with the same seed against the same projections gives exactly
             the same numbers. Every simulated score comes from a player&apos;s projected range.
           </p>

@@ -76,7 +76,7 @@ export function SlateControls({ className, compact = false }: { className?: stri
       */}
       {noPublishedWeeks && slate.catalogReady ? (
         <Tooltip content="Projections for this season are not out yet. They are added by the weekly update.">
-          <span className="border-line bg-surface-sunken text-ink-muted inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 text-xs">
+          <span className="border-line bg-surface-sunken text-ink-muted inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 text-detail">
             <CircleAlert aria-hidden className="size-3.5" />
             No weeks yet
           </span>

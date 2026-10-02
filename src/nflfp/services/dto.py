@@ -289,6 +289,8 @@ class WeatherContext:
     temperature_f: float | None = None
     wind_mph: float | None = None
     wind_gust_mph: float | None = None
+    #: A 0-1 fraction, like every other share here. The warehouse column is
+    #: 0-100; ``assemble.weather_context`` converts it.
     precipitation_probability: float | None = None
     snowfall_in: float | None = None
     roof_uncertain: bool = False

@@ -2,8 +2,12 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode } from 'rea
 
 import { cn } from '@/utils/cn'
 
-export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+// The DOM's `size` is a character count nobody here uses; this one is the
+// control height, the same word `Select` and `Button` use for it.
+export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
   label: string
+  /** `md` 40px in a form, `sm` 32px in a toolbar. */
+  size?: 'sm' | 'md'
   hideLabel?: boolean
   hint?: string
   /** Error text. Presence also sets `aria-invalid`. */
@@ -14,7 +18,7 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, hideLabel, hint, error, icon, trailing, className, id, type = 'text', ...props },
+  { label, hideLabel, hint, error, icon, trailing, size = 'md', className, id, type = 'text', ...props },
   ref,
 ) {
   const generatedId = useId()
@@ -26,7 +30,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     <div className={cn('flex flex-col gap-1.5', className)}>
       <label
         htmlFor={inputId}
-        className={cn('text-ink-secondary text-xs font-medium', hideLabel && 'sr-only')}
+        className={cn('text-ink-secondary text-caption font-medium', hideLabel && 'sr-only')}
       >
         {label}
       </label>
@@ -34,7 +38,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         {icon && (
           <span
             aria-hidden
-            className="text-ink-muted pointer-events-none absolute top-1/2 left-3 flex -translate-y-1/2 items-center"
+            className={cn(
+              'text-ink-muted pointer-events-none absolute top-1/2 flex -translate-y-1/2 items-center',
+              size === 'sm' ? 'left-2.5 [&_svg]:size-3.5' : 'left-3',
+            )}
           >
             {icon}
           </span>
@@ -46,27 +53,33 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           aria-invalid={error ? true : undefined}
           aria-describedby={cn(errorId, hintId) || undefined}
           className={cn(
-            'bg-surface border-line-input text-ink placeholder:text-ink-muted h-10 w-full rounded-[var(--radius-control)] border text-sm',
+            'bg-surface border-line-input text-ink placeholder:text-ink-muted rounded-control w-full border',
             'transition-colors hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-55',
-            icon ? 'pl-9' : 'pl-3',
-            trailing ? 'pr-10' : 'pr-3',
+            size === 'sm' ? 'h-control-sm text-detail' : 'h-control text-body',
+            icon ? (size === 'sm' ? 'pl-8' : 'pl-9') : size === 'sm' ? 'pl-2.5' : 'pl-3',
+            trailing ? 'pr-10' : size === 'sm' ? 'pr-2.5' : 'pr-3',
             error && 'border-negative',
           )}
           {...props}
         />
         {trailing && (
-          <span className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center">
+          <span
+            className={cn(
+              'absolute top-1/2 flex -translate-y-1/2 items-center',
+              size === 'sm' ? 'right-0.5' : 'right-2',
+            )}
+          >
             {trailing}
           </span>
         )}
       </div>
       {error ? (
-        <p id={errorId} className="text-negative-text text-xs" role="alert">
+        <p id={errorId} className="text-negative-text text-detail" role="alert">
           {error}
         </p>
       ) : (
         hint && (
-          <p id={hintId} className="text-ink-muted text-xs">
+          <p id={hintId} className="text-ink-muted text-detail">
             {hint}
           </p>
         )

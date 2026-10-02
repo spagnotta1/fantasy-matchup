@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { cn } from '@/utils/cn'
@@ -42,7 +43,7 @@ export function SimulatedRoster({ seat }: { seat: SeatAnalysis }) {
               {seat.draft_position}
             </caption>
             <thead>
-              <tr className="text-ink-secondary border-line border-b text-xs">
+              <tr className="text-ink-secondary border-line border-b text-caption">
                 <th scope="col" className="py-2 pr-2 pl-4 text-left font-medium">
                   Rd
                 </th>
@@ -105,7 +106,7 @@ function RosterRow({
         <th scope="row" className="text-ink-secondary tnum py-2 pr-2 pl-4 text-left font-medium">
           {pick.round_number}
         </th>
-        <td className="text-ink-muted tnum py-2 pr-2 text-xs">#{pick.overall}</td>
+        <td className="text-ink-muted tnum py-2 pr-2 text-detail">#{pick.overall}</td>
         <td className="py-2 pr-2">
           <div className="flex items-center gap-2">
             <Badge tone="neutral">{pick.position}</Badge>
@@ -116,11 +117,11 @@ function RosterRow({
               <Badge tone="neutral">Bench</Badge>
             )}
           </div>
-          {pick.team && <span className="text-ink-muted text-xs">{pick.team}</span>}
+          {pick.team && <span className="text-ink-muted text-detail">{pick.team}</span>}
         </td>
         <td className="text-ink tnum py-2 pr-2 text-right">
           <span className="font-semibold">{formatNumber(pick.season_value)}</span>
-          <span className="text-ink-muted block text-xs">
+          <span className="text-ink-muted block text-detail">
             {formatPoints(pick.projected_points_per_game)}/g × {formatNumber(pick.expected_games)}
           </span>
         </td>
@@ -128,12 +129,12 @@ function RosterRow({
           {previous ? (
             <>
               <span className="text-ink-secondary">{formatNumber(previous.total_points)}</span>
-              <span className="text-ink-muted block text-xs">
+              <span className="text-ink-muted block text-detail">
                 {previous.season} · {previous.games_played}g
               </span>
             </>
           ) : (
-            <span className="text-ink-muted text-xs">No prior season</span>
+            <span className="text-ink-muted text-detail">No prior season</span>
           )}
         </td>
         <td className="tnum py-2 pr-2 text-right">
@@ -147,19 +148,16 @@ function RosterRow({
           </span>
         </td>
         <td className="py-2 pr-4 text-right">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={onToggle}
             aria-expanded={expanded}
             aria-controls={detailId}
-            className="text-ink-secondary hover:text-ink focus-visible:ring-accent inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium focus-visible:ring-2 focus-visible:outline-none"
           >
             {expanded ? 'Hide' : 'Why'}
-            <ChevronDown
-              aria-hidden
-              className={cn('size-3.5 transition-transform', expanded && 'rotate-180')}
-            />
-          </button>
+            <ChevronDown aria-hidden className={cn('transition-transform', expanded && 'rotate-180')} />
+          </Button>
         </td>
       </tr>
 
@@ -191,7 +189,7 @@ function PickReasoning({ pick }: { pick: SimulatedPick }) {
         {rationale ? (
           <>
             <p className="text-ink text-sm leading-relaxed">{rationale.explanation}</p>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-detail sm:grid-cols-3">
               <Figure label="Fills" value={rationale.slot} />
               <Figure
                 label="Value added"
@@ -237,7 +235,7 @@ function HistoryPanel({ history }: { history: SimulatedPick['historical'] }) {
   if (!history || history.seasons.length === 0) {
     return (
       <div className="border-line rounded-[var(--radius-control)] border p-3">
-        <p className="text-ink-secondary text-xs leading-relaxed">
+        <p className="text-ink-secondary text-detail leading-relaxed">
           No full past season on record, so expected games played uses the typical figure
           for the position rather than this player&rsquo;s own history.
         </p>
@@ -251,12 +249,12 @@ function HistoryPanel({ history }: { history: SimulatedPick['historical'] }) {
   return (
     <div className="border-line space-y-2 rounded-[var(--radius-control)] border p-3">
       <div className="flex items-center justify-between">
-        <span className="text-ink-secondary text-xs font-semibold">Historical</span>
+        <span className="text-ink-secondary text-detail font-semibold">Historical</span>
         <ProvenanceBadge provenance="actual" />
       </div>
       <dl className="space-y-1">
         {history.seasons.map((entry) => (
-          <div key={entry.season} className="flex items-baseline justify-between gap-3 text-xs">
+          <div key={entry.season} className="flex items-baseline justify-between gap-3 text-detail">
             <dt className="text-ink-muted">{entry.season}</dt>
             <dd className="text-ink tnum">
               {formatNumber(entry.total_points)} pts
@@ -265,7 +263,7 @@ function HistoryPanel({ history }: { history: SimulatedPick['historical'] }) {
           </div>
         ))}
       </dl>
-      <div className="border-line/60 flex flex-wrap items-center gap-2 border-t pt-2 text-xs">
+      <div className="border-line/60 flex flex-wrap items-center gap-2 border-t pt-2 text-detail">
         {history.trend && (
           <span className="text-ink-secondary inline-flex items-center gap-1">
             <TrendIcon aria-hidden className="size-3.5" />
@@ -282,7 +280,7 @@ function HistoryPanel({ history }: { history: SimulatedPick['historical'] }) {
         </span>
       </div>
       {history.trend_detail && (
-        <p className="text-ink-muted text-xs leading-relaxed">{history.trend_detail}</p>
+        <p className="text-ink-muted text-detail leading-relaxed">{history.trend_detail}</p>
       )}
     </div>
   )

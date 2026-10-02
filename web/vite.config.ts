@@ -2,7 +2,48 @@ import { fileURLToPath, URL } from 'node:url'
 
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
+
+/**
+ * Preload the Latin subset of Commissioner.
+ *
+ * The font is only discovered once the stylesheet has been fetched and parsed
+ * and layout has found text that needs it, so the first paint is in the
+ * fallback face and every line reflows when the real one arrives. A preload in
+ * the document head starts the download with the stylesheet instead of after
+ * it. Only the Latin file: it is the one every page uses, and preloading the
+ * other five subsets would spend bandwidth on glyphs the page never draws.
+ *
+ * Build only. The file's hashed name exists only in the bundle, and in
+ * development the font is served from `node_modules` uncached anyway.
+ */
+function preloadLatinFont(): Plugin {
+  return {
+    name: 'nflfp:preload-latin-font',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, context) {
+        const font = Object.keys(context.bundle ?? {}).find((file) =>
+          /commissioner-latin-wght-normal-[\w-]+\.woff2$/.test(file),
+        )
+        // A missing file is a changed dependency, not a reason to fail a build:
+        // the page still works, it just flashes the fallback again.
+        if (!font) {
+          this.warn('Commissioner Latin font not found in the bundle; no preload emitted.')
+          return []
+        }
+        return [
+          {
+            tag: 'link',
+            attrs: { rel: 'preload', as: 'font', type: 'font/woff2', href: `/${font}`, crossorigin: '' },
+            injectTo: 'head',
+          },
+        ]
+      },
+    },
+  }
+}
 
 // The API is versioned and served under /api/v1. In development we proxy it
 // rather than pointing the browser at another origin: the backend enables CORS
@@ -14,7 +55,7 @@ export default defineConfig(({ mode }) => {
   const target = env.VITE_DEV_API_PROXY ?? 'http://127.0.0.1:8010'
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), preloadLatinFont()],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

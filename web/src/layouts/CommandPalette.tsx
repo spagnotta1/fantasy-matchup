@@ -213,7 +213,7 @@ function PaletteBody() {
           placeholder="Search players, teams and pages…"
           className="text-ink placeholder:text-ink-muted h-12 min-w-0 flex-1 bg-transparent text-sm outline-none"
         />
-        <kbd className="border-line text-ink-muted hidden rounded border px-1.5 py-0.5 text-[0.625rem] sm:inline">
+        <kbd className="border-line text-ink-muted hidden rounded border px-1.5 py-0.5 text-chip sm:inline">
           Esc
         </kbd>
       </div>
@@ -232,7 +232,7 @@ function PaletteBody() {
               {heading && (
                 <p
                   role="presentation"
-                  className="text-ink-muted px-3 pt-2 pb-1 text-[0.6875rem] font-medium tracking-wide uppercase"
+                  className="text-ink-muted px-3 pt-2 pb-1 text-chip font-medium tracking-wide uppercase"
                 >
                   {heading}
                 </p>
@@ -253,7 +253,7 @@ function PaletteBody() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{option.label}</span>
-                  <span className="text-ink-muted block truncate text-xs">{option.detail}</span>
+                  <span className="text-ink-muted block truncate text-detail">{option.detail}</span>
                 </span>
                 {index === current && <CornerDownLeft aria-hidden className="size-3.5 shrink-0" />}
               </div>
@@ -262,7 +262,7 @@ function PaletteBody() {
         })}
       </ul>
 
-      <p className="border-line text-ink-muted border-t px-4 py-2 text-[0.6875rem]">
+      <p className="border-line text-ink-muted border-t px-4 py-2 text-chip">
         ↑ ↓ to move · Enter to open · Esc to close
         {query.length > 0 && query.length < MIN_SEARCH_LENGTH && ' · type two letters to search players'}
       </p>

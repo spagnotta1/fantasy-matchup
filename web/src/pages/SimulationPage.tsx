@@ -332,7 +332,7 @@ export default function SimulationPage() {
           aria-label="No projections this week"
         >
           <ShieldAlert aria-hidden className="text-caution-text mt-0.5 size-4 shrink-0" />
-          <p className="text-caution-text text-xs leading-relaxed">
+          <p className="text-caution-text text-detail leading-relaxed">
             Projections for week {slate.week ?? '—'} are not out yet, so there is nothing to
             simulate. Pick another week at the top of the page.
           </p>
@@ -412,7 +412,7 @@ export default function SimulationPage() {
           </div>
 
           {!catalog.formatKnown && (
-            <p className="text-ink-muted mt-3 text-xs leading-relaxed">
+            <p className="text-ink-muted mt-3 text-detail leading-relaxed">
               We could not load your league&apos;s lineup format, so one row per position is shown.
               If the lineup does not fit, the simulation will tell you what it expects.
             </p>
@@ -518,7 +518,7 @@ function RunControls({
       <CardBody className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-ink-secondary mb-1.5 text-xs font-medium">Player outcomes</p>
+            <p className="text-ink-secondary mb-1.5 text-detail font-medium">Player outcomes</p>
             <SegmentedControl
               label="Simulation mode"
               value={correlationMode}
@@ -536,19 +536,18 @@ function RunControls({
               {showAdvanced ? 'Hide settings' : 'Settings'}
             </Button>
             <Button
-              size="lg"
               variant="primary"
+              icon={<Play aria-hidden />}
               onClick={onRun}
               disabled={!ready}
               loading={running}
             >
-              {!running && <Play aria-hidden className="size-4" />}
               {running ? 'Simulating…' : 'Run simulation'}
             </Button>
           </div>
         </div>
 
-        {mode && <p className="text-ink-muted text-xs leading-relaxed">{mode.description}</p>}
+        {mode && <p className="text-ink-muted text-detail leading-relaxed">{mode.description}</p>}
 
         {showAdvanced && (
           <div className="border-line grid gap-3 border-t pt-4 sm:grid-cols-2">
@@ -583,7 +582,7 @@ function RunControls({
             aria-label="Lineup cannot be simulated"
           >
             <AlertTriangle aria-hidden className="text-caution-text mt-0.5 size-4 shrink-0" />
-            <div className="text-caution-text min-w-0 text-xs leading-relaxed">
+            <div className="text-caution-text min-w-0 text-detail leading-relaxed">
               <p className="font-semibold">
                 {blocked.reduce((total, side) => total + side.problems.length, 0)} starter(s) cannot
                 be simulated, so this matchup cannot run yet.
@@ -603,7 +602,7 @@ function RunControls({
             </div>
           </div>
         ) : (
-          <p className="text-ink-muted text-xs">
+          <p className="text-ink-muted text-detail">
             {ready
               ? `Ready — week ${week ?? '—'}, ${formatScoringProfile(scoringProfile)}.`
               : `Fill every slot on both lineups to run a simulation. ${emptySlots} still empty.`}
@@ -628,7 +627,7 @@ function RunningState({ iterations }: { iterations: number }) {
         <p className="text-ink text-sm font-medium">
           Simulating {Number.isFinite(iterations) ? iterations.toLocaleString() : ''} weeks…
         </p>
-        <p className="text-ink-muted mx-auto mt-1 max-w-md text-xs leading-relaxed">
+        <p className="text-ink-muted mx-auto mt-1 max-w-md text-detail leading-relaxed">
           Playing out thousands of weeks: each player gets a score from their projected range,
           and both lineups are added up.
         </p>

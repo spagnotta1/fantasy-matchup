@@ -91,7 +91,7 @@ function GameCard({ game, selected }: { game: Game; selected: boolean }) {
       to={`/matchups/${encodeURIComponent(game.game_id)}`}
       aria-current={selected ? 'true' : undefined}
       className={[
-        'bg-surface hover:border-line-strong focus-visible:outline-focus group relative block h-full overflow-hidden rounded-[var(--radius-card)] border px-4 pt-5 pb-4 shadow-card transition-[border-color,transform,box-shadow] hover:-translate-y-0.5 hover:shadow-raised',
+        'bg-surface hover:border-line-strong focus-visible:outline-focus group relative block h-full overflow-hidden rounded-[var(--radius-card)] border px-4 pt-5 pb-4 transition-[border-color,transform,box-shadow] hover:-translate-y-0.5 hover:shadow-raised',
         selected ? 'border-accent ring-accent/30 ring-2' : 'border-line',
       ].join(' ')}
     >
@@ -118,7 +118,7 @@ function GameCard({ game, selected }: { game: Game; selected: boolean }) {
         />
       </div>
 
-      <p className="text-ink-muted border-line mt-3 flex flex-wrap gap-x-2 border-t pt-2.5 text-xs">
+      <p className="text-ink-muted border-line mt-3 flex flex-wrap gap-x-2 border-t pt-2.5 text-detail">
         <span className={completed ? 'text-ink font-semibold' : undefined}>
           {completed ? 'Final' : formatGameDay(game.gameday)}
         </span>

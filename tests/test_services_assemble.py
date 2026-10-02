@@ -223,6 +223,54 @@ class TestPlayerProjection:
         assert assembled.model.run_id == 7
 
 
+class TestWeatherContext:
+    """The warehouse stores a 0-100 rain chance; everything above it reads 0-1.
+
+    The two used to meet unconverted: the UI multiplied a stored 62 by 100 and
+    printed "6200%", and ``is_adverse`` compared the same 62 with 0.6, so every
+    outdoor game with any rain in the forecast was flagged as bad weather.
+    """
+
+    def _weather(self, **overrides):
+        row = {"weather_source": "forecast", "is_indoor": False, "wind_mph": 5.0}
+        row.update(overrides)
+        return assemble.weather_context(row)
+
+    @pytest.mark.parametrize(
+        ("stored", "fraction"),
+        [(0.0, 0.0), (1.0, 0.01), (2.0, 0.02), (5.0, 0.05), (62.0, 0.62), (100.0, 1.0)],
+    )
+    def test_the_stored_percentage_becomes_a_fraction(self, stored, fraction):
+        weather = self._weather(precipitation_probability=stored)
+        assert weather.precipitation_probability == pytest.approx(fraction)
+
+    def test_a_missing_rain_chance_stays_missing(self):
+        # Observed history carries no rain chance at all. That is not 0%.
+        assert self._weather(precipitation_probability=None).precipitation_probability is None
+
+    @pytest.mark.parametrize("stored", [0.0, 1.0, 2.0, 5.0, 59.0])
+    def test_light_rain_chances_in_calm_wind_are_not_adverse(self, stored):
+        assert not self._weather(precipitation_probability=stored).is_adverse
+
+    @pytest.mark.parametrize("stored", [60.0, 62.0, 100.0])
+    def test_a_sixty_percent_rain_chance_is_adverse(self, stored):
+        assert self._weather(precipitation_probability=stored).is_adverse
+
+    def test_twenty_mph_wind_is_adverse_whatever_the_rain_chance(self):
+        assert self._weather(wind_mph=20.0, precipitation_probability=0.0).is_adverse
+        assert not self._weather(wind_mph=19.9, precipitation_probability=0.0).is_adverse
+
+    def test_an_indoor_game_is_never_adverse(self):
+        assert not self._weather(is_indoor=True, precipitation_probability=100.0).is_adverse
+
+    def test_the_api_serves_the_fraction(self):
+        from nflfp.api import mappers
+
+        served = mappers.weather(self._weather(precipitation_probability=62.0))
+        assert served.precipitation_probability == pytest.approx(0.62)
+        assert served.is_adverse
+
+
 class TestRankBoard:
     def test_orders_by_the_calibrated_expectation(self):
         board = assemble.rank_board(

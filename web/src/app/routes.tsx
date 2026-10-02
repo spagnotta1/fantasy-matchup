@@ -28,6 +28,7 @@ const DraftBoardPage = lazy(() => import('@/pages/DraftBoardPage'))
 const LivePage = lazy(() => import('@/pages/LivePage'))
 const MyTeamPage = lazy(() => import('@/pages/MyTeamPage'))
 const TradePage = lazy(() => import('@/pages/TradePage'))
+const SpecimensPage = lazy(() => import('@/pages/SpecimensPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 
 export const router = createBrowserRouter([
@@ -61,6 +62,10 @@ export const router = createBrowserRouter([
       { path: 'my-team', element: <MyTeamPage /> },
       { path: 'trade', element: <TradePage /> },
       { path: 'settings', element: <SettingsPage /> },
+      // The design workbench: every primitive in every state. Routed but not
+      // in the navigation or the palette — it is for building the product, not
+      // for using it.
+      { path: 'specimens', element: <SpecimensPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

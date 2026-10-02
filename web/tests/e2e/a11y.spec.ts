@@ -37,6 +37,7 @@ const ROUTES = [
   { path: '/trade', name: 'trade helper' },
   { path: '/matchups?view=lines', name: 'matchups (lines)' },
   { path: '/matchups?view=schedule', name: 'matchups (schedule)' },
+  { path: '/specimens', name: 'specimens' },
   { path: '/no-such-page', name: '404' },
 ]
 

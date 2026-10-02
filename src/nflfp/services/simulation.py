@@ -953,7 +953,7 @@ def _caveats(
         for caveat in rosters.lineup_caveats(entries):
             caveats.append(f"{lineup.side}: {caveat}")
 
-    shared_games = _shared_games(lineup_a, lineup_b, by_id)
+    shared_games = _shared_game_labels(lineup_a, lineup_b, by_id)
     if shared_games and assumptions.player_independence:
         caveats.append(
             "The two lineups hold players from the same game(s) "
@@ -1073,3 +1073,24 @@ def _shared_games(
         if by_id[player_id].game_id
     }
     return tuple(sorted(game for game in games_a & games_b if game))
+
+
+def _shared_game_labels(
+    lineup_a: Lineup, lineup_b: Lineup, by_id: Mapping[str, PlayerProjection]
+) -> tuple[str, ...]:
+    """The shared games as a reader names them: "ATL at NO", not the warehouse key.
+
+    Ordered as :func:`_shared_games` orders them, so the notice is stable for a
+    given pair of lineups. A game whose sides are unknown is described rather
+    than printed as its key.
+    """
+    labels: dict[str, str | None] = {}
+    for lineup in (lineup_a, lineup_b):
+        for player_id in lineup.player_ids:
+            projection = by_id[player_id]
+            if projection.game_id and not labels.get(projection.game_id):
+                labels[projection.game_id] = rosters.game_label(projection)
+    return tuple(
+        labels.get(game) or "a game with an unlisted opponent"
+        for game in _shared_games(lineup_a, lineup_b, by_id)
+    )

@@ -354,6 +354,16 @@ Under the default, the engine still names what it is ignoring:
 each lineup, `_shared_games()` identifies games spanning the two lineups, and
 each becomes a caveat in `meta.notices` naming the specific players.
 
+The same-game caveat quotes the measurement rather than asserting a direction.
+It used to end "an independent sum will report an interval that is too narrow",
+which is the Phase 6A expectation corrected above. It now states the 80%
+interval coverage from Phase 6D's
+[all held-out matchups](#all-held-out-matchups) table (0.7943 against 0.800 over
+2,878 lineups). The numbers are recorded once, in
+`predict/foundation.py::LINEUP_INDEPENDENCE`, and `tests/test_services_rosters.py`
+pins the sentence to them. Games are named by their teams ("ATL at NO"), never
+by the warehouse key.
+
 `assumptions.player_independence: true`.
 
 ### 2. Kickers and team defences are not projected
@@ -1712,6 +1722,44 @@ Rules this follows, each of which is a way the previous label went wrong:
 On the 2026 week 3 board that is 9 of 667 players caveated for short history
 under half_ppr and ppr (all quarterbacks), 38 under standard, and 2 flagged as
 extrapolated under ppr.
+
+### Range widths are shared, and a width is not a ranking
+
+A range is built from the held-out residuals of players with a similar
+projection, so its *width* belongs to that group and not to the player. Counted
+on the published 2026 week 4 board (run 146, every projection calibrated), as
+distinct `ceiling − median` values to two decimals per position:
+
+| | players | half_ppr | ppr | standard |
+|---|---|---|---|---|
+| QB | 90 | 2 | 2 | 2 |
+| RB | 176 | 8 | 6 | 14 |
+| WR | 269 | 11 | 10 | 24 |
+| TE | 148 | 5 | 5 | 13 |
+
+Between 2% and 9% of players have a width of their own, in every profile. The
+frontend's `hasBandedIntervals` calls a board shared when a position of ten or
+more players has distinct widths numbering a quarter of the group or fewer;
+every cell above is far inside that.
+
+Two things follow on screen, and both were wrong before:
+
+- **The shared-range sentence is shown whenever the board is shared.** It used
+  to be nested inside the "projections are approximate" notice, so a fully
+  calibrated run with shared ranges showed nothing. `CalibrationNotice` now
+  states it on its own, as information rather than a warning: the ranges hold
+  what they claim (80.3% above), and the sentence is about what a width may be
+  compared for.
+- **Equal widths are a tie.** The simulation's "most unpredictable players"
+  panel orders by floor-to-ceiling width. Five of a lineup's six widest ranges
+  were 22.8 points and were printed first to fifth in array order. They are now
+  grouped under "Tied at 22.8 wide" in lineup order
+  (`features/simulations/swing.ts`); equality is decided at the one decimal the
+  screen prints.
+
+The count is of the data in hand, not a property of the model: on a run whose
+ranges are per-player the notice and the tie groups both go quiet, which
+`CalibrationNotice.test.tsx` and `swing.test.ts` pin.
 
 ### Limitations
 

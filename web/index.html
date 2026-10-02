@@ -17,17 +17,26 @@
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#16392a" />
     <title>Fourth &amp; Probable — NFL fantasy projections</title>
     <script>
-      // Applied before first paint so a stored dark preference does not flash a
-      // light screen. Kept inline and tiny for that reason; the React hook owns
-      // it from mount onwards.
-      try {
-        var stored = localStorage.getItem('nflfp.theme')
-        if (stored === 'dark' || stored === 'light') {
-          document.documentElement.setAttribute('data-theme', stored)
+      // Applied before first paint so a dark preference does not flash a light
+      // screen. Kept inline and tiny for that reason; the React hook owns it
+      // from mount onwards.
+      //
+      // The attribute is always set, to `light` or `dark`. With nothing stored
+      // the OS preference is resolved here, which is what lets the stylesheet
+      // define the dark palette once instead of once per way of reaching it.
+      ;(function () {
+        var theme = null
+        try {
+          var stored = localStorage.getItem('nflfp.theme')
+          if (stored === 'dark' || stored === 'light') theme = stored
+        } catch (error) {
+          /* Storage unavailable: fall back to the OS preference. */
         }
-      } catch (error) {
-        /* Storage unavailable: fall back to the OS preference. */
-      }
+        if (!theme) {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        document.documentElement.setAttribute('data-theme', theme)
+      })()
     </script>
   </head>
   <body>

@@ -70,6 +70,12 @@ function useWidth<T extends HTMLElement>() {
  * unchanged. One thing is added: keyboard access. The plot is a single tab
  * stop and the arrow keys step the same readout the pointer shows, announced
  * through a live region. The table view remains the complete accessible form.
+ *
+ * Each game that had a stored projection carries a tick across its column at
+ * the projected number: an ink rule with a ring in the surface colour, so it
+ * reads over the column and over the grid alike, and is told from the column
+ * by shape and not by a second hue. With two kinds of mark there is a legend,
+ * drawn only when a tick is.
  */
 export function GameLogChart({
   data,
@@ -88,10 +94,12 @@ export function GameLogChart({
   }
 
   const values = data.map((datum) => datum.points)
+  const projections = data.map((datum) => datum.projected).filter((value): value is number => value !== null)
   const thresholds = [boomThreshold, bustThreshold].filter((value): value is number => value !== null)
   // Fantasy points can go negative, so the baseline is zero and the domain
   // extends below it only when the data does.
-  const ticks = niceTicks(Math.min(0, ...values), Math.max(1, ...values, ...thresholds))
+  // A projection above every score still has to be on the plot.
+  const ticks = niceTicks(Math.min(0, ...values), Math.max(1, ...values, ...projections, ...thresholds))
   const low = ticks[0] ?? 0
   const high = ticks.at(-1) ?? 1
 
@@ -102,6 +110,9 @@ export function GameLogChart({
   // A 2px surface gap between adjacent columns when the band gets tight.
   const barWidth = Math.max(Math.min(MAX_BAR, band - 2), 1)
   const baseline = y(0)
+  // How far a projection tick reaches past its column: 3px, and nothing where
+  // the columns are so close that two ticks would join into one line.
+  const overhang = Math.max(0, Math.min(3, (band - barWidth) / 2 - 1.5))
   // Thin the x labels until they fit. The last (newest) always shows, and a
   // thinned label that would collide with it is dropped.
   const labelEvery = Math.max(1, Math.ceil(LABEL_SLOT / Math.max(band, 1)))
@@ -128,140 +139,175 @@ export function GameLogChart({
   const anchor = active === null ? 0 : PAD.left + band * active + band / 2
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full rounded-sm"
-      style={{ height: CHART_HEIGHT }}
-      tabIndex={0}
-      role="group"
-      aria-label={`Fantasy points by game, ${data.length} games, oldest to newest. Use the arrow keys to read each game.`}
-      onKeyDown={onKeyDown}
-      onFocus={() => setActive((current) => current ?? last)}
-      onBlur={() => setActive(null)}
-      onPointerLeave={() => setActive(null)}
-    >
-      {width > 0 && (
-        <svg width={width} height={CHART_HEIGHT} aria-hidden className="block">
-          {ticks.map((tick) => (
-            <g key={tick}>
-              <line
+    <>
+      {projections.length > 0 && (
+        <ul aria-hidden className="text-ink-secondary text-chip mb-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <li className="flex items-center gap-1.5">
+            <span className="bg-chart-series h-3 w-2 rounded-t-[2px]" />
+            Scored
+          </li>
+          <li className="flex items-center gap-1.5">
+            <span className="bg-ink h-0.5 w-4" />
+            Projected before the game
+          </li>
+        </ul>
+      )}
+      <div
+        ref={containerRef}
+        className="relative w-full rounded-sm"
+        style={{ height: CHART_HEIGHT }}
+        tabIndex={0}
+        role="group"
+        aria-label={`Fantasy points by game${projections.length > 0 ? ', with the projection made for each' : ''}, ${data.length} games, oldest to newest. Use the arrow keys to read each game.`}
+        onKeyDown={onKeyDown}
+        onFocus={() => setActive((current) => current ?? last)}
+        onBlur={() => setActive(null)}
+        onPointerLeave={() => setActive(null)}
+      >
+        {width > 0 && (
+          <svg width={width} height={CHART_HEIGHT} aria-hidden className="block">
+            {ticks.map((tick) => (
+              <g key={tick}>
+                <line
+                  x1={PAD.left}
+                  x2={width - PAD.right}
+                  y1={y(tick)}
+                  y2={y(tick)}
+                  stroke={tick === 0 ? 'var(--color-chart-axis)' : 'var(--color-chart-grid)'}
+                  shapeRendering="crispEdges"
+                />
+                <text
+                  x={PAD.left - 6}
+                  y={y(tick)}
+                  textAnchor="end"
+                  dominantBaseline="middle"
+                  fill="var(--color-ink-muted)"
+                  fontSize={11}
+                  className="tnum"
+                >
+                  {tick}
+                </text>
+              </g>
+            ))}
+
+            {data.map((datum, index) => {
+              const x = PAD.left + band * index
+              return (
+                <g key={datum.key}>
+                  {active === index && (
+                    <rect x={x} y={PAD.top} width={band} height={plotHeight} fill="var(--color-surface-hover)" />
+                  )}
+                  <path
+                    data-chart-bar=""
+                    d={columnPath(x + (band - barWidth) / 2, barWidth, baseline, y(datum.points))}
+                    fill="var(--color-chart-series)"
+                  />
+                  {datum.projected !== null && (
+                    // Wider than the column where there is room, so it shows
+                    // past a column that ends exactly on it.
+                    <g data-chart-projection="" pointerEvents="none">
+                      <rect
+                        x={x + (band - barWidth) / 2 - overhang - 1}
+                        y={y(datum.projected) - 2}
+                        width={barWidth + 2 * overhang + 2}
+                        height={4}
+                        rx={1}
+                        fill="var(--color-surface)"
+                      />
+                      <rect
+                        x={x + (band - barWidth) / 2 - overhang}
+                        y={y(datum.projected) - 1}
+                        width={barWidth + 2 * overhang}
+                        height={2}
+                        fill="var(--color-ink)"
+                      />
+                    </g>
+                  )}
+                  {showLabel(index) && (
+                    <text
+                      x={x + band / 2}
+                      y={CHART_HEIGHT - 6}
+                      textAnchor="middle"
+                      fill="var(--color-ink-muted)"
+                      fontSize={11}
+                    >
+                      {datum.label}
+                    </text>
+                  )}
+                  {/* The hit target is the whole band, not the painted column. */}
+                  <rect
+                    x={x}
+                    y={PAD.top}
+                    width={band}
+                    height={plotHeight}
+                    fill="transparent"
+                    onPointerEnter={() => setActive(index)}
+                  />
+                </g>
+              )
+            })}
+
+            {/* Thresholds the API supplied, so "boom" and "bust" mean the same
+                thing here as they do in the probabilities above. */}
+            {boomThreshold !== null && (
+              <ThresholdLine
+                y={y(boomThreshold)}
                 x1={PAD.left}
                 x2={width - PAD.right}
-                y1={y(tick)}
-                y2={y(tick)}
-                stroke={tick === 0 ? 'var(--color-chart-axis)' : 'var(--color-chart-grid)'}
-                shapeRendering="crispEdges"
+                label={`Boom ${formatThreshold(boomThreshold)}`}
+                above
               />
-              <text
-                x={PAD.left - 6}
-                y={y(tick)}
-                textAnchor="end"
-                dominantBaseline="middle"
-                fill="var(--color-ink-muted)"
-                fontSize={11}
-                className="tnum"
-              >
-                {tick}
-              </text>
-            </g>
-          ))}
+            )}
+            {bustThreshold !== null && (
+              <ThresholdLine
+                y={y(bustThreshold)}
+                x1={PAD.left}
+                x2={width - PAD.right}
+                label={`Bust ${formatThreshold(bustThreshold)}`}
+              />
+            )}
+            {/* No reference line for the player's average. It lands within a
+                point of the boom threshold for most startable players, and two
+                near-coincident horizontal rules read as one mislabelled line.
+                The average is stated numerically directly beneath the chart. */}
+          </svg>
+        )}
 
-          {data.map((datum, index) => {
-            const x = PAD.left + band * index
-            return (
-              <g key={datum.key}>
-                {active === index && (
-                  <rect x={x} y={PAD.top} width={band} height={plotHeight} fill="var(--color-surface-hover)" />
-                )}
-                <path
-                  data-chart-bar=""
-                  d={columnPath(x + (band - barWidth) / 2, barWidth, baseline, y(datum.points))}
-                  fill="var(--color-chart-series)"
-                />
-                {showLabel(index) && (
-                  <text
-                    x={x + band / 2}
-                    y={CHART_HEIGHT - 6}
-                    textAnchor="middle"
-                    fill="var(--color-ink-muted)"
-                    fontSize={11}
-                  >
-                    {datum.label}
-                  </text>
-                )}
-                {/* The hit target is the whole band, not the painted column. */}
-                <rect
-                  x={x}
-                  y={PAD.top}
-                  width={band}
-                  height={plotHeight}
-                  fill="transparent"
-                  onPointerEnter={() => setActive(index)}
-                />
-              </g>
-            )
-          })}
-
-          {/* Thresholds the API supplied, so "boom" and "bust" mean the same
-              thing here as they do in the probabilities above. */}
-          {boomThreshold !== null && (
-            <ThresholdLine
-              y={y(boomThreshold)}
-              x1={PAD.left}
-              x2={width - PAD.right}
-              label={`Boom ${formatThreshold(boomThreshold)}`}
-              above
-            />
-          )}
-          {bustThreshold !== null && (
-            <ThresholdLine
-              y={y(bustThreshold)}
-              x1={PAD.left}
-              x2={width - PAD.right}
-              label={`Bust ${formatThreshold(bustThreshold)}`}
-            />
-          )}
-          {/* No reference line for the player's average. It lands within a
-              point of the boom threshold for most startable players, and two
-              near-coincident horizontal rules read as one mislabelled line.
-              The average is stated numerically directly beneath the chart. */}
-        </svg>
-      )}
-
-      {activeDatum && (
-        <div
-          data-chart-tooltip=""
-          className="bg-surface-raised border-line shadow-overlay pointer-events-none absolute top-0 z-10 rounded-[var(--radius-control)] border px-3 py-2 whitespace-nowrap"
-          style={{
-            left: anchor,
-            // Beside the column, flipped left in the right half so the readout
-            // never hangs off the card.
-            transform: anchor > width / 2 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)',
-          }}
-        >
-          <p className="text-ink text-xs font-semibold">
-            {activeDatum.season} Week {activeDatum.week}
-          </p>
-          <p className="text-ink-muted text-xs">
-            {activeDatum.isHome ? 'vs' : 'at'} {activeDatum.opponent}
-          </p>
-          <p className="text-ink tnum mt-1 text-sm font-medium">{formatPoints(activeDatum.points)} pts</p>
-          {activeDatum.projected !== null && (
-            <p className="text-ink-muted tnum text-xs">
-              Projected {formatPoints(activeDatum.projected)} ·{' '}
-              {formatSigned(activeDatum.points - activeDatum.projected)}
+        {activeDatum && (
+          <div
+            data-chart-tooltip=""
+            className="bg-surface-raised border-line shadow-overlay pointer-events-none absolute top-0 z-10 rounded-[var(--radius-control)] border px-3 py-2 whitespace-nowrap"
+            style={{
+              left: anchor,
+              // Beside the column, flipped left in the right half so the readout
+              // never hangs off the card.
+              transform: anchor > width / 2 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)',
+            }}
+          >
+            <p className="text-ink text-detail font-semibold">
+              {activeDatum.season} Week {activeDatum.week}
             </p>
-          )}
-        </div>
-      )}
+            <p className="text-ink-muted text-detail">
+              {activeDatum.isHome ? 'vs' : 'at'} {activeDatum.opponent}
+            </p>
+            <p className="text-ink tnum mt-1 text-sm font-medium">{formatPoints(activeDatum.points)} pts</p>
+            {activeDatum.projected !== null && (
+              <p className="text-ink-muted tnum text-detail">
+                Projected {formatPoints(activeDatum.projected)} ·{' '}
+                {formatSigned(activeDatum.points - activeDatum.projected)}
+              </p>
+            )}
+          </div>
+        )}
 
-      <p className="sr-only" aria-live="polite">
-        {activeDatum
-          ? `${activeDatum.season} week ${activeDatum.week}, ${activeDatum.isHome ? 'versus' : 'at'} ${activeDatum.opponent}: ${formatPoints(activeDatum.points)} points` +
-            (activeDatum.projected === null ? '' : `, projected ${formatPoints(activeDatum.projected)}`)
-          : ''}
-      </p>
-    </div>
+        <p className="sr-only" aria-live="polite">
+          {activeDatum
+            ? `${activeDatum.season} week ${activeDatum.week}, ${activeDatum.isHome ? 'versus' : 'at'} ${activeDatum.opponent}: ${formatPoints(activeDatum.points)} points` +
+              (activeDatum.projected === null ? '' : `, projected ${formatPoints(activeDatum.projected)}`)
+            : ''}
+        </p>
+      </div>
+    </>
   )
 }
 

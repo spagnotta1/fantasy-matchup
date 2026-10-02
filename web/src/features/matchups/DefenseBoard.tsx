@@ -150,7 +150,7 @@ export function DefenseBoard() {
                           : undefined
                       }
                       className={cn(
-                        'text-ink-muted px-3 py-2 text-xs font-medium tracking-wide uppercase',
+                        'text-ink-muted px-3 py-2 text-caption font-medium tracking-wide uppercase',
                         column.numeric ? 'text-right' : 'text-left',
                         column.className,
                       )}
@@ -175,7 +175,7 @@ export function DefenseBoard() {
                   ))}
                   <th
                     scope="col"
-                    className="text-ink-muted w-24 px-3 py-2 text-right text-xs font-medium tracking-wide uppercase"
+                    className="text-ink-muted w-24 px-3 py-2 text-right text-caption font-medium tracking-wide uppercase"
                   >
                     Matchup
                   </th>
@@ -187,7 +187,7 @@ export function DefenseBoard() {
                     key={row.team}
                     className="border-line hover:bg-surface-hover border-b transition-colors last:border-b-0"
                   >
-                    <td className="text-ink-muted tnum px-3 py-2 text-xs">
+                    <td className="text-ink-muted tnum px-3 py-2 text-detail">
                       {row.matchup.grade.defense_rank ?? '—'}
                     </td>
                     <th scope="row" className="text-ink px-3 py-2 text-left text-sm font-medium">
@@ -220,7 +220,7 @@ export function DefenseBoard() {
           </div>
 
           <CardBody className="border-line border-t py-3">
-            <p className="text-ink-muted text-xs leading-relaxed">
+            <p className="text-ink-muted text-detail leading-relaxed">
               Points allowed use one standard scoring format and do not change with your league
               settings. Grades compare this week&apos;s matchups with each other. A defence with fewer
               than three games played is left ungraded rather than given an average grade.

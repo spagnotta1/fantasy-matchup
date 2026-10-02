@@ -36,9 +36,9 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-ink text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+        <h1 className="text-ink text-title">{title}</h1>
         {question && (
-          <p className="text-ink-secondary mt-1 max-w-2xl text-sm leading-relaxed">{question}</p>
+          <p className="text-ink-secondary text-body mt-1 max-w-2xl leading-relaxed">{question}</p>
         )}
       </div>
       {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}

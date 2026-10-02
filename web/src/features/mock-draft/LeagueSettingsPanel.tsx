@@ -155,7 +155,7 @@ export function LeagueSettingsPanel({
         </div>
 
         {skill && (
-          <p className="text-ink-muted flex gap-2 text-xs leading-relaxed">
+          <p className="text-ink-muted flex gap-2 text-detail leading-relaxed">
             <Users aria-hidden className="mt-0.5 size-3.5 shrink-0" />
             <span>
               {skill.summary}{' '}
@@ -193,7 +193,7 @@ export function LeagueSettingsPanel({
               />
             ))}
           </div>
-          <p className="text-ink-muted text-xs leading-relaxed">
+          <p className="text-ink-muted text-detail leading-relaxed">
             Kicker and team-defence slots are not offered:{' '}
             {config.unavailable_positions.map((entry) => entry.position).join(' and ')}{' '}
             are not projected, and adding them would mean putting made-up numbers into every

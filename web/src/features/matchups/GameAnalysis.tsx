@@ -98,7 +98,7 @@ function BackLink() {
   return (
     <Link
       to="/matchups"
-      className="text-ink-muted hover:text-ink mb-4 inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
+      className="text-ink-muted hover:text-ink mb-4 inline-flex items-center gap-1.5 text-detail font-medium transition-colors"
     >
       <ArrowLeft aria-hidden className="size-3.5" />
       All games
@@ -185,7 +185,7 @@ function OffenseCard({
           </div>
         )}
 
-        <p className="text-ink-muted mt-4 text-xs leading-relaxed">
+        <p className="text-ink-muted mt-4 text-detail leading-relaxed">
           A longer bar means an easier matchup. Grades compare this week&apos;s matchups with each
           other, so an A means one of the easiest this week — not that the defence is bad overall.
         </p>
@@ -219,7 +219,11 @@ function TopProjectionsCard({ analysis }: { analysis: MatchupAnalysis }) {
   const shown = expanded ? entries : entries.slice(0, GAME_LIST_PREVIEW)
 
   return (
-    <Card>
+    // `min-w-0`: a grid item is at least as wide as its content, and a
+    // truncating line counts at its full length. Without it the longest
+    // "RB · BAL · 60% snaps · 5% targets" set the card's width on a phone and
+    // the page scrolled sideways.
+    <Card className="min-w-0">
       <CardHeader
         as="h2"
         title="Projected players in this game"
@@ -310,7 +314,7 @@ function GameContextCard({ context }: { context: PlayerContext }) {
       />
       <CardBody className="space-y-6">
         <section>
-          <h3 className="text-ink-muted mb-2 text-xs font-semibold tracking-wide uppercase">
+          <h3 className="text-ink-muted mb-2 text-caption font-semibold tracking-wide uppercase">
             Weather
           </h3>
           {!weather ? (
@@ -342,7 +346,7 @@ function GameContextCard({ context }: { context: PlayerContext }) {
                 <Row label="Source" value={weather.source ?? '—'} />
               </dl>
               {weather.is_adverse && (
-                <p className="bg-caution-soft text-caution-text mt-3 rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
+                <p className="bg-caution-soft text-caution-text mt-3 rounded-[var(--radius-control)] px-3 py-2 text-detail leading-relaxed">
                   Bad-weather game: 20+ mph wind or a 60%+ chance of rain or snow.
                 </p>
               )}
@@ -354,7 +358,7 @@ function GameContextCard({ context }: { context: PlayerContext }) {
         </section>
 
         <section>
-          <h3 className="text-ink-muted mb-2 text-xs font-semibold tracking-wide uppercase">
+          <h3 className="text-ink-muted mb-2 text-caption font-semibold tracking-wide uppercase">
             Betting market
           </h3>
           {!game ? (
