@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { settle } from './helpers'
 
@@ -15,36 +15,77 @@ test.skip(({ isMobile }) => !isMobile, 'phone-width behaviour')
 const ROUTES = ['/', '/rankings', '/rankings/rb', '/players', '/matchups', '/simulation', '/mock-draft', '/compare', '/settings']
 
 
+/** How far the page scrolls sideways, and what is sticking out. */
+function measureOverflow(page: Page) {
+  return page.evaluate(() => {
+    const doc = document.documentElement
+    const offenders = [...document.querySelectorAll<HTMLElement>('body *')]
+      .filter((el) => {
+        const r = el.getBoundingClientRect()
+        // Only elements that actually stick out past the right edge, and
+        // that are not inside something designed to scroll sideways.
+        if (r.right <= doc.clientWidth + 1) return false
+        for (let p = el.parentElement; p; p = p.parentElement) {
+          const o = getComputedStyle(p).overflowX
+          if (o === 'auto' || o === 'scroll') return false
+        }
+        return true
+      })
+      .slice(0, 5)
+      .map((el) => `${el.tagName}.${String(el.className).split(' ').slice(0, 3).join('.')} right=${Math.round(el.getBoundingClientRect().right)}`)
+    return { scroll: doc.scrollWidth - doc.clientWidth, offenders }
+  })
+}
+
+async function expectNoOverflow(page: Page) {
+  const overflow = await measureOverflow(page)
+  expect(
+    overflow.scroll,
+    `page scrolls horizontally by ${overflow.scroll}px. Offenders: ${overflow.offenders.join(' | ')}`,
+  ).toBeLessThanOrEqual(0)
+}
+
 for (const route of ROUTES) {
   test(`no horizontal overflow: ${route}`, async ({ page }) => {
     await page.goto(route)
     await settle(page)
-
-    const overflow = await page.evaluate(() => {
-      const doc = document.documentElement
-      const offenders = [...document.querySelectorAll<HTMLElement>('body *')]
-        .filter((el) => {
-          const r = el.getBoundingClientRect()
-          // Only elements that actually stick out past the right edge, and
-          // that are not inside something designed to scroll sideways.
-          if (r.right <= doc.clientWidth + 1) return false
-          for (let p = el.parentElement; p; p = p.parentElement) {
-            const o = getComputedStyle(p).overflowX
-            if (o === 'auto' || o === 'scroll') return false
-          }
-          return true
-        })
-        .slice(0, 5)
-        .map((el) => `${el.tagName}.${String(el.className).split(' ').slice(0, 3).join('.')} right=${Math.round(el.getBoundingClientRect().right)}`)
-      return { scroll: doc.scrollWidth - doc.clientWidth, offenders }
-    })
-
-    expect(
-      overflow.scroll,
-      `page scrolls horizontally by ${overflow.scroll}px. Offenders: ${overflow.offenders.join(' | ')}`,
-    ).toBeLessThanOrEqual(0)
+    await expectNoOverflow(page)
   })
 }
+
+// A game page and the draft board are reached by id or hold a wide table, so
+// neither is in the list above. Both moved when secondary text grew from 12px
+// to 13px: the game page's player list set its card wider than the screen, and
+// the draft board is the first table that scrolls sideways on purpose — inside
+// its own frame, never the page.
+test('no horizontal overflow: a game page', async ({ page }) => {
+  await page.goto('/matchups')
+  await settle(page)
+  const game = page.locator('main a[href^="/matchups/"]').first()
+  await expect(game).toBeVisible()
+  await game.click()
+  await expect(page.getByRole('heading', { name: 'Projected players in this game' })).toBeVisible()
+  await settle(page)
+  await expectNoOverflow(page)
+})
+
+test('the draft board scrolls its table, not the page, and keeps the player column in view', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.goto('/draft-board')
+  await settle(page)
+  const frame = page.locator('[data-table-scrolls]')
+  await expect(frame).toBeVisible({ timeout: 60_000 })
+  await expectNoOverflow(page)
+
+  // Every column is still there; the frame is what scrolls.
+  await expect(frame.getByRole('columnheader', { name: /Per game × games/ })).toBeAttached()
+  const first = frame.getByRole('rowheader').first()
+  const before = await first.boundingBox()
+  await frame.evaluate((el) => el.scrollTo({ left: 400 }))
+  await expect.poll(() => frame.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0)
+  const after = await first.boundingBox()
+  expect(after?.x, 'the frozen player column should not move with the scroll').toBe(before?.x)
+})
 
 test('the mobile nav bar is present, fixed and holds the primary destinations', async ({ page }) => {
   await page.goto('/')

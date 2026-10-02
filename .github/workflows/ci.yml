@@ -1,0 +1,139 @@
+name: CI
+
+# What runs here needs no production data: the backend's unit tests, its
+# database tests against an empty Postgres (they build their own throwaway
+# schemas), and the frontend's build, lint, unit tests, token contrast audit
+# and screenshot comparison (which replays recorded API responses).
+#
+# What does not run here, and why: the Playwright end-to-end suite and the
+# contract check both drive a live API with a published slate behind it. They
+# are run locally against the local stack (`npm run test:e2e`,
+# `npm run contract-check`) before a change is pushed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # The version the Dockerfile ships.
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest -m "not integration"
+
+  backend-integration:
+    name: Backend database tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: nflfp
+          POSTGRES_PASSWORD: nflfp
+          POSTGRES_DB: nflfp
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U nflfp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://nflfp:nflfp@localhost:5432/nflfp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest -m integration
+
+  web:
+    name: Frontend build, lint and unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # The version the Dockerfile builds the bundle with.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      # `tsc -b` then the production bundle: the same command the image runs.
+      - run: npm run build
+      # The contrast audit resolves every token through a real browser canvas.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:contrast
+
+  web-visual:
+    name: Frontend screenshots
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+
+      # Baselines are per platform: text is rasterised differently on Linux
+      # and Windows, and a Windows picture never matches here. Until a Linux
+      # set is committed this job produces one and uploads it, and compares
+      # nothing. Download the artifact, commit it under
+      # web/tests/visual/__screenshots__/linux, and the job starts comparing.
+      - name: Is there a Linux baseline set?
+        id: baselines
+        run: |
+          if [ -d tests/visual/__screenshots__/linux ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No Linux screenshot baselines are committed, so nothing was compared. This run uploads a set to commit."
+          fi
+
+      - name: Compare against the baselines
+        if: steps.baselines.outputs.present == 'true'
+        run: npm run test:visual
+
+      - name: Produce a first set of baselines
+        if: steps.baselines.outputs.present == 'false'
+        run: npm run test:visual:update
+
+      - uses: actions/upload-artifact@v4
+        if: steps.baselines.outputs.present == 'false'
+        with:
+          name: linux-screenshot-baselines
+          path: web/tests/visual/__screenshots__/linux
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: screenshot-diffs
+          path: |
+            web/playwright-report
+            web/test-results

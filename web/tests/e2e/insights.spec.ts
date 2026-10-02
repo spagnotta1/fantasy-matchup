@@ -58,8 +58,10 @@ test('an injured player keeps his projection, with the designation beside it', a
     return
   }
   // Never silently zeroed: the number beside the caveat is the published one.
-  const cell = ruledOut.first().locator('xpath=..')
-  const value = Number((await cell.locator('.tnum').first().innerText()).trim())
+  // The row is a table row, or on a phone a list row; the projection is the
+  // first figure in either.
+  const row = page.locator('main tr, main [data-row-list] li').filter({ has: ruledOut }).first()
+  const value = Number((await row.locator('span.tnum').first().innerText()).trim())
   expect(value, 'an Out player shows his projection, not zero').toBeGreaterThan(0)
 })
 
@@ -67,12 +69,16 @@ test('usage trends read the natural way round', async ({ page }) => {
   await page.goto('/usage')
   await settle(page)
 
-  const changes = page.locator('main tbody tr td:nth-child(4)')
+  // The change is the first column after the player, and on a phone the
+  // number at the right of each row's first line.
+  const changes = page.locator(
+    'main tbody tr:has(a[data-row-link]) td:nth-child(2), main [data-row-list] li > a > .justify-self-end',
+  )
   if ((await changes.count()) === 0) return
   await expect(changes.first()).toContainText('+')
 
   await page.getByRole('radiogroup', { name: 'Direction' }).getByText('Falling', { exact: true }).click()
-  await expect(page.locator('main tbody tr td:nth-child(4)').first()).toContainText('−')
+  await expect(changes.first()).toContainText('−')
 })
 
 test('a team page carries its game, its players and its schedule', async ({ page }) => {
@@ -112,7 +118,7 @@ test('the draft board labels both sides and never compares across positions', as
 
   await expect(page.getByText(/not an input to any projection/).first()).toBeVisible({ timeout: 60_000 })
   // Every rank pair is within one position: "WR4 → WR8", never "WR4 → RB2".
-  const pairs = await page.locator('main tbody tr td:nth-child(3) .tnum').allInnerTexts()
+  const pairs = await page.locator('main [data-rank-pair]').allInnerTexts()
   for (const pair of pairs.slice(0, 40)) {
     const [market, model] = pair.split('→').map((side) => side.trim().replace(/\d+$/, ''))
     expect(market, pair).toBe(model)
@@ -159,7 +165,13 @@ test('live scoring is labelled unofficial and never replaces the projection', as
   await page.goto('/live')
   await settle(page)
   await expect(page.getByText(/They are unofficial/).first()).toBeVisible()
-  await expect(page.getByRole('columnheader', { name: 'Projected' }).or(page.getByText(/No points yet|No games found/))).toBeVisible()
+  // A column of its own in the table; named on each row of the phone's list.
+  await expect(
+    page
+      .getByRole('columnheader', { name: 'Projected' })
+      .or(page.locator('main [data-row-list] li').first().getByText('Proj.'))
+      .or(page.getByText(/No points yet|No games found/)),
+  ).toBeVisible()
 })
 
 test('a team page shows its depth chart as context', async ({ page }) => {

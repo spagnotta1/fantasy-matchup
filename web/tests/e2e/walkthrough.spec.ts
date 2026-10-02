@@ -146,12 +146,12 @@ test('the game log charts the most recent 17 games, oldest to newest', async ({ 
   const bars = log.locator('[data-chart-bar]')
   await expect(bars.first()).toBeVisible()
 
-  // The table lists every loaded game, newest first, so it is the reference for
-  // how many games exist and which one is newest.
+  // The table lists the same games, newest first, so it is the reference for
+  // how many there are and which one is newest. The week is each row's header.
   await log.getByRole('radiogroup', { name: 'Game log view' }).getByText('Table', { exact: true }).click()
   const rows = log.locator('tbody tr')
   const games = await rows.count()
-  const newest = (await rows.first().locator('td').first().innerText()).match(/(\d{4}) W(\d+)/)!
+  const newest = (await rows.first().locator('th').innerText()).match(/(\d{4}) W(\d+)/)!
   await log.getByRole('radiogroup', { name: 'Game log view' }).getByText('Chart', { exact: true }).click()
 
   // Exactly 17 when the player has that many; never padded when they do not.
