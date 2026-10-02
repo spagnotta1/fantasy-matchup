@@ -35,7 +35,7 @@ const DEFAULT_ROUTES = [
   '/draft-board',
   '/my-team',
   '/simulation',
-  '/usage',
+  '/reports/usage',
   '/track-record',
   '/specimens',
 ]

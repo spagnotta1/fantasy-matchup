@@ -21,8 +21,8 @@ const SimulationPage = lazy(() => import('@/pages/SimulationPage'))
 const MockDraftPage = lazy(() => import('@/pages/MockDraftPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const TeamsPage = lazy(() => import('@/pages/TeamsPage'))
-const InjuriesPage = lazy(() => import('@/pages/InjuriesPage'))
-const UsagePage = lazy(() => import('@/pages/UsagePage'))
+const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
+const MovedPage = lazy(() => import('@/pages/MovedPage'))
 const TrackRecordPage = lazy(() => import('@/pages/TrackRecordPage'))
 const DraftBoardPage = lazy(() => import('@/pages/DraftBoardPage'))
 const LivePage = lazy(() => import('@/pages/LivePage'))
@@ -52,10 +52,15 @@ export const router = createBrowserRouter([
       { path: 'simulation', element: <SimulationPage /> },
       { path: 'mock-draft', element: <MockDraftPage /> },
       // Optional segment, one route: moving between teams is a param change on
-      // a mounted page, not a remount (see the rankings note above).
+      // a mounted page, not a remount (see the rankings note above). Without a
+      // team it forwards to the Teams view of Matchups.
       { path: 'teams/:team?', element: <TeamsPage /> },
-      { path: 'injuries', element: <InjuriesPage /> },
-      { path: 'usage', element: <UsagePage /> },
+      // The injury report and the usage trends: two views of one page, the
+      // view a segment like the board's position.
+      { path: 'reports/:report?', element: <ReportsPage /> },
+      // Where those two used to live. Old links keep working, filters and all.
+      { path: 'injuries', element: <MovedPage to="/reports/injuries" /> },
+      { path: 'usage', element: <MovedPage to="/reports/usage" /> },
       { path: 'track-record', element: <TrackRecordPage /> },
       { path: 'draft-board', element: <DraftBoardPage /> },
       { path: 'live', element: <LivePage /> },

@@ -14,7 +14,6 @@ import {
   TableHead,
   TableRow,
 } from '@/components/ui/DataTable'
-import { PageHeader } from '@/components/ui/PageHeader'
 import { RowList, RowListGroup, RowListItem, RowListRows, RowListTitle } from '@/components/ui/RowList'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Skeleton, SkeletonTable } from '@/components/ui/Skeleton'
@@ -29,123 +28,27 @@ import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionVal
 import { NotAppliedNotice, ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { TeamLink } from '@/components/domain/TeamLink'
 import { ScheduleRow } from '@/features/matchups/ScheduleGrid'
+import { TeamCrest } from '@/features/matchups/TeamGrid'
+import MovedPage from '@/pages/MovedPage'
 import { useDocumentTitle } from '@/app/page-title'
 import { useSlate } from '@/app/slate-context'
 import { usePositions, useTeams } from '@/hooks/useCatalog'
 import { useAllDefenseForm, useDepthChart, useScheduleStrength, useTeamOutlook } from '@/hooks/useInsights'
-import { useGames } from '@/hooks/useMatchups'
 import { useRowList } from '@/hooks/useRowList'
 import { useUrlState } from '@/hooks/useUrlState'
 import { anyUngraded, boardCeiling } from '@/utils/board'
 import { formatGameDay, formatPercent, formatPoints, formatSpread, headlinePoints } from '@/utils/format'
-import type { Game, RankedProjection, Team } from '@/api/schemas'
-
-/** `/teams` lists every team; `/teams/:team` is one team's week. One route, one page. */
-export default function TeamsPage() {
-  const { team } = useParams<{ team: string }>()
-  return team ? <TeamDetail team={team.toUpperCase()} /> : <TeamIndex />
-}
-
-// ---------------------------------------------------------------------------
-// Index
-// ---------------------------------------------------------------------------
+import type { RankedProjection } from '@/api/schemas'
 
 /**
- * Every team, by division, with this week's opponent.
+ * `/teams/:team` is one team's week.
  *
- * The index is a way in, not an analysis: it answers "where is my team's page"
- * and, at a glance, who everyone plays. The analysis is one click further.
+ * The list of every team is a view of Matchups now (`TeamGrid`), and `/teams`
+ * on its own forwards there, so an old link to the list still finds it.
  */
-function TeamIndex() {
-  const slate = useSlate()
-  const teams = useTeams()
-  const games = useGames()
-
-  const gameByTeam = useMemo(() => {
-    const map = new Map<string, Game>()
-    for (const game of games.data?.data ?? []) {
-      map.set(game.home_team, game)
-      map.set(game.away_team, game)
-    }
-    return map
-  }, [games.data])
-
-  const divisions = useMemo(() => {
-    const grouped = new Map<string, Team[]>()
-    for (const team of teams.data ?? []) {
-      const key = team.division ?? 'Other'
-      grouped.set(key, [...(grouped.get(key) ?? []), team])
-    }
-    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b))
-  }, [teams.data])
-
-  return (
-    <>
-      <PageHeader
-        title="Teams"
-        question={`Who does each team play in week ${slate.week ?? '—'}, and who is projected?`}
-      />
-      {teams.isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 8 }, (_, index) => (
-            <Skeleton key={index} className="h-48 rounded-[var(--radius-card)]" />
-          ))}
-        </div>
-      ) : teams.isError ? (
-        <Card>
-          <ErrorState error={teams.error} onRetry={() => void teams.refetch()} />
-        </Card>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {divisions.map(([division, members]) => (
-            <Card key={division}>
-              <CardHeader as="h2" title={division} />
-              <ul className="divide-line divide-y">
-                {members.map((team) => (
-                  <li key={team.abbr}>
-                    <TeamTile team={team} game={gameByTeam.get(team.abbr)} />
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ))}
-        </div>
-      )}
-    </>
-  )
-}
-
-function TeamLogo({ team, size = 'md' }: { team: Pick<Team, 'abbr' | 'logo_url'>; size?: 'md' | 'lg' }) {
-  const box = size === 'lg' ? 'size-14' : 'size-8'
-  return team.logo_url ? (
-    <img src={team.logo_url} alt="" className={`${box} shrink-0 object-contain`} loading="lazy" />
-  ) : (
-    <span
-      aria-hidden
-      className={`${box} bg-surface-sunken text-ink-muted flex shrink-0 items-center justify-center rounded-full text-detail font-semibold`}
-    >
-      {team.abbr}
-    </span>
-  )
-}
-
-function TeamTile({ team, game }: { team: Team; game: Game | undefined }) {
-  const isHome = game?.home_team === team.abbr
-  const opponent = game ? (isHome ? game.away_team : game.home_team) : null
-  return (
-    <Link
-      to={`/teams/${team.abbr}`}
-      className="hover:bg-surface-hover flex items-center gap-3 px-4 py-2.5 transition-colors"
-    >
-      <TeamLogo team={team} />
-      <span className="min-w-0 flex-1">
-        <span className="text-ink block truncate text-sm font-medium">{team.name ?? team.abbr}</span>
-        <span className="text-ink-muted block text-detail">
-          {opponent ? `${isHome ? 'vs' : '@'} ${opponent}` : 'Bye this week'}
-        </span>
-      </span>
-    </Link>
-  )
+export default function TeamsPage() {
+  const { team } = useParams<{ team: string }>()
+  return team ? <TeamDetail team={team.toUpperCase()} /> : <MovedPage to="/matchups" params={{ view: 'teams' }} />
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +109,7 @@ function TeamDetail({ team }: { team: string }) {
     <>
       <BackLink />
       <div className="mb-6 flex items-center gap-4">
-        <TeamLogo team={branding ?? { abbr: team, logo_url: null }} size="lg" />
+        <TeamCrest team={branding ?? { abbr: team, logo_url: null }} size="lg" />
         <div>
           <h1 className="text-ink text-xl font-semibold tracking-tight sm:text-2xl">
             {branding?.name ?? team}
@@ -474,7 +377,7 @@ function TeamPlayersTable({ team, players }: { team: string; players: RankedProj
 function BackLink() {
   return (
     <Link
-      to="/teams"
+      to="/matchups?view=teams"
       className="text-ink-muted hover:text-ink mb-4 inline-flex items-center gap-1.5 rounded-sm text-sm"
     >
       <ArrowLeft aria-hidden className="size-3.5" />

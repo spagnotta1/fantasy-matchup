@@ -9,6 +9,9 @@ import { cn } from '@/utils/cn'
 /**
  * Season, week and scoring format — the selection every view reads.
  *
+ * Drawn `compact`, with its labels, inside the header's slate button
+ * (`SlateSwitch` in `TopBar`), which is the only place it is used.
+ *
  * Both lists are built from `/seasons`, which reports only what has a
  * *published* board. Offering week 4 when nothing is published for it — or
  * 2003, which the warehouse has games for and no projection run has ever
@@ -67,7 +70,8 @@ export function SlateControls({ className, compact = false }: { className?: stri
         options={seasonOptions.length > 0 ? seasonOptions : [{ value: '', label: placeholder }]}
         disabled={seasonOptions.length === 0}
         onChange={(event) => slate.setSeason(Number(event.target.value))}
-        className={compact ? 'flex-1' : 'w-24'}
+        // A year is four characters; the room goes to the other two.
+        className={compact ? 'w-[5.5rem] shrink-0' : 'w-24'}
       />
 
       {/*
@@ -102,7 +106,7 @@ export function SlateControls({ className, compact = false }: { className?: stri
         options={profileOptions.length > 0 ? profileOptions : [{ value: '', label: placeholder }]}
         disabled={profileOptions.length === 0}
         onChange={(event) => slate.setScoringProfile(event.target.value)}
-        className={compact ? 'flex-1' : 'w-32'}
+        className={compact ? 'flex-[1.3]' : 'w-32'}
       />
     </div>
   )
