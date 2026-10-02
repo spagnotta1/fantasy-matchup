@@ -41,7 +41,9 @@ export function PageHeader({
           <p className="text-ink-secondary text-body mt-1 max-w-2xl leading-relaxed">{question}</p>
         )}
       </div>
-      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+      {/* Never wider than the page: on a phone the action wraps under the
+          title, and a view switch in it has to know how much room that is. */}
+      {action && <div className="flex max-w-full min-w-0 items-center gap-2 sm:shrink-0">{action}</div>}
     </div>
   )
 }

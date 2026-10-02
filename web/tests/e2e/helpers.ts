@@ -44,10 +44,11 @@ export function pageOverflow(page: Page) {
 /**
  * Reveals the season/week/scoring selectors.
  *
- * They are inline in the header from `md` up and behind a disclosure below it,
- * so a test that reaches straight for the `<select>` passes on desktop and
- * times out on a phone against an app that is behaving correctly. Safe to call
- * at any width: on desktop the toggle is not rendered and this does nothing.
+ * They are behind the header's slate button at every width, so a test that
+ * reaches straight for a `<select>` times out against an app that is behaving
+ * correctly. Safe to call when they are already showing, and on the draft
+ * pages, which have no slate button: it does nothing there. A navigation
+ * closes them again.
  */
 export async function openSlateControls(page: Page) {
   const toggle = page.getByRole('button', { name: /season, week and scoring/i })
@@ -60,11 +61,8 @@ export async function openSlateControls(page: Page) {
 /**
  * The visible slate selector.
  *
- * The header renders the controls twice — once inline for `md` and up, once
- * inside the phone disclosure — so the label matches two elements at every
- * width and exactly one of them is on screen. `.first()` alone picks the
- * desktop copy regardless of viewport, which is how a mobile run ends up
- * timing out on a hidden control.
+ * By its label, and only if it is on screen: the draft pages have a "Season"
+ * of their own, and the header's is hidden until `openSlateControls` shows it.
  */
 export function slateSelect(page: Page, name: RegExp) {
   return page.getByLabel(name).filter({ visible: true }).first()

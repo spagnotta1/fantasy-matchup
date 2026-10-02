@@ -444,6 +444,78 @@ ruled-out player's projection with nothing beside it.
 this browser's storage with the theme, not in the URL with the sort: a shared
 link should not set the row height of whoever opens it.
 
+## The shell
+
+The sidebar, the header and the phone's bottom bar (`layouts/`), and one list
+they are all built from (`layouts/navigation.ts`).
+
+**Nine entries and a foot.** The sidebar was thirteen lines. It is now two
+groups and a foot:
+
+| | entries |
+|---|---|
+| This week | Dashboard, Rankings, Matchups, Live, Reports |
+| Tools | My team, Simulation, Compare, Trade analyzer |
+| foot | Track record, Settings, and the control that folds the sidebar |
+
+Four of the thirteen were this week's slate from another angle, and each had
+grown a line of its own:
+
+| was | is now | old address |
+|---|---|---|
+| Teams (`/teams`) | the Teams view of Matchups, `/matchups?view=teams` | forwards there |
+| a team's page (`/teams/BAL`) | where it was; Matchups is what is marked while it is open | unchanged |
+| Injuries (`/injuries`) | a view of Reports, `/reports/injuries` | forwards, filters and all |
+| Usage trends (`/usage`) | a view of Reports, `/reports/usage` | forwards, filters and all |
+
+`MovedPage` is the redirect: it carries the query string across, so
+`/usage?metric=target&position=WR` arrives showing the same rows. Each report
+keeps its own heading and its own question; the switch between them sits where
+Matchups has its own. Switching carries the week and the scoring format and
+leaves the other report's filters behind.
+
+**The command palette still lists every page by its own name**, including the
+three that are views now (`PALETTE_ONLY`). Typing "usage" lands on the usage
+view, not on Reports.
+
+**The rail.** The sidebar folds to 56px of icons (`useSidebarRail`, kept in
+this browser's storage with the theme, not in the URL). Each icon keeps its
+name as its accessible name and its hover title. The 184px goes to the page,
+and since every table here chooses its drawing by the room it has, that is a
+column: in a 1,100px window the board is a table with the rail (996px of
+room) and a two-line list without it (804px, under the table's 912px).
+
+**What a path belongs to** is decided in one place (`isAt`): a whole-segment
+match on the entry's own address plus any it lists in `alsoAt`. It replaced
+`NavLink`'s own matching so that a team's page could mark Matchups.
+
+**The header** holds the slate, search and the theme. Compare and Settings are
+no longer in it (each has a place in the sidebar, and on a phone in the menu),
+and the "not signed in" badge is gone: there are no accounts.
+
+**The slate is one button**, at every width: "2026 · Wk 4 · Half PPR". It says
+what every number on the page is for, and pressing it shows the three
+selectors (`SlateSwitch` in `TopBar.tsx`): a row under the header on a phone,
+a panel under the button from 768px. It used to be three dropdowns across a
+desktop header and an unlabelled icon on a phone. The three change at very
+different rates (the week weekly, the season almost never, scoring once per
+league), and what a reader needs all the time is to read the slate, not to
+change it. The panel is a disclosure: it stays open while more than one is
+changed, and closes on Escape (focus returns to the button), on a press
+elsewhere, and on leaving the page. On the player page the week stepper is the
+quick way to change the week, and this button is where it is read.
+
+**The phone bar** is unchanged: Dashboard, Rankings, Matchups, Simulation,
+My team.
+
+**A filter keeps the page where it is.** Filters, the slate, the roster and
+the other things kept in the query string are written with
+`preventScrollReset`. The router treats any change of address as a new page
+and scrolls to its top, which is right for a link and wrong for a filter: the
+position switch on a team's remaining schedule is three screens down, and
+every press of it threw the reader back to the top. `useUrlState` does this
+for every page that uses it; a new direct `setSearchParams` has to as well.
+
 ## The player page
 
 `/players/:id` is where one player's week is read, and where the week before
@@ -636,7 +708,7 @@ a cold start):
 E2E_BASE_URL=https://<the-deployed-origin> npm run test:e2e
 ```
 
-Eleven specs, by what they protect:
+Twelve specs, by what they protect:
 
 | spec | what breaks without it |
 |---|---|
@@ -649,6 +721,7 @@ Eleven specs, by what they protect:
 | `search.spec.ts` | the first result being the player meant: projected players first, exact names first, retired players still listed |
 | `board.spec.ts` | the board at every width: a range strip on every row, 40px rows and the remembered 48px choice, the toolbar and column header staying in view, the row as the link, headers that explain themselves, the table giving way to the list by measured room, nothing in a list row printed over anything else at 412, 390 and 360px on a graded and an ungraded week, an injury designation on the board |
 | `player.spec.ts` | the player page: the bar following the page down with the name and the projection in it, each section link landing its section under the bar with the focus, the week stepper keeping the scroll position and the focus and saying why it stops at the last week, a projection tick for every game that had one, the table's difference column, a season choice the usage trend follows, earlier seasons loaded on request, a week with no projection; axe in both themes; no overflow at 1024, 820, 412, 390 and 360px; the one-line bar and 44px targets on a phone |
+| `shell.spec.ts` | the sidebar's two groups and its foot, the page a reader is on being marked (a team's page marks Matchups), the rail folding to named icons and staying folded, the header no longer repeating the sidebar; every old address arriving with its filters, Reports and its two views, Teams as a view of Matchups, the palette listing every page; on a phone the slate chip saying the week and the scoring format, and the bottom bar keeping its five |
 | `primitives.spec.ts` | the shared `Button`, `DataTable` and `FilterToolbar` on `/specimens`: sorting from the keyboard, the row link, the sticky header, row heights, target sizes, a loading button keeping its width and focus, a filter choice becoming a select only where it does not fit |
 | `tables.spec.ts` | Live, Usage, Injuries, Teams and the draft board on the shared table and toolbar: filters working together and living in the URL, a filter leaving the sort alone, the row as the link, row groups announced as headings, a Live refresh keeping focus, scroll and filters, an empty filter told apart from no data, loading and failed requests; and all six screens (My team included) at 1440, 1024, 820, 768, 412, 390 and 360px: no page overflow, no clipped or wrapped control, no dropped column, the player column held while a table scrolls in its frame, and at the three phone widths the list in its place with every column of the table in each row, nothing printed over anything else, one link per row; every toolbar control 44px on a phone |
 

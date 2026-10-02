@@ -86,7 +86,7 @@ export default function TradePage() {
       else out.delete(key)
     }
     latest.current = out
-    setParams(out, { replace: true })
+    setParams(out, { replace: true, preventScrollReset: true })
   }
   const editSides = (edit: (sides: Record<Side, string[]>) => Record<Side, string[]>) => {
     const current = latest.current
@@ -97,7 +97,7 @@ export default function TradePage() {
       else out.delete(key)
     }
     latest.current = out
-    setParams(out, { replace: true })
+    setParams(out, { replace: true, preventScrollReset: true })
   }
   const add = (side: Side, id: string) =>
     editSides((sides) => {

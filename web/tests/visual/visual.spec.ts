@@ -140,8 +140,8 @@ const SCREENS: Screen[] = [
   { name: 'my-team', path: () => '/my-team', roster: true, tablet: true },
   // The first screenful: a full week is a hundred rows of the same row.
   { name: 'live', path: () => '/live', roster: true, foldOnly: true, dark: true, tablet: true },
-  { name: 'usage', path: () => '/usage', tablet: true },
-  { name: 'injuries', path: () => '/injuries', dark: true, tablet: true },
+  { name: 'usage', path: () => '/reports/usage', tablet: true },
+  { name: 'injuries', path: () => '/reports/injuries', dark: true, tablet: true },
   { name: 'compare', path: (s) => `/compare?players=${s.compare.join(',')}` },
   { name: 'simulation', path: () => '/simulation', roster: true },
   { name: 'track-record', path: () => '/track-record' },

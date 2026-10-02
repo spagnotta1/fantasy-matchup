@@ -177,7 +177,7 @@ const COLUMNS: DataTableColumn<Movement>[] = [
  * return all move it. The page says so rather than ranking noise with
  * confidence.
  */
-export default function UsagePage() {
+export default function UsagePage({ action }: { action?: ReactNode }) {
   const slate = useSlate()
   const board = useBoard()
   const [state, setState] = useUrlState(DEFAULT_STATE)
@@ -213,6 +213,8 @@ export default function UsagePage() {
     <>
       <PageHeader
         title="Usage trends"
+        // The switch to the other report, when this is drawn as a view of Reports.
+        action={action}
         question={`Whose role grew or shrank going into week ${slate.week ?? '—'}?`}
       />
 
