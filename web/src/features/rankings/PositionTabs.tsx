@@ -1,8 +1,9 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useSearchParams } from 'react-router-dom'
 
 import { Tooltip } from '@/components/ui/Tooltip'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { usePositions } from '@/hooks/useCatalog'
+import { COMPARE_PARAM, compareSearch, parsePlayerIds } from '@/hooks/useCompareSelection'
 import { useSlidingIndicator } from '@/hooks/useSlidingIndicator'
 import { cn } from '@/utils/cn'
 
@@ -21,9 +22,16 @@ import { cn } from '@/utils/cn'
  *
  * It draws no rule of its own. It sits at the foot of the board's sticky bar,
  * whose bottom border is the line the active tab's underline lands on.
+ *
+ * A tab carries one thing across: the players ticked to compare. Search, team
+ * and sort belong to the board they were set on and are dropped, as before. A
+ * selection is the reader's, not the board's — a flex decision is a running
+ * back against a wide receiver, ticked on two tabs.
  */
 export function PositionTabs({ active, className }: { active: string | null; className?: string }) {
   const { data, isPending } = usePositions()
+  const [searchParams] = useSearchParams()
+  const search = compareSearch(parsePlayerIds(searchParams.get(COMPARE_PARAM)))
   // One underline that slides between tabs. Changing position is a param
   // change on a mounted page (see `routes.tsx`), which is what lets it slide
   // rather than reappear.
@@ -50,7 +58,7 @@ export function PositionTabs({ active, className }: { active: string | null; cla
           />
         )}
         <li>
-          <TabLink to="/rankings" active={active === null} slid={underline !== null}>
+          <TabLink to={{ pathname: '/rankings', search }} active={active === null} slid={underline !== null}>
             All
           </TabLink>
         </li>
@@ -58,7 +66,7 @@ export function PositionTabs({ active, className }: { active: string | null; cla
           <li key={position.position}>
             {position.projected ? (
               <TabLink
-                to={`/rankings/${position.position}`}
+                to={{ pathname: `/rankings/${position.position}`, search }}
                 active={active === position.position}
                 slid={underline !== null}
                 title={position.label}
@@ -93,7 +101,7 @@ function TabLink({
   slid,
   children,
 }: {
-  to: string
+  to: { pathname: string; search: string }
   active: boolean
   /** The sliding underline is drawn, so the tab should not draw its own. */
   slid: boolean

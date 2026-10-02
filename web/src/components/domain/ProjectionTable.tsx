@@ -12,12 +12,14 @@ import {
   type TableDensity,
 } from '@/components/ui/DataTable'
 import { ShowMoreRows } from '@/components/domain/BoardBudget'
+import { CompareTick } from '@/components/domain/CompareTick'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { PlayerCell } from '@/components/domain/PlayerCell'
 import { RowFlags } from '@/components/domain/RowFlags'
 import { useReorderAnimation } from '@/hooks/useReorderAnimation'
 import { useRenderBudget } from '@/hooks/useRenderBudget'
+import type { CompareSelection } from '@/hooks/useCompareSelection'
 import { formatPercent } from '@/utils/format'
 import { boardCeiling, gameLine, groupByTier, orderSignature } from '@/utils/board'
 import type { SortDirection, SortKey } from '@/utils/board'
@@ -60,6 +62,11 @@ export interface ProjectionTableProps {
   density?: TableDensity
   /** Where the column header stops under the page's own sticky toolbar. */
   stickyTop?: string
+  /**
+   * Adds a tick box to every row, for choosing players to compare. The ticks
+   * are the caller's (they live in its URL); the table only draws them.
+   */
+  compare?: CompareSelection
   caption?: string
 }
 
@@ -96,6 +103,14 @@ export interface ProjectionTableProps {
  * is what brings it from 53px to 40px, and a laptop screen from ten players to
  * sixteen. A row grows only when its own content needs it — a long name beside
  * an injury designation in a narrow table.
+ *
+ * ## Choosing players to compare
+ *
+ * Given a `compare` selection, each row opens with a tick box. The box is its
+ * own control with its own state, not a property of the row: the row still
+ * goes to the player, and a press on the box's cell ticks the box instead. Six
+ * is the most the comparison takes, so at six the unticked boxes are disabled
+ * where they stand, which says so before a seventh is refused.
  */
 export const ProjectionTable = memo(function ProjectionTable({
   entries,
@@ -107,6 +122,7 @@ export const ProjectionTable = memo(function ProjectionTable({
   showTierColumn = false,
   density = 'default',
   stickyTop,
+  compare,
   caption,
 }: ProjectionTableProps) {
   // The scale and the tier sizes come from the whole list, not the drawn
@@ -125,7 +141,7 @@ export const ProjectionTable = memo(function ProjectionTable({
   const tableRef = useReorderAnimation<HTMLTableElement>(orderKey)
 
   const groups = showTiers ? groupByTier(visible) : [{ tier: 0, entries: visible }]
-  const columnCount = showTierColumn ? 7 : 6
+  const columnCount = (showTierColumn ? 7 : 6) + (compare ? 1 : 0)
   // A finished week prints "actual 18.4" beside each projection, which needs
   // the room a bare number does not.
   const hasActuals = useMemo(
@@ -147,6 +163,11 @@ export const ProjectionTable = memo(function ProjectionTable({
         layout="fixed"
       >
         <TableHead>
+          {compare && (
+            <ColumnHeader className={COMPARE_WIDTH}>
+              <span className="sr-only">Compare</span>
+            </ColumnHeader>
+          )}
           <ColumnHeader className="w-12" sort={sortOf('rank')} onSort={() => onSort('rank')}>
             #
           </ColumnHeader>
@@ -166,7 +187,7 @@ export const ProjectionTable = memo(function ProjectionTable({
           >
             Matchup
           </ColumnHeader>
-          <ColumnHeader className={RANGE_WIDTH} tip={BOARD_HINTS.range}>
+          <ColumnHeader className={compare ? RANGE_WIDTH_WITH_COMPARE : RANGE_WIDTH} tip={BOARD_HINTS.range}>
             Range
           </ColumnHeader>
           <ColumnHeader
@@ -212,6 +233,10 @@ export const ProjectionTable = memo(function ProjectionTable({
                   rankMode={rankMode}
                   showTierColumn={showTierColumn}
                   scaleMax={scaleMax}
+                  comparing={compare !== undefined}
+                  ticked={compare?.has(entry.projection.player.player_id) ?? false}
+                  compareFull={compare?.full ?? false}
+                  onCompare={compare?.toggle}
                 />
               ))}
             </TableBody>
@@ -236,29 +261,59 @@ export const ProjectionTable = memo(function ProjectionTable({
  */
 const RANGE_WIDTH = 'w-[clamp(13rem,calc(100cqw-48rem),38cqw)]'
 
+/** The tick box's column: a 16px box and the cell's padding either side. */
+const COMPARE_WIDTH = 'w-9'
+
+/** The same sum with the tick box's column among the fixed ones. */
+const RANGE_WIDTH_WITH_COMPARE = 'w-[clamp(13rem,calc(100cqw-50.25rem),38cqw)]'
+
 /**
  * One board row, memoised.
  *
  * A re-sort hands every row the same `entry` object it had before, so React can
  * move the existing `<tr>` rather than re-render a chip, an avatar and a range
  * strip for each of them. `scaleMax` is computed over the whole board, so it is
- * stable across sorts and reveals too.
+ * stable across sorts and reveals too. The tick arrives as a boolean for the
+ * same reason: ticking one player re-renders the rows whose box changed, not
+ * the board.
  */
 const BoardRow = memo(function BoardRow({
   entry,
   rankMode,
   showTierColumn,
   scaleMax,
+  comparing,
+  ticked,
+  compareFull,
+  onCompare,
 }: {
   entry: RankedProjection
   rankMode: 'overall' | 'positional'
   showTierColumn: boolean
   scaleMax: number
+  comparing: boolean
+  ticked: boolean
+  compareFull: boolean
+  onCompare?: (playerId: string) => void
 }) {
   const { projection } = entry
   const { points } = projection.prediction
   return (
     <TableRow data-flip-key={projection.player.player_id}>
+      {comparing && (
+        <TableCell className="relative p-0">
+          <CompareTick
+            name={projection.player.name}
+            ticked={ticked}
+            full={compareFull}
+            onToggle={() => onCompare?.(projection.player.player_id)}
+            // The whole cell, so a near miss ticks the box and does not open
+            // the player. Laid over the cell, not in it: a label as tall as
+            // the row would add the cell's border to the row's height.
+            className="absolute inset-0"
+          />
+        </TableCell>
+      )}
       <TableCell className="text-ink-muted tnum text-detail">
         {rankMode === 'positional' ? entry.positional_rank : entry.rank}
       </TableCell>

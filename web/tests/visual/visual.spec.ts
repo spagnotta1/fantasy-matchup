@@ -134,15 +134,23 @@ interface Screen {
 const SCREENS: Screen[] = [
   { name: 'dashboard', path: () => '/', roster: true, dark: true },
   { name: 'rankings', path: () => '/rankings/rb', foldOnly: true, dark: true },
+  // Two rows ticked and the bar that offers their comparison. The first
+  // screenful, so the bar is where a reader sees it: at the foot of the screen.
+  {
+    name: 'rankings-selection',
+    path: (s) => `/rankings/rb?compare=${s.compare.slice(0, 2).join(',')}`,
+    foldOnly: true,
+    dark: true,
+  },
   { name: 'player', path: (s) => `/players/${s.playerId}`, dark: true },
   { name: 'game', path: (s) => `/matchups/${s.gameId}` },
   { name: 'team', path: (s) => `/teams/${s.team}`, tablet: true },
   { name: 'my-team', path: () => '/my-team', roster: true, tablet: true },
   // The first screenful: a full week is a hundred rows of the same row.
   { name: 'live', path: () => '/live', roster: true, foldOnly: true, dark: true, tablet: true },
-  { name: 'usage', path: () => '/usage', tablet: true },
-  { name: 'injuries', path: () => '/injuries', dark: true, tablet: true },
-  { name: 'compare', path: (s) => `/compare?players=${s.compare.join(',')}` },
+  { name: 'usage', path: () => '/reports/usage', tablet: true },
+  { name: 'injuries', path: () => '/reports/injuries', dark: true, tablet: true },
+  { name: 'compare', path: (s) => `/compare?players=${s.compare.join(',')}`, dark: true, tablet: true },
   { name: 'simulation', path: () => '/simulation', roster: true },
   { name: 'track-record', path: () => '/track-record' },
   { name: 'draft-board', path: () => '/draft-board' },

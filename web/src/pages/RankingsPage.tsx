@@ -10,6 +10,7 @@ import { ProjectionList } from '@/components/domain/ProjectionList'
 import { InfoTip } from '@/components/ui/Tooltip'
 import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/feedback/States'
 import { CalibrationNotice } from '@/components/domain/CalibrationNotice'
+import { CompareBar } from '@/components/domain/CompareBar'
 import { LatestWeekButton } from '@/components/domain/LatestWeekButton'
 import { ProjectionCards } from '@/components/domain/ProjectionCards'
 import { ProjectionTable } from '@/components/domain/ProjectionTable'
@@ -19,6 +20,7 @@ import { UnprojectedPosition } from '@/features/rankings/UnprojectedPosition'
 import type { ViewMode } from '@/features/rankings/RankingsToolbar'
 import { useBoardDensity } from '@/hooks/useBoardDensity'
 import { usePositions } from '@/hooks/useCatalog'
+import { useCompareSelection } from '@/hooks/useCompareSelection'
 import { useElementSize } from '@/hooks/useElementSize'
 import { boardNotices, useBoard, usePositionRankings } from '@/hooks/useProjections'
 import { useUrlDraft } from '@/hooks/useUrlDraft'
@@ -82,15 +84,26 @@ const DEFAULT_STATE: RankingsPageState = {
  * "Room" is the width the board actually has, measured, not the width of the
  * window: the sidebar takes 240px of a laptop screen, so a 1,024px window has
  * less room for a table than an 820px tablet does.
+ *
+ * ## Ticking players to compare
+ *
+ * Each table row opens with a tick box, and a bar at the foot of the screen
+ * goes to the comparison of whoever is ticked. The ticks are in the URL
+ * (`?compare=`) and the position tabs carry them, so a running back and a
+ * wide receiver can be ticked on two boards for one flex decision. The list
+ * and the cards have no box: a row there is one link, and a link cannot hold
+ * a second control. The bar is still drawn for them, so a selection that
+ * arrived in a link can be used or cleared.
  */
 
 /**
  * The narrowest the table is drawn at. Its fixed columns and the smallest
- * range strip come to 640px; this leaves the player column the 270px that a
- * name and a game need to share a line. Narrower than this, most rows would
- * wrap, and a table of two-line rows is a worse list than the list.
+ * range strip come to 676px, the tick box's 36px among them; this leaves the
+ * player column the 270px that a name and a game need to share a line.
+ * Narrower than this, most rows would wrap, and a table of two-line rows is a
+ * worse list than the list.
  */
-const TABLE_MIN_WIDTH = 912
+const TABLE_MIN_WIDTH = 948
 
 /** The bar bleeds into the page's side padding, 24px a side from `sm`. */
 const PAGE_GUTTERS = 48
@@ -113,6 +126,7 @@ export default function RankingsPage() {
   const setTeam = useCallback((value: string) => setState({ team: value }), [setState])
   const setView = useCallback((value: ViewMode) => setState({ view: value }), [setState])
 
+  const compare = useCompareSelection()
   const [density, setDensity] = useBoardDensity()
   // The bar spans the page's content width plus its gutters, so it measures
   // both things the board needs: where the bar ends, and how much room there is.
@@ -321,6 +335,7 @@ export default function RankingsPage() {
                     showTierColumn={position === null}
                     density={density}
                     stickyTop={`calc(var(--spacing-shell-bar) + 1px + ${bar.height}px)`}
+                    compare={compare}
                     caption={`${position ?? 'Overall'} rankings for week ${slate.week ?? ''}, ${formatScoringProfile(slate.scoringProfile)}`}
                   />
                 ) : (
@@ -338,6 +353,8 @@ export default function RankingsPage() {
           </Card>
         </>
       )}
+
+      <CompareBar selection={compare} />
     </>
   )
 }

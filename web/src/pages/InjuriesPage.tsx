@@ -96,7 +96,7 @@ const DEFAULT_STATE = { position: '', status: 'all' }
  * "will not play" under it, two columns off screen: the one pairing this page
  * exists to show.
  */
-export default function InjuriesPage() {
+export default function InjuriesPage({ action }: { action?: ReactNode }) {
   const slate = useSlate()
   const positions = usePositions()
   const board = useBoard()
@@ -134,6 +134,8 @@ export default function InjuriesPage() {
     <>
       <PageHeader
         title="Injury report"
+        // The switch to the other report, when this is drawn as a view of Reports.
+        action={action}
         question={`Who is hurt in week ${slate.week ?? '—'}, and what were they projected for?`}
       />
 

@@ -8,7 +8,7 @@ import { useTeams } from '@/hooks/useCatalog'
 import { MIN_SEARCH_LENGTH, usePlayerSearch } from '@/hooks/useProjections'
 import { cn } from '@/utils/cn'
 
-import { HIDDEN_DESTINATIONS, NAV_GROUP_LABELS, NAV_ITEMS } from './navigation'
+import { FOOT_ITEMS, NAV_GROUP_LABELS, NAV_ITEMS, PALETTE_ONLY } from './navigation'
 
 /** Long enough to stop firing per keystroke, short enough to feel immediate. */
 const DEBOUNCE_MS = 150
@@ -111,7 +111,8 @@ function PaletteBody() {
   const options = useMemo<Option[]>(() => {
     const pages = [
       ...NAV_ITEMS.map((item) => ({ ...item, section: NAV_GROUP_LABELS[item.group] })),
-      ...HIDDEN_DESTINATIONS.map((item) => ({ ...item, section: 'More' })),
+      ...PALETTE_ONLY.map((item) => ({ ...item, section: 'More' })),
+      ...FOOT_ITEMS.map((item) => ({ ...item, section: 'About' })),
     ]
       .filter(
         (item) =>

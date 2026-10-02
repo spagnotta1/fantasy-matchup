@@ -4,6 +4,7 @@ import { ArrowRight, Copy, Play, Search, Settings, Trash2, UserPlus, X } from 'l
 import { Badge } from '@/components/ui/Badge'
 import { Button, ButtonLink, IconButton, IconButtonLink, type ButtonSize, type ButtonVariant } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
+import { Checkbox } from '@/components/ui/Checkbox'
 import {
   ColumnHeader,
   DataTable,
@@ -173,6 +174,7 @@ export default function SpecimensPage() {
   const [position, setPosition] = useState('')
   const [designation, setDesignation] = useState('all')
   const [game, setGame] = useState(true)
+  const [ticked, setTicked] = useState(true)
 
   return (
     <>
@@ -320,6 +322,33 @@ export default function SpecimensPage() {
                 </div>
               ))}
             </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Tick box"
+            description="A 16px box with no visible label, for a row of a table. The hit area is the label around it and is the caller's to size: here, dashed, a 36 by 40px cell."
+          />
+          <CardBody className="text-detail text-ink-secondary flex flex-wrap items-center gap-x-8 gap-y-3">
+            {(
+              [
+                { caption: 'Ticked, and it works', checked: ticked, onChange: () => setTicked(!ticked) },
+                { caption: 'Empty', checked: false },
+                { caption: 'Empty, cannot be ticked', checked: false, disabled: true },
+                { caption: 'Ticked, cannot be changed', checked: true, disabled: true },
+              ] as const
+            ).map(({ caption, ...box }) => (
+              <span key={caption} className="flex items-center gap-2">
+                <Checkbox
+                  label={caption}
+                  onChange={() => {}}
+                  {...box}
+                  className="border-line-strong rounded-control h-row w-9 border border-dashed"
+                />
+                {caption}
+              </span>
+            ))}
           </CardBody>
         </Card>
 

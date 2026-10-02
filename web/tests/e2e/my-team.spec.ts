@@ -161,8 +161,9 @@ test.describe('a row is not a link', () => {
     await expect(row.getByRole('rowheader').getByRole('link')).toBeVisible()
     await expect(row.locator('a[data-row-link]')).toHaveCount(0)
 
-    // The projection cell, a few pixels from Bench.
-    await row.getByRole('cell').nth(3).click()
+    // The projection cell, a few pixels from Bench. The fifth cell: the tick
+    // box, the slot, the matchup and the range come before it.
+    await row.getByRole('cell').nth(4).click()
     await expect(page).toHaveURL(/\/my-team/)
 
     const name = await row.getByRole('rowheader').getByRole('link').innerText()

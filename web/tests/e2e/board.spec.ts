@@ -29,7 +29,7 @@ test.describe('on a wide screen', () => {
     expect(count).toBeGreaterThan(10)
     await expect(page.locator('main tbody').getByRole('img', { name: RANGE })).toHaveCount(count)
     // "10.8 [strip] 33.1": two printed numbers in the range cell.
-    const cell = rows.first().getByRole('cell').nth(2)
+    const cell = rows.first().locator('td:has([role="img"])')
     expect((await cell.innerText()).match(/\d+\.\d/g)).toHaveLength(2)
   })
 
@@ -80,7 +80,7 @@ test.describe('on a wide screen', () => {
     const href = await row.locator('a[data-row-link]').getAttribute('href')
 
     // A click on the chance-of-20+ cell, nowhere near the name.
-    await row.getByRole('cell').nth(3).click()
+    await row.locator('td:nth-last-child(2)').click()
     await expect(page).toHaveURL(new RegExp(`${href}$`))
 
     await page.goBack()

@@ -201,8 +201,9 @@ DATABASE_URL=postgresql://nflfp:nflfp@localhost:5432/nflfp \
   data. Pin both with `?season=2026&week=3`. On a Friday Live holds one game.
 - **A search-param change scrolls the page to its top.** The router's
   `ScrollRestoration` treats `setSearchParams` as a new page unless it is
-  passed `preventScrollReset: true`. The slate's setters pass it; a control
-  that changes the URL from half-way down a page has to as well.
+  passed `preventScrollReset: true`. `useUrlState` and the slate's setters
+  pass it; a new direct `setSearchParams` has to as well, or a filter
+  half-way down a page throws the reader to the top.
 - **A stale page is `inert`.** `Refreshing` makes what it wraps inert while
   it dims it, so a control that caused the refresh (a stepper) has to sit
   outside it or it loses the keyboard's focus.

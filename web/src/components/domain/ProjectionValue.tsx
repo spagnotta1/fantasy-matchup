@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react'
 
 import { Tooltip } from '@/components/ui/Tooltip'
 import type { Points } from '@/api/schemas'
+import { fieldScaleMax, YARD_LINE_POINTS } from '@/utils/board'
 import { cn } from '@/utils/cn'
 import { formatPoints, headlinePoints } from '@/utils/format'
 
@@ -80,9 +81,6 @@ export function ProjectionValue({
   )
 }
 
-/** Yard lines on the field, in points. */
-const YARD_LINE_POINTS = 5
-
 /**
  * The outcome range, drawn on the field.
  *
@@ -153,7 +151,7 @@ export function OutcomeRange({
   // Round the scale up to a whole yard line so the rules land on 5, 10, 15…
   // rather than wherever the board's highest ceiling happens to fall.
   const rawMax = scaleMax && scaleMax > 0 ? scaleMax : ceiling
-  const max = Math.max(YARD_LINE_POINTS, Math.ceil(rawMax / YARD_LINE_POINTS) * YARD_LINE_POINTS)
+  const max = fieldScaleMax(rawMax)
   const at = (value: number) => Math.max(0, Math.min(100, (value / max) * 100))
   const has = (value: number | null | undefined): value is number =>
     value !== null && value !== undefined && Number.isFinite(value)
