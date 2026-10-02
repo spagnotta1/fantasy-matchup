@@ -36,7 +36,7 @@ export function UnprojectedPosition({ support }: { support: PositionSupport }) {
 
         {support.blocked_on.length > 0 && (
           <div>
-            <h3 className="text-ink-muted mb-2 text-xs font-semibold tracking-wide uppercase">
+            <h3 className="text-ink-muted mb-2 text-caption font-semibold tracking-wide uppercase">
               What is needed first
             </h3>
             <ul className="text-ink-secondary space-y-1.5 text-sm">
@@ -52,7 +52,7 @@ export function UnprojectedPosition({ support }: { support: PositionSupport }) {
           </div>
         )}
 
-        <p className="text-ink-muted text-xs leading-relaxed">
+        <p className="text-ink-muted text-detail leading-relaxed">
           Until then we show no {support.label.toLowerCase()} numbers at all, rather than a guess.
         </p>
       </CardBody>

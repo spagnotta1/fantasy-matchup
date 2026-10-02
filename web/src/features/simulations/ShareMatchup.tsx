@@ -47,7 +47,7 @@ export function ShareMatchup() {
         )}
         {copied ? 'Link copied' : 'Copy link'}
       </Button>
-      <span aria-live="polite" className="text-ink-muted text-xs">
+      <span aria-live="polite" className="text-ink-muted text-detail">
         {failed
           ? 'Copying was blocked — copy the page address instead to share this matchup.'
           : copied
@@ -92,7 +92,7 @@ export function ShareImage({
         <ImageDown aria-hidden className="size-3.5" />
         Share image
       </Button>
-      <span aria-live="polite" className="text-ink-muted text-xs">
+      <span aria-live="polite" className="text-ink-muted text-detail">
         {state === 'failed' ? 'The image could not be made in this browser — copy the link instead.' : ''}
       </span>
     </div>

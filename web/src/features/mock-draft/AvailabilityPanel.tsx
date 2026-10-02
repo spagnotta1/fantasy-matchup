@@ -74,7 +74,7 @@ export function AvailabilityPanel({ seat }: { seat: SeatAnalysis }) {
                 {seat.draft_position}&rsquo;s picks
               </caption>
               <thead className="bg-surface sticky top-0 z-10">
-                <tr className="text-ink-secondary border-line border-b text-xs">
+                <tr className="text-ink-secondary border-line border-b text-caption">
                   <th scope="col" className="py-2 pr-2 pl-4 text-left font-medium">
                     Player
                   </th>
@@ -110,14 +110,14 @@ export function AvailabilityPanel({ seat }: { seat: SeatAnalysis }) {
                       <td className="text-ink-secondary tnum py-2 pr-2 text-right">
                         {formatNumber(entry.season_value)}
                       </td>
-                      <td className="text-ink-muted tnum py-2 pr-2 text-right text-xs">
+                      <td className="text-ink-muted tnum py-2 pr-2 text-right text-detail">
                         {entry.mean_selection_pick == null
                           ? 'Undrafted'
                           : `#${formatNumber(entry.mean_selection_pick, 0)}`}
                       </td>
                       <td className="tnum py-2 pr-2 text-right">
                         {entry.next_reference_pick == null ? (
-                          <span className="text-ink-muted text-xs">No later pick</span>
+                          <span className="text-ink-muted text-detail">No later pick</span>
                         ) : (
                           <>
                             <span
@@ -128,7 +128,7 @@ export function AvailabilityPanel({ seat }: { seat: SeatAnalysis }) {
                             >
                               {formatPercent(entry.next_pick_probability)}
                             </span>
-                            <span className="text-ink-muted block text-xs">
+                            <span className="text-ink-muted block text-detail">
                               at #{entry.next_reference_pick}
                             </span>
                           </>
@@ -136,7 +136,7 @@ export function AvailabilityPanel({ seat }: { seat: SeatAnalysis }) {
                       </td>
                       <td className="py-2 pr-4">
                         {entry.next_reference_pick == null ? (
-                          <span className="text-ink-muted text-xs">—</span>
+                          <span className="text-ink-muted text-detail">—</span>
                         ) : gone ? (
                           <Badge tone="negative">Likely gone</Badge>
                         ) : waitable ? (

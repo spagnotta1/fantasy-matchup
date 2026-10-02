@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, GitCompareArrows, Shuffle, UserRound } from 'lucide-react'
 
+import { ButtonLink } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { SkeletonTable } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/feedback/States'
@@ -9,11 +10,6 @@ import { ProjectionValue } from '@/components/domain/ProjectionValue'
 import { useSlate } from '@/app/slate-context'
 import { closestCall, useMyLineup } from '@/hooks/useMyLineup'
 import { formatPoints } from '@/utils/format'
-
-const PRIMARY_LINK =
-  'bg-accent text-on-accent hover:bg-accent-hover inline-flex h-10 items-center gap-2 rounded-[var(--radius-control)] px-4 text-sm font-medium transition-colors'
-const SECONDARY_LINK =
-  'border-line-input text-ink hover:bg-surface-hover inline-flex h-10 items-center gap-2 rounded-[var(--radius-control)] border px-4 text-sm font-medium transition-colors'
 
 /**
  * The dashboard's first answer: what this week means for *your* team.
@@ -56,10 +52,10 @@ export function YourWeek() {
               in this browser — no account.
             </p>
           </div>
-          <Link to="/my-team" className={PRIMARY_LINK}>
+          <ButtonLink to="/my-team" variant="primary">
             Add your roster
-            <ArrowRight aria-hidden className="size-4" />
-          </Link>
+            <ArrowRight aria-hidden />
+          </ButtonLink>
         </CardBody>
       </Card>
     )
@@ -146,7 +142,7 @@ export function YourWeek() {
 
         {call && (
           <div className="bg-surface-sunken rounded-[var(--radius-control)] p-3">
-            <p className="text-ink-muted text-xs font-medium">Your closest call, at {call.slot}</p>
+            <p className="text-ink-muted text-detail font-medium">Your closest call, at {call.slot}</p>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2">
               <span className="text-sm">
                 <span className="text-ink font-medium">{call.starter.projection.player.name}</span>{' '}
@@ -172,13 +168,10 @@ export function YourWeek() {
         )}
 
         <div className="flex flex-wrap gap-2 pt-1">
-          <Link to={my.simulateHref} className={PRIMARY_LINK}>
-            <Shuffle aria-hidden className="size-4" />
+          <ButtonLink to={my.simulateHref} variant="primary" icon={<Shuffle aria-hidden />}>
             Estimate my chance of winning
-          </Link>
-          <Link to="/my-team" className={SECONDARY_LINK}>
-            Edit lineup
-          </Link>
+          </ButtonLink>
+          <ButtonLink to="/my-team">Edit lineup</ButtonLink>
         </div>
       </CardBody>
     </Card>

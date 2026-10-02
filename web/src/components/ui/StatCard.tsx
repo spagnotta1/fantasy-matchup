@@ -34,17 +34,17 @@ export function StatCard({
   return (
     <div
       className={cn(
-        'rounded-[var(--radius-card)] border p-4',
+        'rounded-card border p-4',
         emphasis === 'primary'
           ? 'bg-accent-soft border-transparent'
-          : 'bg-surface border-line shadow-card',
+          : 'bg-surface border-line-strong',
         className,
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <p
           className={cn(
-            'text-xs font-medium tracking-wide uppercase',
+            'text-caption font-medium tracking-wide uppercase',
             emphasis === 'primary' ? 'text-accent-text' : 'text-ink-muted',
           )}
         >
@@ -61,9 +61,9 @@ export function StatCard({
         >
           {value}
         </span>
-        {unit && <span className="text-ink-muted text-xs font-medium">{unit}</span>}
+        {unit && <span className="text-ink-muted text-detail font-medium">{unit}</span>}
       </p>
-      {detail && <p className="text-ink-muted mt-2 text-xs leading-relaxed">{detail}</p>}
+      {detail && <p className="text-ink-muted mt-2 text-detail leading-relaxed">{detail}</p>}
     </div>
   )
 }

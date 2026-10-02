@@ -159,7 +159,7 @@ function CoverageCard() {
           <p className="text-ink-secondary text-sm leading-relaxed">
             No projections have been published yet. The weekly update adds each upcoming week.
             To fill in past weeks, an admin can run{' '}
-            <code className="text-ink-primary text-xs">
+            <code className="text-ink-primary text-detail">
               python -m nflfp.jobs run backfill_projections
             </code>{' '}
             .
@@ -178,7 +178,7 @@ function CoverageCard() {
                 </div>
               ))}
             </dl>
-            <p className="text-ink-muted mt-4 text-xs leading-relaxed">
+            <p className="text-ink-muted mt-4 text-detail leading-relaxed">
               {data.length} season{data.length === 1 ? '' : 's'}, {totalWeeks} published
               week{totalWeeks === 1 ? '' : 's'}. Playoff weeks (19–22) are not projected, and
               seasons without projections are not listed.
@@ -269,7 +269,7 @@ function PositionsCard() {
                   </Badge>
                 </div>
                 {position.reason && (
-                  <p className="text-ink-muted mt-1.5 pl-6 text-xs leading-relaxed">
+                  <p className="text-ink-muted mt-1.5 pl-6 text-detail leading-relaxed">
                     {position.reason}
                   </p>
                 )}
@@ -429,7 +429,7 @@ function ModelEvidence({ document }: { document: unknown }) {
       {bar.length > 0 && (
         <section>
           <h3 className="text-ink text-sm font-semibold">What a replacement must prove</h3>
-          <p className="text-ink-muted mt-1 text-xs leading-relaxed">
+          <p className="text-ink-muted mt-1 text-detail leading-relaxed">
             A new model replaces this one only if it clears every one of these on the same test.
             A sharper average that widens the ranges or skews the boom chances does not count as
             better.
@@ -448,7 +448,7 @@ function ModelEvidence({ document }: { document: unknown }) {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <>
-      <dt className="text-ink-muted text-xs font-medium tracking-wide uppercase">{label}</dt>
+      <dt className="text-ink-muted text-caption font-medium tracking-wide uppercase">{label}</dt>
       <dd className="text-ink text-sm">{children}</dd>
     </>
   )

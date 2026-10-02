@@ -1,15 +1,25 @@
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
-import { Radio, Search, X } from 'lucide-react'
+import { Radio } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader } from '@/components/ui/Card'
-import { Input } from '@/components/ui/Input'
+import {
+  ColumnHeader,
+  RowHeaderCell,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@/components/ui/DataTable'
+import { FilterChip, FilterChoice, FilterSearch, FilterToolbar } from '@/components/ui/FilterToolbar'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { SegmentedControl } from '@/components/ui/SegmentedControl'
+import { RowList, RowListItem, RowListLine, RowListRows, RowListTitle } from '@/components/ui/RowList'
 import { Skeleton, SkeletonTable } from '@/components/ui/Skeleton'
 import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/feedback/States'
+import { PlayerCell } from '@/components/domain/PlayerCell'
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
 import { ShowMoreRows } from '@/components/domain/BoardBudget'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
@@ -20,6 +30,7 @@ import { LIVE_REFRESH_MS, useLive } from '@/hooks/useInsights'
 import { useRenderBudget } from '@/hooks/useRenderBudget'
 import { replayAnimation, useCountUp } from '@/hooks/useCountUp'
 import { useRememberedRoster } from '@/hooks/useRoster'
+import { useRowList } from '@/hooks/useRowList'
 import { useUrlDraft } from '@/hooks/useUrlDraft'
 import { useUrlState } from '@/hooks/useUrlState'
 import { cn } from '@/utils/cn'
@@ -101,6 +112,7 @@ export default function LivePage() {
       ),
     [data, state.position, state.who, roster, selectedGame, deferredSearch],
   )
+  const total = data?.players.length ?? 0
   const filtered = Boolean(state.position || state.who !== 'all' || selectedGame || search.trim())
   const clearFilters = () => {
     setSearch('', { immediate: true })
@@ -175,36 +187,30 @@ export default function LivePage() {
             ))}
           </ul>
 
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <Input
+          <FilterToolbar
+            label="Filter players"
+            summary={
+              total > 0
+                ? players.length === total
+                  ? `${total} players`
+                  : `${players.length} of ${total} players`
+                : undefined
+            }
+          >
+            <FilterSearch
               label="Search players"
-              hideLabel
               placeholder="Search by name or team…"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              icon={<Search className="size-4" />}
-              className="min-w-0 flex-1 basis-56 sm:max-w-72"
-              type="search"
-              trailing={
-                search ? (
-                  <button
-                    type="button"
-                    onClick={() => setSearch('', { immediate: true })}
-                    aria-label="Clear search"
-                    className="text-ink-muted hover:text-ink flex size-6 items-center justify-center rounded-md"
-                  >
-                    <X aria-hidden className="size-3.5" />
-                  </button>
-                ) : undefined
-              }
+              onChange={setSearch}
+              onClear={() => setSearch('', { immediate: true })}
             />
-            <SegmentedControl
+            <FilterChoice
               label="Position"
               value={state.position}
               onChange={(value) => setState({ position: value })}
               options={[{ value: '', label: 'All' }, ...['QB', 'RB', 'WR', 'TE'].map((p) => ({ value: p, label: p }))]}
             />
-            <SegmentedControl
+            <FilterChoice
               label="Players"
               value={state.who}
               onChange={(value) => setState({ who: value })}
@@ -214,26 +220,23 @@ export default function LivePage() {
               ]}
             />
             {state.who === 'mine' && roster.size === 0 && (
-              <Link to="/my-team" className="text-accent-text text-xs hover:underline">
+              <Link to="/my-team" className="text-accent-text text-detail hover:underline">
                 Add your roster first
               </Link>
             )}
             {selectedGame && (
-              <Badge tone="accent" className="gap-1 py-0.5 pr-0.5">
+              <FilterChip
+                removeLabel={`Show every game, not just ${selectedGame.away} at ${selectedGame.home}`}
+                onRemove={() => setState({ game: '' })}
+              >
                 {selectedGame.away} @ {selectedGame.home}
-                <button
-                  type="button"
-                  onClick={() => setState({ game: '' })}
-                  aria-label={`Show every game, not just ${selectedGame.away} at ${selectedGame.home}`}
-                  className="hover:bg-surface-hover flex size-5 items-center justify-center rounded-full"
-                >
-                  <X aria-hidden className="size-3" />
-                </button>
-              </Badge>
+              </FilterChip>
             )}
-          </div>
+          </FilterToolbar>
 
-          <Card className="overflow-hidden">
+          {/* `clip`, not `hidden`: a hidden overflow would make the card a
+              scroll container and the column header would stick to it. */}
+          <Card className="overflow-clip">
             <CardHeader
               as="h2"
               title="Points so far"
@@ -276,35 +279,10 @@ export default function LivePage() {
                 }
               />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <caption className="sr-only">Unofficial live fantasy points with published projections</caption>
-                  <thead>
-                    <tr className="border-line text-ink-muted border-b text-xs font-medium tracking-wide uppercase">
-                      <th scope="col" className="px-3 py-2 text-left">Player</th>
-                      <th scope="col" className="hidden px-3 py-2 text-left lg:table-cell">Stat line</th>
-                      <th scope="col" className="hidden w-[30%] px-3 py-2 text-left md:table-cell">
-                        On the field
-                      </th>
-                      <th scope="col" className="px-3 py-2 text-right">Live</th>
-                      <th scope="col" className="px-3 py-2 text-right">Projected</th>
-                      <th scope="col" className="hidden px-3 py-2 text-right sm:table-cell">Final vs proj.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visible.map((player) => (
-                      <LiveRow
-                        key={player.player_id}
-                        player={player}
-                        game={games.get(player.event_id)}
-                        mine={roster.has(player.player_id)}
-                        fieldMax={fieldMax}
-                      />
-                    ))}
-                  </tbody>
-                </table>
+              <>
+                <LiveRows players={visible} games={games} roster={roster} fieldMax={fieldMax} />
                 <ShowMoreRows budget={budget} />
-              </div>
+              </>
             )}
           </Card>
         </Refreshing>
@@ -359,7 +337,7 @@ function GameTile({
       aria-pressed={selected}
       aria-label={`${game.away} at ${game.home}, ${final ? 'final' : (game.detail ?? game.state)}. ${selected ? 'Showing only this game; press to show every game.' : 'Show only players in this game.'}`}
       className={cn(
-        'bg-surface shadow-card hover:bg-surface-hover relative block h-full w-full overflow-hidden rounded-[var(--radius-control)] border px-3 pt-3 pb-2 text-left transition-colors',
+        'bg-surface hover:bg-surface-hover relative block h-full w-full overflow-hidden rounded-[var(--radius-control)] border px-3 pt-3 pb-2 text-left transition-colors',
         selected ? 'border-accent ring-accent ring-2' : live ? 'border-negative/50' : 'border-line',
       )}
     >
@@ -382,7 +360,7 @@ function GameTile({
       </div>
       <p
         className={cn(
-          'mt-2 flex items-center gap-1.5 truncate text-[0.6875rem]',
+          'mt-2 flex items-center gap-1.5 truncate text-chip',
           live ? 'text-negative-text font-semibold' : final ? 'text-ink font-semibold' : 'text-ink-muted',
         )}
       >
@@ -393,6 +371,139 @@ function GameTile({
   )
 }
 
+/**
+ * The narrowest the table is drawn at before it scrolls inside its own frame:
+ * its four fixed columns (36.5rem), the smallest field strip (13rem) and a
+ * 10rem player column — a headshot, a name and a line under it. The numbers
+ * come first after the player so that on a phone, where the rest scrolls, the
+ * first thing beside a name is his points.
+ */
+const TABLE_MIN_WIDTH = '59.5rem'
+
+/**
+ * What the table has to spare after the fixed columns and a 19.5rem player
+ * cell: a name, a team, where the game stands and "My team" on one line.
+ */
+const FIELD_WIDTH = 'w-[clamp(13rem,calc(100cqw-56rem),26cqw)]'
+
+const CAPTION = 'Unofficial live fantasy points with published projections'
+const ORDER = 'highest live points first'
+
+/**
+ * The rows: a table where there is room for its columns, a list where there is
+ * not.
+ *
+ * On a phone the table kept the name in view and showed one column beside it,
+ * so live points and the projection they are measured against were never on
+ * screen together, and a full Sunday scrolled inside a frame the height of the
+ * screen. The list is the page scrolling, with every column of a row in it.
+ */
+function LiveRows({
+  players,
+  games,
+  roster,
+  fieldMax,
+}: {
+  players: LivePlayer[]
+  games: Map<string, LiveGame>
+  roster: Set<string>
+  fieldMax: number
+}) {
+  const [frameRef, asList] = useRowList<HTMLDivElement>()
+
+  return (
+    <div ref={frameRef}>
+      {asList ? (
+        <RowList
+          value="Live points"
+          note="The ball is the points scored so far, on the range the projection gave before kickoff. The yellow line is 20 points."
+        >
+          <RowListRows aria-label={`${CAPTION}, ${ORDER}`}>
+            {players.map((player) => (
+              <LiveListRow
+                key={player.player_id}
+                player={player}
+                game={games.get(player.event_id)}
+                mine={roster.has(player.player_id)}
+                fieldMax={fieldMax}
+              />
+            ))}
+          </RowListRows>
+        </RowList>
+      ) : (
+        <Table
+          // A query container, so the field column can size to the table.
+          className="@container"
+          caption={CAPTION}
+          captionNote={ORDER}
+          layout="fixed"
+          minWidth={TABLE_MIN_WIDTH}
+          freezeFirstColumn
+        >
+          <TableHead>
+            <ColumnHeader>Player</ColumnHeader>
+            {/* As wide as the "Past the 20" mark under the number. */}
+            <ColumnHeader numeric className="w-28">
+              Live
+            </ColumnHeader>
+            <ColumnHeader numeric className="w-26">
+              Projected
+            </ColumnHeader>
+            <ColumnHeader
+              numeric
+              className="w-28"
+              tip="Live points minus the projection, shown once the game is final. Before then the gap mostly measures how much of the game is left."
+            >
+              Final vs proj.
+            </ColumnHeader>
+            <ColumnHeader
+              className={FIELD_WIDTH}
+              tip="The ball is the points scored so far, on the range the projection gave before kickoff: the floor and the ceiling are printed either side. The yellow line is 20 points."
+            >
+              On the field
+            </ColumnHeader>
+            <ColumnHeader className="w-64">Stat line</ColumnHeader>
+          </TableHead>
+          <TableBody>
+            {players.map((player) => (
+              <LiveRow
+                key={player.player_id}
+                player={player}
+                game={games.get(player.event_id)}
+                mine={roster.has(player.player_id)}
+                fieldMax={fieldMax}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Where a player's game stands. A game in progress is the one thing here that
+ * is still moving, so it is marked the way the ticker marks it: the live dot
+ * and the clock in the alert colour, and in words either way.
+ */
+function GameState({ game }: { game: LiveGame }) {
+  if (game.state === 'in') {
+    return (
+      <span className="text-negative-text inline-flex items-center gap-1 font-semibold">
+        <span aria-hidden className="bg-negative animate-live-dot size-1.5 shrink-0 rounded-full" />
+        <span className="sr-only">In progress, </span>
+        {game.detail ?? 'In progress'}
+      </span>
+    )
+  }
+  return <>{game.state === 'post' ? 'Final' : 'Not started'}</>
+}
+
+/**
+ * One player, memoised: a refresh hands every row whose numbers did not change
+ * the same props it had, so the row is not redrawn and whatever in it had
+ * focus keeps it.
+ */
 const LiveRow = memo(function LiveRow({
   player,
   game,
@@ -404,6 +515,80 @@ const LiveRow = memo(function LiveRow({
   mine: boolean
   fieldMax: number
 }) {
+  const { difference, shown, pastTheLine, rowRef, numberRef } = useLiveScore<HTMLTableRowElement>(player, game)
+
+  return (
+    <TableRow ref={rowRef} highlighted={mine}>
+      <RowHeaderCell>
+        <PlayerCell
+          player={player}
+          meta={
+            <>
+              {player.position} · {player.team}
+              {game && (
+                <>
+                  {' · '}
+                  <GameState game={game} />
+                </>
+              )}
+            </>
+          }
+        >
+          {/* The tint on the row says the same thing; this says it in words. */}
+          {mine && <span className="text-accent-text text-detail font-medium whitespace-nowrap">My team</span>}
+        </PlayerCell>
+      </RowHeaderCell>
+      <TableCell numeric>
+        <span ref={numberRef} className="text-ink inline-block text-base font-semibold">
+          <span aria-hidden>{formatPoints(shown)}</span>
+          <span className="sr-only">{formatPoints(player.live_points)}</span>
+        </span>
+        {pastTheLine && (
+          <span className="bg-line-to-gain text-on-line-to-gain text-chip ml-auto block w-fit rounded-sm px-1.5 py-px font-bold tracking-wide whitespace-nowrap uppercase">
+            Past the {LINE_TO_GAIN}
+          </span>
+        )}
+      </TableCell>
+      <TableCell numeric className="text-ink-secondary">
+        {formatPoints(player.projected)}
+      </TableCell>
+      <TableCell
+        numeric
+        className={
+          difference == null ? 'text-ink-muted' : difference >= 0 ? 'text-positive-text' : 'text-negative-text'
+        }
+      >
+        {difference == null ? '—' : formatSigned(difference)}
+      </TableCell>
+      <TableCell>
+        <OutcomeRange
+          floor={player.floor}
+          median={null}
+          ceiling={player.ceiling}
+          threshold={LINE_TO_GAIN}
+          scaleMax={fieldMax}
+          actual={player.live_points}
+        />
+      </TableCell>
+      <TableCell className="text-ink-secondary text-detail">{statLine(player.components)}</TableCell>
+    </TableRow>
+  )
+})
+
+/**
+ * What both drawings of a row need from its score: the number as it counts up,
+ * the difference once the game is final, and the two animations.
+ */
+function useLiveScore<Row extends HTMLElement>(
+  player: LivePlayer,
+  game: LiveGame | undefined,
+): {
+  difference: number | null
+  shown: number
+  pastTheLine: boolean
+  rowRef: RefObject<Row | null>
+  numberRef: RefObject<HTMLSpanElement | null>
+} {
   const final = game?.state === 'post'
   const difference = final && player.projected != null ? player.live_points - player.projected : null
   const shown = useCountUp(player.live_points)
@@ -412,7 +597,7 @@ const LiveRow = memo(function LiveRow({
   // Plays only when a refetch brings a different number: a score, not a page
   // load. Crossing the line to gain gets the yellow sweep; any other score
   // gets the bump on the number.
-  const rowRef = useRef<HTMLTableRowElement>(null)
+  const rowRef = useRef<Row>(null)
   const numberRef = useRef<HTMLSpanElement>(null)
   const last = useRef(player.live_points)
   useEffect(() => {
@@ -425,66 +610,91 @@ const LiveRow = memo(function LiveRow({
     }
   }, [player.live_points])
 
-  const strip = (compact: boolean) => (
-    <OutcomeRange
-      hideEndpoints={compact}
-      floor={player.floor}
-      median={null}
-      ceiling={player.ceiling}
-      threshold={LINE_TO_GAIN}
-      scaleMax={fieldMax}
-      actual={player.live_points}
-    />
-  )
+  return { difference, shown, pastTheLine, rowRef, numberRef }
+}
+
+/**
+ * One player on the list, memoised like the table's row.
+ *
+ * Line one is who and how many: the name, where the game stands, the live
+ * points. Line two is the field strip with the projection beside it, and line
+ * three the stat line with, once the game is final, how the score finished
+ * against that projection. A list has no header to name a number, so each of
+ * the two smaller ones is named where it is printed.
+ */
+const LiveListRow = memo(function LiveListRow({
+  player,
+  game,
+  mine,
+  fieldMax,
+}: {
+  player: LivePlayer
+  game: LiveGame | undefined
+  mine: boolean
+  fieldMax: number
+}) {
+  const { difference, shown, pastTheLine, rowRef, numberRef } = useLiveScore<HTMLLIElement>(player, game)
 
   return (
-    <tr ref={rowRef} className={cn('border-line border-b last:border-b-0', mine && 'bg-accent-soft/40')}>
-      <td className="px-3 py-2">
-        <span className="flex items-center gap-3">
-          <PlayerAvatar player={{ name: player.name, headshot_url: player.headshot_url }} size="sm" />
-          <span className="min-w-0 flex-1">
-            <Link to={`/players/${encodeURIComponent(player.player_id)}`} className="text-ink hover:text-accent-text block truncate font-medium">
-              {player.name}
-            </Link>
-            <span className="text-ink-muted block text-xs">
-              {player.position} · {player.team}
-              {game ? ` · ${game.state === 'in' ? game.detail : final ? 'Final' : 'Not started'}` : ''}
-              {mine && ' · My team'}
-            </span>
-            {/* The field under the name on a phone, where there is no column for it. */}
-            <span className="mt-1.5 block md:hidden">{strip(true)}</span>
-          </span>
-        </span>
-      </td>
-      <td className="text-ink-secondary hidden px-3 py-2 text-xs lg:table-cell">{statLine(player.components)}</td>
-      <td className="hidden px-3 py-2 md:table-cell">{strip(false)}</td>
-      <td className="px-3 py-2 text-right">
-        <span ref={numberRef} className="tnum text-ink inline-block text-base font-semibold">
-          <span aria-hidden>{formatPoints(shown)}</span>
-          <span className="sr-only">{formatPoints(player.live_points)}</span>
-        </span>
+    <RowListItem ref={rowRef} to={`/players/${encodeURIComponent(player.player_id)}`} highlighted={mine}>
+      <PlayerAvatar player={player} size="xs" />
+      <RowListTitle
+        name={player.name}
+        meta={
+          <>
+            {player.position} · {player.team}
+            {game && (
+              <>
+                {' · '}
+                <GameState game={game} />
+              </>
+            )}
+          </>
+        }
+      >
+        {/* The tint on the row says the same thing; this says it in words. */}
+        {mine && <span className="text-accent-text text-chip font-medium whitespace-nowrap">My team</span>}
         {pastTheLine && (
-          <span className="bg-line-to-gain text-on-line-to-gain mt-1 block w-fit rounded-sm px-1.5 py-px text-[0.625rem] font-bold tracking-wide whitespace-nowrap uppercase sm:ml-auto">
+          <span className="bg-line-to-gain text-on-line-to-gain text-chip rounded-sm px-1.5 py-px font-bold tracking-wide whitespace-nowrap uppercase">
             Past the {LINE_TO_GAIN}
           </span>
         )}
-      </td>
-      <td className="tnum text-ink-secondary px-3 py-2 text-right">
-        {formatPoints(player.projected)}
-        {player.floor != null && player.ceiling != null && (
-          <span className="text-ink-muted block text-[0.6875rem]">
-            {formatPoints(player.floor)}–{formatPoints(player.ceiling)}
+      </RowListTitle>
+      <span ref={numberRef} className="text-ink tnum inline-block justify-self-end text-base font-semibold">
+        <span aria-hidden>{formatPoints(shown)}</span>
+        <span className="sr-only">{formatPoints(player.live_points)} live points</span>
+      </span>
+      <RowListLine>
+        <OutcomeRange
+          floor={player.floor}
+          median={null}
+          ceiling={player.ceiling}
+          threshold={LINE_TO_GAIN}
+          scaleMax={fieldMax}
+          actual={player.live_points}
+          className="min-w-0 flex-1"
+        />
+        <span className={SIDE_NOTE}>
+          <span className="text-ink-muted">Proj. </span>
+          {formatPoints(player.projected)}
+        </span>
+      </RowListLine>
+      <RowListLine className="items-start">
+        <span className="text-ink-secondary text-chip min-w-0 flex-1">{statLine(player.components)}</span>
+        {difference != null && (
+          <span className={cn(SIDE_NOTE, difference >= 0 ? 'text-positive-text' : 'text-negative-text')}>
+            <span className="text-ink-muted">Final </span>
+            {formatSigned(difference)}
           </span>
         )}
-      </td>
-      <td
-        className={cn(
-          'tnum hidden px-3 py-2 text-right sm:table-cell',
-          difference == null ? 'text-ink-muted' : difference >= 0 ? 'text-positive-text' : 'text-negative-text',
-        )}
-      >
-        {difference == null ? '—' : formatSigned(difference)}
-      </td>
-    </tr>
+      </RowListLine>
+    </RowListItem>
   )
 })
+
+/**
+ * The projection and the final difference, one above the other at the row's
+ * right edge. A fixed width, so every strip beside them ends at the same place
+ * and one row's yard lines sit over the next's.
+ */
+const SIDE_NOTE = 'text-ink-secondary tnum text-chip w-[4.75rem] shrink-0 text-right font-medium whitespace-nowrap'

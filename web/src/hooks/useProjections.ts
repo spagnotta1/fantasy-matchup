@@ -7,6 +7,7 @@
  * different from another view's.
  */
 
+import { useMemo } from 'react'
 import { useQueries, useQuery } from '@tanstack/react-query'
 
 import { keepPreviousSubject } from '@/api/keepPreviousSubject'
@@ -16,6 +17,8 @@ import * as projectionsApi from '@/api/projections'
 import { queryKeys } from '@/api/queryKeys'
 import type { ResponseMeta } from '@/api/schemas'
 import { useSlate } from '@/app/slate-context'
+import { entryPoints } from '@/utils/board'
+import { rankPlayerSearch } from '@/utils/search'
 
 /**
  * A whole slate in one request.
@@ -142,19 +145,36 @@ export function useWeek() {
   })
 }
 
-/** Everything the player page needs, in one call. */
-export function usePlayerProfile(playerId: string | undefined) {
+/**
+ * Everything the player page needs, in one call.
+ *
+ * `weeks` is how many completed games of history to load. The API's default
+ * (24, about a season and a third) is what the page opens with; the game log
+ * asks for more only when a reader asks to see earlier seasons, because the
+ * full history is a response several times the size.
+ *
+ * Stepping a week, changing the scoring format or loading more history keeps
+ * the same player's previous profile on screen until the new one arrives, so
+ * the page dims instead of collapsing to a skeleton and the reader keeps their
+ * place in it. A different player starts from the skeleton: their numbers under
+ * someone else's name would be wrong, not stale.
+ */
+export function usePlayerProfile(playerId: string | undefined, weeks?: number) {
   const slate = useSlate()
   const params = {
     season: slate.season,
     week: slate.week,
     scoringProfile: slate.scoringProfile,
+    weeks,
   }
+  const subject = playerId ?? ''
 
   return useQuery({
-    queryKey: queryKeys.players.profile(playerId ?? '', params),
+    queryKey: queryKeys.players.profile(subject, params),
     queryFn: ({ signal }) => playersApi.getPlayerProfile(playerId as string, params, signal),
     enabled: Boolean(playerId) && slate.resolved,
+    meta: { subject },
+    placeholderData: keepPreviousSubject(subject),
   })
 }
 
@@ -186,20 +206,55 @@ export function usePlayers(playerIds: string[]) {
  */
 export const MIN_SEARCH_LENGTH = 2
 
+/**
+ * How many matches are fetched before they are ordered for this week and cut
+ * to what the caller shows. A palette shows six; asking the API for six would
+ * leave nothing to reorder, and a player projected this week who was seventh
+ * by recency would never appear.
+ */
+const SEARCH_POOL = 25
+
+/**
+ * `limit` results, most useful first.
+ *
+ * The API orders by how the name matched and how recently the player was
+ * active. This adds the one thing only the client knows — the slate on screen
+ * — and puts players projected for it first within each kind of match (see
+ * `rankPlayerSearch`). The board is requested only once there is a term to
+ * rank, and it is the same cached query every board on the site reads.
+ */
 export function usePlayerSearch(
   query: string,
   options: { limit?: number; positions?: string[] } = {},
 ) {
   const term = query.trim()
   const limit = options.limit ?? 10
+  const pool = Math.max(limit, SEARCH_POOL)
+  const searching = term.length >= MIN_SEARCH_LENGTH
   // Sorted so that ['RB','WR'] and ['WR','RB'] are one cache entry rather than
   // two identical results under different keys.
   const positions = options.positions ? [...options.positions].sort() : undefined
 
-  return useQuery({
-    queryKey: queryKeys.players.search(`${term}:${limit}:${positions?.join('+') ?? 'all'}`),
-    queryFn: ({ signal }) => playersApi.searchPlayers(term, { limit, positions }, signal),
-    enabled: term.length >= MIN_SEARCH_LENGTH,
+  const board = useBoard({ enabled: searching })
+  const projected = useMemo(
+    () =>
+      board.data
+        ? new Map(board.data.data.map((entry) => [entry.projection.player.player_id, entryPoints(entry)]))
+        : undefined,
+    [board.data],
+  )
+
+  const search = useQuery({
+    queryKey: queryKeys.players.search(`${term}:${pool}:${positions?.join('+') ?? 'all'}`),
+    queryFn: ({ signal }) => playersApi.searchPlayers(term, { limit: pool, positions }, signal),
+    enabled: searching,
     staleTime: 60 * 1000,
   })
+
+  const data = useMemo(
+    () => (search.data ? rankPlayerSearch(search.data, term, projected).slice(0, limit) : undefined),
+    [search.data, term, projected, limit],
+  )
+
+  return { ...search, data }
 }

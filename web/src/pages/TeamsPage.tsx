@@ -4,14 +4,27 @@ import { ArrowLeft, CloudRain, ShieldQuestion } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
+import {
+  ColumnHeader,
+  GroupHeaderRow,
+  RowHeaderCell,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@/components/ui/DataTable'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { RowList, RowListGroup, RowListItem, RowListRows, RowListTitle } from '@/components/ui/RowList'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Skeleton, SkeletonTable } from '@/components/ui/Skeleton'
 import { StatCard } from '@/components/ui/StatCard'
 import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/feedback/States'
 import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
-import { PlayerIdentity } from '@/components/domain/PlayerIdentity'
+import { PlayerCell } from '@/components/domain/PlayerCell'
+import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
+import { ProjectionLine } from '@/components/domain/ProjectionList'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { NotAppliedNotice, ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { TeamLink } from '@/components/domain/TeamLink'
@@ -21,8 +34,9 @@ import { useSlate } from '@/app/slate-context'
 import { usePositions, useTeams } from '@/hooks/useCatalog'
 import { useAllDefenseForm, useDepthChart, useScheduleStrength, useTeamOutlook } from '@/hooks/useInsights'
 import { useGames } from '@/hooks/useMatchups'
+import { useRowList } from '@/hooks/useRowList'
 import { useUrlState } from '@/hooks/useUrlState'
-import { boardCeiling } from '@/utils/board'
+import { anyUngraded, boardCeiling } from '@/utils/board'
 import { formatGameDay, formatPercent, formatPoints, formatSpread, headlinePoints } from '@/utils/format'
 import type { Game, RankedProjection, Team } from '@/api/schemas'
 
@@ -108,7 +122,7 @@ function TeamLogo({ team, size = 'md' }: { team: Pick<Team, 'abbr' | 'logo_url'>
   ) : (
     <span
       aria-hidden
-      className={`${box} bg-surface-sunken text-ink-muted flex shrink-0 items-center justify-center rounded-full text-xs font-semibold`}
+      className={`${box} bg-surface-sunken text-ink-muted flex shrink-0 items-center justify-center rounded-full text-detail font-semibold`}
     >
       {team.abbr}
     </span>
@@ -126,7 +140,7 @@ function TeamTile({ team, game }: { team: Team; game: Game | undefined }) {
       <TeamLogo team={team} />
       <span className="min-w-0 flex-1">
         <span className="text-ink block truncate text-sm font-medium">{team.name ?? team.abbr}</span>
-        <span className="text-ink-muted block text-xs">
+        <span className="text-ink-muted block text-detail">
           {opponent ? `${isHome ? 'vs' : '@'} ${opponent}` : 'Bye this week'}
         </span>
       </span>
@@ -188,8 +202,6 @@ function TeamDetail({ team }: { team: string }) {
       POSITION_ORDER.indexOf(a.projection.player.position ?? '') -
         POSITION_ORDER.indexOf(b.projection.player.position ?? '') || a.rank - b.rank,
   )
-  const scaleMax = boardCeiling(players)
-
   return (
     <>
       <BackLink />
@@ -259,7 +271,7 @@ function TeamDetail({ team }: { team: string }) {
                 <Badge tone={weather.is_adverse ? 'caution' : 'neutral'} icon={<CloudRain className="size-3" />}>
                   {formatPoints(weather.temperature_f, 0)}°F · wind {formatPoints(weather.wind_mph, 0)} mph
                   {weather.precipitation_probability != null
-                    ? ` · ${formatPercent(weather.precipitation_probability / 100)} precip`
+                    ? ` · ${formatPercent(weather.precipitation_probability)} precip`
                     : ''}
                 </Badge>
               )}
@@ -272,7 +284,9 @@ function TeamDetail({ team }: { team: string }) {
         )}
 
         <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
-          <Card className="min-w-0 overflow-hidden">
+          {/* `clip`, not `hidden`: a hidden overflow would make the card a
+              scroll container and the column header would stick to it. */}
+          <Card className="min-w-0 overflow-clip">
             <CardHeader
               as="h2"
               title="Projected players"
@@ -285,67 +299,7 @@ function TeamDetail({ team }: { team: string }) {
                 description="No projections for this team this week — either a bye week or projections are not out yet."
               />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <caption className="sr-only">{team} projected players for the week</caption>
-                  <thead>
-                    <tr className="border-line text-ink-muted border-b text-xs font-medium tracking-wide uppercase">
-                      <th scope="col" className="px-3 py-2 text-left">Player</th>
-                      <th scope="col" className="px-3 py-2 text-left">Matchup</th>
-                      <th scope="col" className="hidden w-72 px-3 py-2 text-left lg:table-cell">Range</th>
-                      <th scope="col" className="hidden px-3 py-2 text-right md:table-cell">Chance of 20+</th>
-                      <th scope="col" className="px-3 py-2 text-right">Projection</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {players.map((entry) => {
-                      const { projection } = entry
-                      const { points } = projection.prediction
-                      return (
-                        <tr key={projection.player.player_id} className="border-line border-b last:border-b-0">
-                          <td className="px-3 py-2">
-                            <PlayerIdentity
-                              player={projection.player}
-                              team={projection.team}
-                              size="sm"
-                              subtitle={
-                                <span className="inline-flex items-center gap-1.5">
-                                  {projection.player.position}
-                                  <InjuryBadge injury={projection.context.injury} />
-                                </span>
-                              }
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <MatchupGradeChip
-                              grade={projection.matchup?.grade}
-                              opponent={projection.opponent}
-                              fpAllowed={projection.matchup?.fp_allowed_vs_position_l4}
-                            />
-                          </td>
-                          <td className="hidden px-3 py-2 lg:table-cell">
-                            <OutcomeRange
-                              floor={points.floor}
-                              p25={points.p25}
-                              median={points.median}
-                              p75={points.p75}
-                              ceiling={points.ceiling}
-                              threshold={points.boom_threshold}
-                              scaleMax={scaleMax}
-                            />
-                          </td>
-                          <td className="tnum text-ink hidden px-3 py-2 text-right text-sm font-semibold md:table-cell">
-                            {formatPercent(points.boom_probability)}
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <ProjectionValue points={points} actualPoints={projection.actual_points} />
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <TeamPlayersTable team={team} players={players} />
             )}
           </Card>
 
@@ -356,6 +310,164 @@ function TeamDetail({ team }: { team: string }) {
         <TeamSchedule team={team} />
       </Refreshing>
     </>
+  )
+}
+
+const POSITION_NAMES: Record<string, string> = {
+  QB: 'Quarterbacks',
+  RB: 'Running backs',
+  WR: 'Wide receivers',
+  TE: 'Tight ends',
+}
+
+/**
+ * The room the range strip is given: what the table has to spare after its
+ * other columns, never under 12rem — the two printed endpoints and the
+ * smallest strip that still shows the box and the line to gain apart.
+ */
+const RANGE_WIDTH = 'w-[clamp(12rem,calc(100cqw-36rem),38cqw)]'
+
+/**
+ * The offence's projected players, grouped by position.
+ *
+ * The board's columns in the board's order, so a row here reads like a row
+ * there. Each position is a row group with its own heading, which is why the
+ * rows no longer repeat the position under every name. Within a position the
+ * order is the board's rank.
+ *
+ * Nothing is hidden as the card narrows. The range and the chance of 20+ used
+ * to drop out below 1,024px and 768px; now a table with less room than its
+ * columns need scrolls inside its own frame with the player column held.
+ *
+ * On a phone it is the board's list instead. These are the board's columns,
+ * and scrolling put the projection three columns from the name it belongs to,
+ * with the range and the chance of 20+ off screen between them.
+ */
+function TeamPlayersTable({ team, players }: { team: string; players: RankedProjection[] }) {
+  const [frameRef, asList] = useRowList<HTMLDivElement>()
+  const scaleMax = boardCeiling(players)
+  // A finished week prints "actual 18.4" beside each projection, which needs
+  // the room a bare number does not.
+  const hasActuals = players.some((entry) => entry.projection.actual_points != null)
+  const groups = useMemo(() => {
+    const byPosition = new Map<string, RankedProjection[]>()
+    for (const entry of players) {
+      const position = entry.projection.player.position ?? 'Other'
+      byPosition.set(position, [...(byPosition.get(position) ?? []), entry])
+    }
+    return [...byPosition.entries()]
+  }, [players])
+  // One ungraded matchup sets the width of the grade's slot on every row.
+  const wordsForGrade = anyUngraded(players)
+  const groupNote = (entries: RankedProjection[]) => `${entries.length} ${entries.length === 1 ? 'player' : 'players'}`
+
+  return (
+    // One element measured for both drawings, so the choice follows the card
+    // as it narrows and widens.
+    <div ref={frameRef}>
+      {asList ? (
+        <RowList value="Projected points">
+          {groups.map(([position, entries]) => (
+            <RowListGroup
+              key={position}
+              id={`team-players-${position}`}
+              heading={POSITION_NAMES[position] ?? position}
+              note={groupNote(entries)}
+            >
+              <RowListRows>
+                {entries.map(({ projection }) => (
+                  <RowListItem
+                    key={projection.player.player_id}
+                    to={`/players/${encodeURIComponent(projection.player.player_id)}`}
+                  >
+                    <PlayerAvatar player={projection.player} size="xs" />
+                    <RowListTitle name={projection.player.name}>
+                      <InjuryBadge injury={projection.context.injury} />
+                    </RowListTitle>
+                    <ProjectionValue
+                      points={projection.prediction.points}
+                      actualPoints={projection.actual_points}
+                      className="justify-self-end"
+                    />
+                    <ProjectionLine projection={projection} scaleMax={scaleMax} wordsForGrade={wordsForGrade} />
+                  </RowListItem>
+                ))}
+              </RowListRows>
+            </RowListGroup>
+          ))}
+        </RowList>
+      ) : (
+        <Table
+          // A query container, so the range column can size to the table.
+          className="@container"
+          caption={`${team} projected players for the week, by position`}
+          layout="fixed"
+          minWidth={hasActuals ? '48rem' : '44.5rem'}
+          freezeFirstColumn
+          // Twenty rows at most, and the page goes on below them: a header that
+          // followed the scroll would also cap the table's height on a phone and
+          // put the tight ends behind a second scrollbar.
+          stickyHeader={false}
+        >
+          <TableHead>
+            <ColumnHeader>Player</ColumnHeader>
+            <ColumnHeader className="w-26">Matchup</ColumnHeader>
+            <ColumnHeader className={RANGE_WIDTH}>Range</ColumnHeader>
+            <ColumnHeader numeric className="w-28">
+              Chance of 20+
+            </ColumnHeader>
+            <ColumnHeader numeric className={hasActuals ? 'w-40' : 'w-26'}>
+              Projection
+            </ColumnHeader>
+          </TableHead>
+          {groups.map(([position, entries]) => (
+            <TableBody key={position}>
+              <GroupHeaderRow colSpan={5}>
+                {POSITION_NAMES[position] ?? position}
+                <span className="text-ink-muted ml-2 font-normal">{groupNote(entries)}</span>
+              </GroupHeaderRow>
+              {entries.map((entry) => {
+                const { projection } = entry
+                const { points } = projection.prediction
+                return (
+                  <TableRow key={projection.player.player_id}>
+                    <RowHeaderCell>
+                      <PlayerCell player={projection.player}>
+                        <InjuryBadge injury={projection.context.injury} />
+                      </PlayerCell>
+                    </RowHeaderCell>
+                    <TableCell>
+                      <MatchupGradeChip
+                        grade={projection.matchup?.grade}
+                        opponent={projection.opponent}
+                        fpAllowed={projection.matchup?.fp_allowed_vs_position_l4}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <OutcomeRange
+                        floor={points.floor}
+                        p25={points.p25}
+                        median={points.median}
+                        p75={points.p75}
+                        ceiling={points.ceiling}
+                        threshold={points.boom_threshold}
+                        scaleMax={scaleMax}
+                      />
+                    </TableCell>
+                    <TableCell numeric className="font-semibold">
+                      {formatPercent(points.boom_probability)}
+                    </TableCell>
+                    <TableCell numeric>
+                      <ProjectionValue points={points} actualPoints={projection.actual_points} />
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          ))}
+        </Table>
+      )}
+    </div>
   )
 }
 
@@ -399,7 +511,7 @@ function DefenseCard({ team }: { team: string }) {
           {rows.map((row) => (
             <li key={row.position} className="flex items-center gap-3 px-4 py-2.5">
               <span className="text-ink w-8 text-sm font-semibold">{row.position}</span>
-              <span className="text-ink-secondary flex-1 text-xs">
+              <span className="text-ink-secondary flex-1 text-detail">
                 {formatPoints(row.fp_allowed_l4)} pts/game allowed
                 {row.grade.defense_rank ? ` · rank ${row.grade.defense_rank} of 32` : ''}
               </span>
@@ -449,7 +561,7 @@ function TeamSchedule({ team }: { team: string }) {
       ) : (
         <Refreshing active={strength.isPlaceholderData}>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-xs">
+            <table className="w-full border-collapse text-caption">
               <caption className="sr-only">
                 {team} remaining schedule against {state.sospos}
               </caption>
@@ -471,7 +583,7 @@ function TeamSchedule({ team }: { team: string }) {
               </tbody>
             </table>
           </div>
-          <CardBody className="border-line text-ink-muted border-t py-3 text-xs">
+          <CardBody className="border-line text-ink-muted border-t py-3 text-detail">
             <Link to={`/matchups?view=schedule&position=${state.sospos}`} className="text-accent-text hover:underline">
               Compare every team's schedule
             </Link>
@@ -524,13 +636,13 @@ function DepthChartCard({ team, players }: { team: string; players: RankedProjec
           <div className="grid gap-px bg-[var(--color-line)] sm:grid-cols-2 xl:grid-cols-4">
             {POSITION_ORDER.map((position) => (
               <section key={position} className="bg-surface p-4" aria-label={`${position} depth`}>
-                <h3 className="text-ink-muted mb-2 text-xs font-semibold tracking-wide uppercase">{position}</h3>
+                <h3 className="text-ink-muted mb-2 text-caption font-semibold tracking-wide uppercase">{position}</h3>
                 <ol className="space-y-1.5">
                   {(data?.positions[position] ?? []).slice(0, 6).map((entry) => {
                     const projected = entry.player_id ? byId.get(entry.player_id) : undefined
                     return (
                       <li key={`${entry.depth}-${entry.name}`} className="flex items-center gap-2 text-sm">
-                        <span className="tnum text-ink-muted w-7 shrink-0 text-xs">
+                        <span className="tnum text-ink-muted w-7 shrink-0 text-detail">
                           {position}
                           {entry.depth}
                         </span>
@@ -547,7 +659,7 @@ function DepthChartCard({ team, players }: { team: string; players: RankedProjec
                           )}
                         </span>
                         {projected && <InjuryBadge injury={projected.projection.context.injury} />}
-                        <span className="tnum text-ink-secondary w-9 shrink-0 text-right text-xs">
+                        <span className="tnum text-ink-secondary w-9 shrink-0 text-right text-detail">
                           {projected ? formatPoints(headlinePoints(projected.projection.prediction.points).value) : '—'}
                         </span>
                       </li>

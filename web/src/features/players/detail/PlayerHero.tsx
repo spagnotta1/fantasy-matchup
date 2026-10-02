@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type Ref } from 'react'
 import { Link } from 'react-router-dom'
 import { TeamLink } from '@/components/domain/TeamLink'
 import { ArrowLeft, Check, GitCompareArrows, UserPlus } from 'lucide-react'
@@ -10,16 +10,12 @@ import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { TeamLogo } from '@/components/domain/TeamLogo'
-import { Button } from '@/components/ui/Button'
-import { useRosterMembership } from '@/hooks/useRoster'
+import { Button, ButtonLink } from '@/components/ui/Button'
 import { teamStyle, useTeamBrand } from '@/hooks/useTeamBrand'
 import { cn } from '@/utils/cn'
 import { flyTo } from '@/utils/flyTo'
 import { formatPercent, formatPoints, formatScoringProfile, formatThreshold } from '@/utils/format'
 import type { Player, Projection } from '@/api/schemas'
-
-const OUTLINE_LINK =
-  'border-line-input text-ink bg-surface hover:bg-surface-hover inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-control)] border px-3 text-sm font-medium transition-colors'
 
 /**
  * The top of the player page.
@@ -35,44 +31,58 @@ const OUTLINE_LINK =
  * never a colour a reader has to decode (see `useTeamBrand`). The jersey number
  * is outline type behind the name, the way a broadcast lower-third carries it,
  * and is hidden from assistive technology because the meta line says it.
+ *
+ * With room for it (64rem of its own width, measured as a container) the name
+ * and the scoreboard sit side by side, which is what brings the game log onto
+ * the first screen of a laptop, and the jersey number is left to the meta
+ * line. Narrower, the scoreboard goes under the name.
  */
 export function PlayerHero({
   player,
   projection,
   scoringProfile,
+  onRoster,
+  onAdd,
+  ref,
 }: {
   player: Player
   projection: Projection | null | undefined
   scoringProfile: string
+  /**
+   * Whether the player is on the remembered roster. Null for a position My
+   * team and Compare do not accept: a kicker page offering "Add to my team"
+   * would add a player the lineup can never start.
+   */
+  onRoster: boolean | null
+  onAdd: () => void
+  ref?: Ref<HTMLElement>
 }) {
   const points = projection?.prediction.points
-  const [onRoster, addToRoster] = useRosterMembership(player.player_id)
-  // Only the positions My team and Compare accept. A kicker page offering
-  // "Add to my team" would add a player the lineup can never start.
-  const actionable = ['QB', 'RB', 'WR', 'TE'].includes(player.position ?? '')
+  const actionable = onRoster !== null
   const team = projection?.team ?? player.team
   const brand = useTeamBrand(team)
   const avatarRef = useRef<HTMLSpanElement>(null)
   // The headshot flies to My team and the player is saved as it lands, so the
   // nav's count bumps on arrival. The write does not depend on the flight: a
   // skipped or failed animation resolves at once and saves immediately.
-  const add = () => void flyTo(avatarRef.current, '/my-team').then(addToRoster)
+  const add = () => void flyTo(avatarRef.current, '/my-team').then(onAdd)
   const jersey =
     player.jersey_number !== null && player.jersey_number !== undefined ? String(player.jersey_number) : null
 
   return (
-    <div className="mb-6">
+    <div className="mb-4">
       <Link
         to="/rankings"
-        className="text-ink-muted hover:text-ink mb-4 inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
+        className="text-ink-muted hover:text-ink mb-3 inline-flex items-center gap-1.5 text-detail font-medium transition-colors"
       >
         <ArrowLeft aria-hidden className="size-3.5" />
         All rankings
       </Link>
 
       <section
+        ref={ref}
         aria-label={`${player.name} this week`}
-        className="bg-surface border-line shadow-card animate-rise relative overflow-hidden rounded-[var(--radius-card)] border"
+        className="bg-surface border-line shadow-raised animate-rise @container relative overflow-hidden rounded-[var(--radius-card)] border"
         style={teamStyle(brand)}
       >
         <div
@@ -87,7 +97,9 @@ export function PlayerHero({
         {jersey && (
           <span
             aria-hidden
-            className="tnum pointer-events-none absolute -top-5 right-3 text-[8rem] leading-none font-black tracking-tighter select-none sm:right-8 sm:text-[11rem]"
+            // Not drawn side by side: the scoreboard has the right-hand side
+            // then, and behind the name it only made the name harder to read.
+            className="tnum pointer-events-none absolute -top-5 right-3 text-[8rem] leading-none font-black tracking-tighter select-none sm:right-8 sm:text-[11rem] @5xl:hidden"
             style={{
               color: 'transparent',
               // The team colour pulled toward the ink: navy on paper, chalk on
@@ -100,13 +112,13 @@ export function PlayerHero({
           </span>
         )}
 
-        <div className="relative p-5 sm:p-6">
-          <div className="flex flex-wrap items-center gap-4 sm:gap-5">
+        <div className="relative p-4 sm:p-5 @5xl:grid @5xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] @5xl:items-center @5xl:gap-6">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:gap-x-5">
             <span ref={avatarRef} className="shrink-0 rounded-full">
               <PlayerAvatar
                 player={player}
                 size="xl"
-                className="ring-surface shadow-raised size-20 ring-4 sm:size-28"
+                className="ring-surface shadow-raised size-20 ring-4 sm:size-24"
               />
             </span>
 
@@ -149,23 +161,24 @@ export function PlayerHero({
               // Always their own row: beside the name on a phone they squeezed it
               // into a one-word column, and at the top right on a desktop they
               // sat on the jersey number. From `sm` the row is indented to line
-              // up under the name (avatar 7rem + gap 1.25rem).
-              <div className="flex w-full flex-wrap gap-2 sm:pl-[8.25rem]">
+              // up under the name (avatar 6rem + gap 1.25rem).
+              <div className="flex w-full flex-wrap gap-2 sm:pl-[7.25rem]">
                 {onRoster ? (
-                  <Link to="/my-team" className={OUTLINE_LINK}>
-                    <Check aria-hidden className="size-4" />
+                  <ButtonLink to="/my-team" size="sm" icon={<Check aria-hidden />}>
                     On your team
-                  </Link>
+                  </ButtonLink>
                 ) : (
-                  <Button variant="primary" size="md" onClick={add}>
-                    <UserPlus aria-hidden className="size-4" />
+                  <Button variant="primary" size="sm" icon={<UserPlus aria-hidden />} onClick={add}>
                     Add to my team
                   </Button>
                 )}
-                <Link to={`/compare?players=${player.player_id}`} className={OUTLINE_LINK}>
-                  <GitCompareArrows aria-hidden className="size-4" />
+                <ButtonLink
+                  to={`/compare?players=${player.player_id}`}
+                  size="sm"
+                  icon={<GitCompareArrows aria-hidden />}
+                >
                   Compare
-                </Link>
+                </ButtonLink>
               </div>
             )}
           </div>
@@ -177,9 +190,9 @@ export function PlayerHero({
             each cell is unchanged: it is what makes the number readable.
           */}
           {points && (
-            <dl className="border-line bg-surface/85 mt-5 grid grid-cols-2 overflow-hidden rounded-[var(--radius-control)] border backdrop-blur-sm lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
-              <div className="border-line col-span-2 border-b p-4 lg:col-span-1 lg:border-r lg:border-b-0">
-                <dt className="text-accent-text flex items-center justify-between gap-2 text-xs font-medium tracking-wide uppercase">
+            <dl className="border-line bg-surface/85 mt-4 grid grid-cols-2 overflow-hidden rounded-[var(--radius-control)] border backdrop-blur-sm @3xl:grid-cols-[1.4fr_1fr_1fr_1fr] @5xl:mt-0">
+              <div className="border-line col-span-2 border-b p-4 @3xl:col-span-1 @3xl:border-r @3xl:border-b-0">
+                <dt className="text-accent-text flex items-center justify-between gap-2 text-caption font-medium tracking-wide uppercase">
                   Projected
                   <ProvenanceBadge provenance="model" showLabel={false} />
                 </dt>
@@ -188,7 +201,7 @@ export function PlayerHero({
                     <ProjectionValue points={points} size="hero" markUncalibrated />
                     <span className="text-ink-muted text-sm font-medium">pts</span>
                   </span>
-                  <span className="text-ink-muted mt-2 block text-xs">
+                  <span className="text-ink-muted mt-2 block text-detail">
                     Middle outcome {formatPoints(points.median)} · {formatScoringProfile(scoringProfile)}
                   </span>
                   {/* The range, on the same 40-point field as every board, in
@@ -203,7 +216,7 @@ export function PlayerHero({
                     scaleMax={Math.max(40, points.ceiling ?? 0)}
                     className="mt-3"
                   />
-                  <span className="text-ink-secondary mt-1.5 block text-right text-xs font-semibold">
+                  <span className="text-ink-secondary mt-1.5 block text-right text-detail font-semibold">
                     {formatPercent(points.boom_probability)} chance of {formatThreshold(points.boom_threshold)}+
                   </span>
                 </dd>
@@ -218,11 +231,11 @@ export function PlayerHero({
                 label="Ceiling"
                 value={formatPoints(points.ceiling)}
                 detail="A strong week. Scores more than this about 1 week in 10."
-                className="lg:border-r"
+                className="@3xl:border-r"
               />
-              <div className="border-line col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t p-4 lg:col-span-1 lg:block lg:border-t-0">
-                <dt className="text-ink-muted text-xs font-medium tracking-wide uppercase">Range based on</dt>
-                <dd className="lg:mt-2">
+              <div className="border-line col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t p-4 @3xl:col-span-1 @3xl:block @3xl:border-t-0">
+                <dt className="text-ink-muted text-caption font-medium tracking-wide uppercase">Range based on</dt>
+                <dd className="@3xl:mt-2">
                   <EvidenceChip
                     evidence={points.evidence}
                     note={points.evidence_note}
@@ -232,7 +245,7 @@ export function PlayerHero({
                 </dd>
                 {/* The caveat is the API's sentence, which quotes what was
                     measured. With none, the tile says what the range is. */}
-                <dd className="text-ink-muted w-full text-xs leading-relaxed lg:mt-2">
+                <dd className="text-ink-muted w-full text-detail leading-relaxed @3xl:mt-2">
                   {points.evidence_note ?? evidenceDetail(points.evidence, player.position)}
                 </dd>
               </div>
@@ -264,12 +277,12 @@ function HeroCell({
 }) {
   return (
     <div className={cn('border-line p-4', className)}>
-      <dt className="text-ink-muted text-xs font-medium tracking-wide uppercase">{label}</dt>
+      <dt className="text-ink-muted text-caption font-medium tracking-wide uppercase">{label}</dt>
       <dd className="mt-2 flex items-baseline gap-1">
         <span className="tnum text-ink text-2xl leading-none font-semibold tracking-tight">{value}</span>
-        <span className="text-ink-muted text-xs font-medium">pts</span>
+        <span className="text-ink-muted text-detail font-medium">pts</span>
       </dd>
-      <dd className="text-ink-muted mt-2 text-xs leading-relaxed">{detail}</dd>
+      <dd className="text-ink-muted mt-2 text-detail leading-relaxed">{detail}</dd>
     </div>
   )
 }

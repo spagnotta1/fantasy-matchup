@@ -287,6 +287,7 @@ export const weatherSchema = z.object({
   temperature_f: maybeNumber,
   wind_mph: maybeNumber,
   wind_gust_mph: maybeNumber,
+  /** A 0–1 fraction, like every other share. Render with `formatPercent`. */
   precipitation_probability: maybeNumber,
   snowfall_in: maybeNumber,
   roof_uncertain: z.boolean().default(false),

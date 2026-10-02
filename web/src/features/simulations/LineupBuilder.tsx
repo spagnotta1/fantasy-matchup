@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { AlertTriangle, Sparkles, Trash2, X } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
+import { Button, IconButton } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { InjuryBadge } from '@/components/domain/InjuryBadge'
@@ -252,7 +252,7 @@ function SlotRow({
     <div className="flex items-center gap-3">
       <span
         className={cn(
-          'flex h-9 w-14 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-xs font-bold tracking-wide',
+          'flex h-9 w-14 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-caption font-bold tracking-wide',
           blocked
             ? 'bg-caution-soft text-caution-text'
             : row.player
@@ -278,7 +278,7 @@ function SlotRow({
             </span>
             <span
               className={cn(
-                'block truncate text-xs',
+                'block truncate text-detail',
                 blocked ? 'text-caution-text' : 'text-ink-muted',
               )}
             >
@@ -311,19 +311,18 @@ function SlotRow({
             ) : (
               // The board is not fully in hand, so absence from it means
               // nothing yet. Saying "no projection" here would be a guess.
-              <span className="text-ink-muted text-xs">—</span>
+              <span className="text-ink-muted text-detail">—</span>
             )}
           </span>
 
-          <button
-            type="button"
+          <IconButton
+            size="xs"
+            label={`Remove ${row.player.name} from ${row.slot}`}
             onClick={onClear}
             disabled={disabled}
-            aria-label={`Remove ${row.player.name} from ${row.slot}`}
-            className="text-ink-muted hover:bg-surface-hover hover:text-ink flex size-7 shrink-0 items-center justify-center rounded-full transition-colors"
           >
-            <X aria-hidden className="size-3.5" />
-          </button>
+            <X />
+          </IconButton>
         </div>
       ) : (
         <div className="min-w-0 flex-1">
@@ -359,7 +358,7 @@ function FinalValue({ final, projected }: { final: KnownFinal; projected: number
       <span className="tnum text-ink text-base font-semibold tracking-tight">
         {formatPoints(final.points)}
       </span>
-      <span className="text-ink-muted text-[11px] whitespace-nowrap">
+      <span className="text-ink-muted text-chip whitespace-nowrap">
         <span className="text-positive-text font-medium">Final</span>
         {final.official ? '' : ' · unofficial'}
         {/* The projection gives way first on a phone, where the name needs the room. */}

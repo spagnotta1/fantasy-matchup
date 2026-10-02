@@ -1,5 +1,6 @@
 import { Plus, X } from 'lucide-react'
 
+import { IconButton } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { PlayerIdentity } from '@/components/domain/PlayerIdentity'
@@ -22,7 +23,7 @@ export function PositionRank({ value, className }: { value: TradeValue; classNam
   return (
     <span
       className={cn(
-        'bg-accent text-on-accent tnum inline-flex h-5 min-w-10 shrink-0 items-center justify-center rounded-[5px] px-1.5 text-[0.6875rem] font-bold tracking-tight',
+        'bg-accent text-on-accent tnum inline-flex h-5 min-w-10 shrink-0 items-center justify-center rounded-[5px] px-1.5 text-chip font-bold tracking-tight',
         className,
       )}
     >
@@ -126,7 +127,7 @@ export function TradeSide({
                 <span className="text-ink-muted text-sm">Loading…</span>
               )}
               {row.value && (
-                <p className="text-ink-muted mt-1 text-[0.6875rem]">
+                <p className="text-ink-muted mt-1 text-chip">
                   <ValueWorking value={row.value} />
                 </p>
               )}
@@ -136,34 +137,34 @@ export function TradeSide({
                 <span className="tnum text-ink text-base font-bold">{formatNumber(row.value.trade_value, 0)}</span>
               ) : (
                 row.player && (
-                  <span className="text-caution-text block max-w-28 text-[0.6875rem] leading-tight">
+                  <span className="text-caution-text block max-w-28 text-chip leading-tight">
                     No value: not projected this week
                   </span>
                 )
               )}
             </div>
-            <button
-              type="button"
+            <IconButton
+              size="xs"
+              className="-mr-1"
+              label={`Remove ${row.player?.name ?? 'player'}`}
               onClick={() => onRemove(row.id)}
-              aria-label={`Remove ${row.player?.name ?? 'player'}`}
-              className="text-ink-muted hover:text-ink hover:bg-surface-hover -mr-1 rounded-sm p-1"
             >
-              <X aria-hidden className="size-4" />
-            </button>
+              <X />
+            </IconButton>
           </li>
         ))}
       </ul>
 
       {suggestions && suggestions.length > 0 && !full && (
         <div className="border-line mt-auto border-t px-4 py-3 sm:px-5">
-          <p className="text-ink-muted mb-2 text-xs font-medium">{suggestionsLabel}</p>
+          <p className="text-ink-muted mb-2 text-detail font-medium">{suggestionsLabel}</p>
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((value) => (
               <button
                 key={value.player.player_id}
                 type="button"
                 onClick={() => onAdd(value.player.player_id)}
-                className="border-line bg-surface hover:bg-surface-hover hover:border-line-strong text-ink inline-flex items-center gap-1.5 rounded-full border py-1 pr-2.5 pl-1.5 text-xs transition-colors"
+                className="border-line bg-surface hover:bg-surface-hover hover:border-line-strong text-ink inline-flex items-center gap-1.5 rounded-full border py-1 pr-2.5 pl-1.5 text-detail transition-colors"
               >
                 <Plus aria-hidden className="text-ink-muted size-3.5" />
                 <span className="font-medium">{value.player.name}</span>

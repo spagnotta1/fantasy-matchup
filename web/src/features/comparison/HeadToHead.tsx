@@ -104,7 +104,7 @@ export function HeadToHeadCard({ result }: { result: StartSit }) {
             />
           </div>
 
-          <p className="text-ink-muted mt-2 text-xs leading-relaxed">
+          <p className="text-ink-muted mt-2 text-detail leading-relaxed">
             {recommendedName ? (
               <>
                 <span className="text-ink-secondary font-medium">Start {recommendedName}.</span>{' '}
@@ -124,7 +124,7 @@ export function HeadToHeadCard({ result }: { result: StartSit }) {
 
         {result.rationale.length > 0 && (
           <div>
-            <h4 className="text-ink-muted mb-2 text-xs font-semibold tracking-wide uppercase">
+            <h4 className="text-ink-muted mb-2 text-caption font-semibold tracking-wide uppercase">
               Why
             </h4>
             <ul className="text-ink-secondary space-y-1.5 text-sm">
@@ -142,10 +142,10 @@ export function HeadToHeadCard({ result }: { result: StartSit }) {
 
         {result.caveats.length > 0 && (
           <div className="bg-caution-soft rounded-[var(--radius-control)] px-3 py-2.5">
-            <h4 className="text-caution-text mb-1 text-xs font-semibold tracking-wide uppercase">
+            <h4 className="text-caution-text mb-1 text-caption font-semibold tracking-wide uppercase">
               Worth knowing
             </h4>
-            <ul className="text-caution-text space-y-1 text-xs leading-relaxed">
+            <ul className="text-caution-text space-y-1 text-detail leading-relaxed">
               {result.caveats.map((caveat) => (
                 <li key={caveat}>{caveat}</li>
               ))}

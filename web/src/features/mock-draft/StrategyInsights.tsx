@@ -93,7 +93,7 @@ function EvidenceList({ evidence }: { evidence: StrategyInsight['evidence'] }) {
   if (entries.length === 0) return null
 
   return (
-    <dl className="text-ink-muted flex flex-wrap gap-x-4 gap-y-1 pt-1 text-xs">
+    <dl className="text-ink-muted flex flex-wrap gap-x-4 gap-y-1 pt-1 text-detail">
       {entries.map(([key, value]) => (
         <div key={key} className="flex gap-1.5">
           <dt>{humanise(key)}</dt>

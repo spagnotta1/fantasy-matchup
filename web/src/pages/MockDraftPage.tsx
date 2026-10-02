@@ -420,7 +420,7 @@ function Methodology({
               reason, and draft positions end up closer together in value. Raise the league
               skill to reduce it.
             </p>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1 text-xs sm:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1 text-detail sm:grid-cols-4">
               <Detail label="Seed" value={String(methodology.seed)} />
               <Detail label="Pool" value={`${pool.players} players`} />
               <Detail
@@ -461,7 +461,7 @@ function RookieGap({ pool }: { pool: DraftPoolSummary }) {
     >
       <div className="flex gap-2.5">
         <TriangleAlert aria-hidden className="text-caution-text mt-0.5 size-4 shrink-0" />
-        <div className="text-caution-text space-y-1.5 text-xs leading-relaxed">
+        <div className="text-caution-text space-y-1.5 text-detail leading-relaxed">
           <p>
             <span className="font-semibold">
               No rookies are on this board — it holds {pool.players} veterans and

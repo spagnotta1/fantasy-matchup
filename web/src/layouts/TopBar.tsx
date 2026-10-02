@@ -4,7 +4,7 @@ import { GitCompareArrows, Menu, Monitor, Moon, Search, Settings, SlidersHorizon
 
 import { openCommandPalette } from '@/app/command-palette'
 import { useTheme } from '@/hooks/useTheme'
-import { Button } from '@/components/ui/Button'
+import { Button, IconButton, IconButtonLink } from '@/components/ui/Button'
 import { cn } from '@/utils/cn'
 
 import { SlateControls } from './SlateControls'
@@ -15,16 +15,9 @@ function ThemeToggle() {
   const next = preference === 'light' ? 'dark' : preference === 'dark' ? 'system' : 'light'
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={cycle}
-      aria-label={`Theme: ${preference}. Switch to ${next}.`}
-      title={`Theme: ${preference}`}
-      className="px-2"
-    >
-      <Icon aria-hidden className="size-4" />
-    </Button>
+    <IconButton label={`Theme: ${preference}. Switch to ${next}.`} title={`Theme: ${preference}`} onClick={cycle}>
+      <Icon />
+    </IconButton>
   )
 }
 
@@ -48,7 +41,7 @@ export function TopBar() {
 
   return (
     <header className="border-line bg-bg/85 sticky top-0 z-30 border-b backdrop-blur-md">
-      <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
+      <div className="h-shell-bar flex items-center gap-3 px-4 sm:px-6">
         {/* The wordmark lives in the sidebar on desktop; on mobile it belongs here. */}
         <Link
           to="/"
@@ -57,7 +50,7 @@ export function TopBar() {
         >
           <span
             aria-hidden
-            className="bg-accent text-on-accent flex size-7 items-center justify-center rounded-md text-xs font-bold"
+            className="bg-accent text-on-accent flex size-7 items-center justify-center rounded-md text-detail font-bold"
           >
             FP
           </span>
@@ -71,7 +64,7 @@ export function TopBar() {
         */}
         <div className="hidden flex-1 md:block">
           {ownsSettings ? (
-            <p className="text-ink-muted text-xs">This page uses its own season and scoring settings, below.</p>
+            <p className="text-ink-muted text-detail">This page uses its own season and scoring settings, below.</p>
           ) : (
             <SlateControls />
           )}
@@ -83,54 +76,38 @@ export function TopBar() {
             it lists every page, including the ones beyond the five in the
             bottom bar. Two faces for one control, labelled for what each does.
           */}
-          <button
-            type="button"
+          <Button
+            size="sm"
+            icon={<Search aria-hidden />}
             onClick={openCommandPalette}
-            className="border-line text-ink-muted hover:border-line-strong hover:text-ink mr-1 hidden h-8 items-center gap-2 rounded-[var(--radius-control)] border px-2.5 text-xs transition-colors lg:inline-flex"
+            className="text-ink-muted not-disabled:hover:text-ink mr-1 hidden font-normal lg:inline-flex"
           >
-            <Search aria-hidden className="size-3.5" />
             Search
-            <kbd className="border-line rounded border px-1 text-[0.625rem]">Ctrl K</kbd>
-          </button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="px-2 lg:hidden"
-            onClick={openCommandPalette}
-            aria-label="Search and all pages"
-          >
-            <Menu aria-hidden className="size-4" />
+            <kbd className="border-line rounded-chip text-chip border px-1">Ctrl K</kbd>
           </Button>
+          <IconButton label="Search and all pages" className="lg:hidden" onClick={openCommandPalette}>
+            <Menu />
+          </IconButton>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn('px-2 md:hidden', ownsSettings && 'hidden')}
+          <IconButton
+            label="Season, week and scoring"
+            className={cn('md:hidden', ownsSettings && 'hidden')}
             aria-expanded={filtersOpen}
             aria-controls="slate-controls-mobile"
             onClick={() => setFiltersOpen((open) => !open)}
           >
-            <SlidersHorizontal aria-hidden className="size-4" />
-            <span className="sr-only">Season, week and scoring</span>
-          </Button>
+            <SlidersHorizontal />
+          </IconButton>
 
-          <Link
-            to="/compare"
-            aria-label="Compare players"
-            className="text-ink-secondary hover:bg-surface-hover hover:text-ink hidden size-8 items-center justify-center rounded-[var(--radius-control)] transition-colors sm:inline-flex"
-          >
-            <GitCompareArrows aria-hidden className="size-4" />
-          </Link>
+          <IconButtonLink to="/compare" label="Compare players" className="hidden sm:inline-flex">
+            <GitCompareArrows />
+          </IconButtonLink>
 
           <ThemeToggle />
 
-          <Link
-            to="/settings"
-            aria-label="Settings"
-            className="text-ink-secondary hover:bg-surface-hover hover:text-ink inline-flex size-8 items-center justify-center rounded-[var(--radius-control)] transition-colors"
-          >
-            <Settings aria-hidden className="size-4" />
-          </Link>
+          <IconButtonLink to="/settings" label="Settings">
+            <Settings />
+          </IconButtonLink>
 
           {/*
             Account placeholder. The API is anonymous today — `current_principal`

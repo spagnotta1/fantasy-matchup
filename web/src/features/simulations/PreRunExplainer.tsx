@@ -59,13 +59,13 @@ export function PreRunExplainer() {
             // inside the <dt> rather than beside it, and the <dd> is indented
             // by the icon's width plus the gap so the two lines still align.
             <div key={item.title} className="min-w-0">
-              <dt className="text-ink flex items-start gap-2.5 text-xs font-semibold">
+              <dt className="text-ink flex items-start gap-2.5 text-detail font-semibold">
                 <span className="bg-surface-sunken text-ink-secondary flex size-7 shrink-0 items-center justify-center rounded-full">
                   <item.icon aria-hidden className="size-3.5" />
                 </span>
                 <span className="mt-1.5">{item.title}</span>
               </dt>
-              <dd className="text-ink-muted ps-[2.375rem] text-xs leading-relaxed">
+              <dd className="text-ink-muted ps-[2.375rem] text-detail leading-relaxed">
                 {item.detail}
               </dd>
             </div>

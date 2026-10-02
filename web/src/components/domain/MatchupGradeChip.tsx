@@ -49,7 +49,7 @@ export function MatchupGradeChip({
         <span
           className={cn(
             'text-ink-muted decoration-line-strong inline-flex items-center gap-1 whitespace-nowrap underline decoration-dotted underline-offset-2',
-            size === 'sm' ? 'text-[0.6875rem]' : 'text-xs',
+            size === 'sm' ? 'text-chip' : 'text-detail',
           )}
         >
           <HelpCircle aria-hidden className="size-3 shrink-0" />
@@ -72,7 +72,9 @@ export function MatchupGradeChip({
 
   return (
     <Tooltip content={parts.join(' ')} align={align}>
-      <Badge tone={toneForLetter(grade.letter)} size={size}>
+      {/* Square, not a pill. A pill is a status or a provenance label; a grade
+          is a mark in a column, and should not look like either. */}
+      <Badge tone={toneForLetter(grade.letter)} size={size} className="rounded-chip min-w-7 justify-center px-1.5">
         <span className="tnum font-semibold">{grade.letter}</span>
         <span className="sr-only">matchup grade</span>
       </Badge>

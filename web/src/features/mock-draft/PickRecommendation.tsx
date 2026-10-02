@@ -42,7 +42,7 @@ export function PickRecommendation({ seat }: { seat: SeatAnalysis }) {
             <span className="text-ink tnum block text-lg font-semibold">
               {formatNumber(opener.season_value)}
             </span>
-            <span className="text-ink-muted text-xs">projected season points</span>
+            <span className="text-ink-muted text-detail">projected season points</span>
           </span>
         </div>
 
@@ -67,13 +67,13 @@ export function PickRecommendation({ seat }: { seat: SeatAnalysis }) {
                   className="border-line flex items-baseline gap-2 rounded-[var(--radius-control)] border px-2.5 py-1.5"
                 >
                   <span className="text-ink text-sm font-medium">{entry.position}</span>
-                  <span className="text-ink-secondary tnum text-xs">
+                  <span className="text-ink-secondary tnum text-detail">
                     {formatPercent(entry.share)}
                   </span>
                 </li>
               ))}
             </ul>
-            <p className="text-ink-muted text-xs leading-relaxed">
+            <p className="text-ink-muted text-detail leading-relaxed">
               How often your first pick was each position. One position near 100% means the
               draft reliably falls the same way for you; a mix means it varies.
             </p>
@@ -108,7 +108,7 @@ export function PositionStrength({ seat }: { seat: SeatAnalysis }) {
             Mean starting points and value over replacement by position
           </caption>
           <thead>
-            <tr className="text-ink-secondary border-line border-b text-xs">
+            <tr className="text-ink-secondary border-line border-b text-caption">
               <th scope="col" className="py-1.5 pr-3 text-left font-medium">
                 Position
               </th>
@@ -128,7 +128,7 @@ export function PositionStrength({ seat }: { seat: SeatAnalysis }) {
               <tr key={entry.position} className="border-line/60 border-b last:border-0">
                 <th scope="row" className="text-ink py-2 pr-3 text-left font-medium">
                   {entry.position}
-                  <span className="text-ink-muted ml-1.5 text-xs font-normal">
+                  <span className="text-ink-muted ml-1.5 text-detail font-normal">
                     {formatNumber(entry.mean_starters)} starters
                   </span>
                 </th>

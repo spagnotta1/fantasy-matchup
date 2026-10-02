@@ -22,7 +22,7 @@ function Wordmark() {
         <span className="text-ink block text-sm leading-tight font-semibold tracking-tight">
           Fourth &amp; Probable
         </span>
-        <span className="text-ink-muted block text-[0.6875rem] leading-tight">
+        <span className="text-ink-muted block text-chip leading-tight">
           Fantasy projections
         </span>
       </span>
@@ -42,7 +42,7 @@ function ServiceStatus() {
   if (!degraded) return null
 
   return (
-    <div className="bg-caution-soft text-caution-text mx-3 rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
+    <div className="bg-caution-soft text-caution-text mx-3 rounded-[var(--radius-control)] px-3 py-2 text-detail leading-relaxed">
       <span className="font-medium">Service degraded.</span> Some data may be stale or
       unavailable.
     </div>
@@ -70,7 +70,7 @@ export function Sidebar() {
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-3">
         {navGroups().map(({ group, label, items }) => (
           <div key={group}>
-            <p className="text-ink-muted mb-1 px-3 text-[0.6875rem] font-medium tracking-wide uppercase">
+            <p className="text-ink-muted mb-1 px-3 text-chip font-medium tracking-wide uppercase">
               {label}
             </p>
             <ul className="flex flex-col gap-0.5">
@@ -141,7 +141,7 @@ export function MobileNav() {
               data-nav={item.to}
               className={({ isActive }) =>
                 cn(
-                  'relative flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[0.625rem] font-medium transition-colors',
+                  'relative flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-chip font-medium transition-colors',
                   isActive ? 'text-accent-text' : 'text-ink-muted',
                 )
               }
@@ -186,7 +186,7 @@ function RosterBadge({ className }: { className?: string }) {
     <span
       ref={ref}
       className={cn(
-        'bg-accent text-on-accent tnum inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.625rem] leading-none font-bold',
+        'bg-accent text-on-accent tnum inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-chip leading-none font-bold',
         className,
       )}
     >

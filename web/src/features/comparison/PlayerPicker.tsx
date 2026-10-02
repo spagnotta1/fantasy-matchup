@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 
+import { IconButton } from '@/components/ui/Button'
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
 import { PlayerSearchField } from '@/components/domain/PlayerSearchField'
 import { MAX_COMPARISON_PLAYERS } from '@/hooks/useCompare'
@@ -47,17 +48,17 @@ export function PlayerPicker({
               <span className="bg-surface border-line inline-flex items-center gap-2 rounded-full border py-1 pr-1 pl-2 text-sm">
                 <PlayerAvatar player={player} size="sm" />
                 <span className="text-ink font-medium">{player.name}</span>
-                <span className="text-ink-muted text-xs">
+                <span className="text-ink-muted text-detail">
                   {[player.position, player.team].filter(Boolean).join(' · ')}
                 </span>
-                <button
-                  type="button"
+                <IconButton
+                  size="xs"
+                  className="rounded-full"
+                  label={`Remove ${player.name} from the comparison`}
                   onClick={() => onRemove(player.player_id)}
-                  aria-label={`Remove ${player.name} from the comparison`}
-                  className="text-ink-muted hover:bg-surface-hover hover:text-ink flex size-6 items-center justify-center rounded-full transition-colors"
                 >
-                  <X aria-hidden className="size-3.5" />
-                </button>
+                  <X />
+                </IconButton>
               </span>
             </li>
           ))}

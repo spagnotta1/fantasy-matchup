@@ -56,7 +56,7 @@ function BalanceBar({ balance }: { balance: TradeBalance }) {
         />
         <div aria-hidden className="bg-ink absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2" />
       </div>
-      <div className="text-ink-muted mt-1.5 flex justify-between text-[0.6875rem]">
+      <div className="text-ink-muted mt-1.5 flex justify-between text-chip">
         <span>Bad for you</span>
         <span>Even</span>
         <span>Good for you</span>
@@ -110,7 +110,7 @@ function EvenOutLine({
             key={candidate.player.player_id}
             type="button"
             onClick={() => onAdd(result.side, candidate.player.player_id)}
-            className="border-line bg-surface hover:bg-surface-hover hover:border-line-strong text-ink inline-flex items-center gap-1.5 rounded-full border py-1 pr-2.5 pl-1.5 text-xs transition-colors"
+            className="border-line bg-surface hover:bg-surface-hover hover:border-line-strong text-ink inline-flex items-center gap-1.5 rounded-full border py-1 pr-2.5 pl-1.5 text-detail transition-colors"
           >
             <Plus aria-hidden className="text-ink-muted size-3.5" />
             <span className="font-medium">{candidate.player.name}</span>
@@ -168,7 +168,7 @@ function LineupImpact({
             : 'You give up more total value, but your starting lineup gets better.'}
         </p>
       )}
-      <p className="text-ink-muted mt-1 text-xs leading-relaxed">
+      <p className="text-ink-muted mt-1 text-detail leading-relaxed">
         {joins.length === 0 && leaves.length === 0
           ? 'Your starters do not change, so this trade moves only your bench.'
           : [
@@ -224,7 +224,7 @@ export function TradeVerdict({
       <div className="space-y-4 px-4 py-5 sm:px-6">
         <div>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-ink-muted text-xs font-medium">Estimated rest-of-season value</p>
+            <p className="text-ink-muted text-detail font-medium">Estimated rest-of-season value</p>
             <ProvenanceBadge provenance="derived" />
           </div>
           <h2 className={cn('mt-1 text-3xl font-extrabold tracking-tight sm:text-4xl', headline.tone)}>
@@ -237,20 +237,20 @@ export function TradeVerdict({
 
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div>
-            <dt className="text-ink-muted text-xs">You give</dt>
+            <dt className="text-ink-muted text-detail">You give</dt>
             <dd className="tnum text-ink text-lg font-bold">{formatNumber(balance.give, 0)}</dd>
           </div>
           <div>
-            <dt className="text-ink-muted text-xs">You get</dt>
+            <dt className="text-ink-muted text-detail">You get</dt>
             <dd className="tnum text-ink text-lg font-bold">{formatNumber(balance.get, 0)}</dd>
           </div>
           <div className="col-span-2 sm:col-span-1">
-            <dt className="text-ink-muted text-xs">This week{week ? ` (week ${week})` : ''}</dt>
+            <dt className="text-ink-muted text-detail">This week{week ? ` (week ${week})` : ''}</dt>
             <dd className="tnum text-ink text-lg font-bold">
-              {formatSigned(weekGap)} <span className="text-ink-muted text-xs font-normal">projected pts</span>
+              {formatSigned(weekGap)} <span className="text-ink-muted text-detail font-normal">projected pts</span>
             </dd>
             {weekMissing.length > 0 && (
-              <dd className="text-caution-text text-[0.6875rem] leading-snug">
+              <dd className="text-caution-text text-chip leading-snug">
                 {weekMissing.join(', ')} {weekMissing.length === 1 ? 'has' : 'have'} no projection this week
                 (a bye or an inactive listing) and {weekMissing.length === 1 ? 'counts' : 'count'} as zero here.
               </dd>
@@ -274,7 +274,7 @@ export function TradeVerdict({
 
         <details className="group">
           <summary className="text-ink cursor-pointer text-sm font-semibold select-none">How the values work</summary>
-          <div className="text-ink-secondary mt-3 space-y-3 text-xs leading-relaxed">
+          <div className="text-ink-secondary mt-3 space-y-3 text-detail leading-relaxed">
             <p>
               A player&rsquo;s value is the rest-of-season points they are projected to score above the best
               player at their position still on the waiver wire. Values add up across a trade: a throw-in below

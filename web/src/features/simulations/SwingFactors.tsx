@@ -4,13 +4,7 @@ import { Badge } from '@/components/ui/Badge'
 import { formatPoints } from '@/utils/format'
 import type { SimulatedPlayer } from '@/api/schemas'
 
-interface Swing {
-  player: SimulatedPlayer
-  side: string
-  floor: number
-  ceiling: number
-  spread: number
-}
+import { collectSwings, groupSwingsByWidth, type Swing } from './swing'
 
 /** More than this and the list stops being "the ones that matter". */
 const SHOWN = 6
@@ -32,6 +26,12 @@ const SHOWN = 6
  * Nor is it a sensitivity analysis. Nothing here re-runs the simulation with a
  * player removed; the ordering is by how wide each player's own range is, which
  * is the honest reading of "who could swing this".
+ *
+ * Widths tie, and often. Ranges are shared across groups of players with
+ * similar projections, so several of a lineup's widest ranges can be exactly
+ * the same width. Printing those in sequence would present a tie as a ranking,
+ * so equal widths are grouped under one heading that says they are tied (see
+ * `groupSwingsByWidth`).
  */
 export function SwingFactors({
   labelA,
@@ -44,12 +44,12 @@ export function SwingFactors({
   playersA: SimulatedPlayer[]
   playersB: SimulatedPlayer[]
 }) {
-  const swings = [
-    ...collect(playersA, labelA),
-    ...collect(playersB, labelB),
-  ]
-    .sort((left, right) => right.spread - left.spread)
-    .slice(0, SHOWN)
+  const groups = groupSwingsByWidth(
+    [...collectSwings(playersA, labelA), ...collectSwings(playersB, labelB)],
+    SHOWN,
+  )
+  const swings = groups.flatMap((group) => group.members)
+  const anyTie = groups.some((group) => group.size > 1)
 
   const settled = [...playersA, ...playersB].filter((player) => player.final).length
 
@@ -71,64 +71,34 @@ export function SwingFactors({
   return (
     <div className="space-y-3">
       <ul className="space-y-3">
-        {swings.map((swing) => (
-          <li key={`${swing.side}-${swing.player.player_id}`}>
-            <div className="mb-1 flex items-baseline justify-between gap-3">
-              <span className="flex min-w-0 items-baseline gap-2">
-                <Link
-                  to={`/players/${encodeURIComponent(swing.player.player_id)}`}
-                  className="text-ink hover:text-accent-text truncate text-sm font-medium transition-colors"
-                >
-                  {swing.player.name}
-                </Link>
-                <Badge tone="neutral">{swing.side}</Badge>
-                <span className="text-ink-muted hidden text-xs sm:inline">
-                  {swing.player.slot}
-                </span>
-              </span>
-              <span className="text-ink-muted tnum shrink-0 text-xs">
-                {formatPoints(swing.spread)} wide
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="tnum text-ink-muted w-9 shrink-0 text-right text-xs">
-                {formatPoints(swing.floor)}
-              </span>
-              <div
-                className="bg-surface-sunken relative h-2 flex-1 overflow-hidden rounded-full"
-                role="img"
-                aria-label={`${swing.player.name}, ${swing.side}: 10th percentile ${formatPoints(swing.floor)} points, expected ${formatPoints(swing.player.expected_points)}, 90th percentile ${formatPoints(swing.ceiling)}.`}
-              >
-                <span
-                  aria-hidden
-                  className="bg-chart-series/45 absolute inset-y-0 rounded-full"
-                  style={{
-                    left: `${at(swing.floor)}%`,
-                    width: `${Math.max(at(swing.ceiling) - at(swing.floor), 1)}%`,
-                  }}
-                />
-                {swing.player.expected_points !== null &&
-                  swing.player.expected_points !== undefined && (
-                    <span
-                      aria-hidden
-                      className="bg-chart-series absolute inset-y-0 w-0.5 rounded-full"
-                      style={{ left: `${at(swing.player.expected_points)}%` }}
-                    />
-                  )}
-              </div>
-              <span className="tnum text-ink-muted w-9 shrink-0 text-xs">
-                {formatPoints(swing.ceiling)}
-              </span>
-            </div>
+        {groups.map((group) => (
+          <li key={group.width}>
+            {group.size > 1 && (
+              <p className="text-ink-secondary mb-2 text-detail font-medium">
+                Tied at {group.width} wide: {group.size} players, in lineup order
+              </p>
+            )}
+            <ul className={group.size > 1 ? 'border-line space-y-3 border-l-2 pl-3' : 'space-y-3'}>
+              {group.members.map((swing) => (
+                <SwingRow key={`${swing.side}-${swing.player.player_id}`} swing={swing} at={at} />
+              ))}
+            </ul>
+            {group.hidden > 0 && (
+              <p className="text-ink-muted mt-2 text-detail">
+                {group.hidden} more tied at {group.width} wide {group.hidden === 1 ? 'is' : 'are'} not
+                listed.
+              </p>
+            )}
           </li>
         ))}
       </ul>
 
-      <p className="text-ink-muted text-xs leading-relaxed">
-        Ranked by the gap between each player&apos;s floor and ceiling — a bad week and a big one,
+      <p className="text-ink-muted text-detail leading-relaxed">
+        Ordered by the gap between each player&apos;s floor and ceiling — a bad week and a big one,
         each about 1 week in 10. The marker is the projection, which is often off-centre because a
         big week can run further above it than a bad week falls below it.
+        {anyTie &&
+          ' Players with the same gap are tied, not ranked against each other: ranges are shared across players with similar projections, so equal gaps are common.'}
         {settled > 0 &&
           ` ${settled} player${settled === 1 ? ' has' : 's have'} finished ${settled === 1 ? 'their game' : 'their games'} and ${settled === 1 ? 'is' : 'are'} left out.`}
       </p>
@@ -136,13 +106,57 @@ export function SwingFactors({
   )
 }
 
-function collect(players: SimulatedPlayer[], side: string): Swing[] {
-  const swings: Swing[] = []
-  for (const player of players) {
-    if (player.final) continue
-    const { floor, ceiling } = player
-    if (floor === null || floor === undefined || ceiling === null || ceiling === undefined) continue
-    swings.push({ player, side, floor, ceiling, spread: ceiling - floor })
-  }
-  return swings
+function SwingRow({ swing, at }: { swing: Swing; at: (value: number) => number }) {
+  return (
+    <li>
+      <div className="mb-1 flex items-baseline justify-between gap-3">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <Link
+            to={`/players/${encodeURIComponent(swing.player.player_id)}`}
+            className="text-ink hover:text-accent-text truncate text-sm font-medium transition-colors"
+          >
+            {swing.player.name}
+          </Link>
+          <Badge tone="neutral">{swing.side}</Badge>
+          <span className="text-ink-muted hidden text-detail sm:inline">
+            {swing.player.slot}
+          </span>
+        </span>
+        <span className="text-ink-muted tnum shrink-0 text-detail">
+          {formatPoints(swing.spread)} wide
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="tnum text-ink-muted w-9 shrink-0 text-right text-detail">
+          {formatPoints(swing.floor)}
+        </span>
+        <div
+          className="bg-surface-sunken relative h-2 flex-1 overflow-hidden rounded-full"
+          role="img"
+          aria-label={`${swing.player.name}, ${swing.side}: 10th percentile ${formatPoints(swing.floor)} points, expected ${formatPoints(swing.player.expected_points)}, 90th percentile ${formatPoints(swing.ceiling)}.`}
+        >
+          <span
+            aria-hidden
+            className="bg-chart-series/45 absolute inset-y-0 rounded-full"
+            style={{
+              left: `${at(swing.floor)}%`,
+              width: `${Math.max(at(swing.ceiling) - at(swing.floor), 1)}%`,
+            }}
+          />
+          {swing.player.expected_points !== null &&
+            swing.player.expected_points !== undefined && (
+              <span
+                aria-hidden
+                className="bg-chart-series absolute inset-y-0 w-0.5 rounded-full"
+                style={{ left: `${at(swing.player.expected_points)}%` }}
+              />
+            )}
+        </div>
+        <span className="tnum text-ink-muted w-9 shrink-0 text-detail">
+          {formatPoints(swing.ceiling)}
+        </span>
+      </div>
+    </li>
+  )
 }

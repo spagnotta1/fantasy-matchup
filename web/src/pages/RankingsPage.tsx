@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SkeletonCards, SkeletonTable } from '@/components/ui/Skeleton'
+import { ProjectionList } from '@/components/domain/ProjectionList'
 import { InfoTip } from '@/components/ui/Tooltip'
 import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/feedback/States'
 import { CalibrationNotice } from '@/components/domain/CalibrationNotice'
@@ -13,11 +14,12 @@ import { LatestWeekButton } from '@/components/domain/LatestWeekButton'
 import { ProjectionCards } from '@/components/domain/ProjectionCards'
 import { ProjectionTable } from '@/components/domain/ProjectionTable'
 import { PositionTabs } from '@/features/rankings/PositionTabs'
-import { RankingsToolbar } from '@/features/rankings/RankingsToolbar'
+import { RankingsFilters, RankingsViewBar } from '@/features/rankings/RankingsToolbar'
 import { UnprojectedPosition } from '@/features/rankings/UnprojectedPosition'
 import type { ViewMode } from '@/features/rankings/RankingsToolbar'
+import { useBoardDensity } from '@/hooks/useBoardDensity'
 import { usePositions } from '@/hooks/useCatalog'
-import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { useElementSize } from '@/hooks/useElementSize'
 import { boardNotices, useBoard, usePositionRankings } from '@/hooks/useProjections'
 import { useUrlDraft } from '@/hooks/useUrlDraft'
 import { useUrlState } from '@/hooks/useUrlState'
@@ -60,7 +62,38 @@ const DEFAULT_STATE: RankingsPageState = {
  * rank. A tier is a statement about adjacent rows; drawn over a list ordered by
  * ceiling it would scatter one tier down the page and assert something the API
  * never said.
+ *
+ * ## One bar that stays
+ *
+ * Position, search, team and sort sit in one bar that sticks under the
+ * application header, and the table's column header sticks under that. A
+ * reader forty rows down can change position or team, and can still see which
+ * column is which, without scrolling back to the top. The bar wraps onto a
+ * second line on a narrow screen, so its height is measured and the column
+ * header is told where it ends.
+ *
+ * ## Three drawings of the same rows
+ *
+ * With room for it the board is a table. Without, the same rows are drawn two
+ * lines each (`ProjectionList`), because seven columns do not fit a phone and
+ * the alternative — dropping the range — is the thing this layout exists to
+ * stop. Cards remain as a choice on a wide screen.
+ *
+ * "Room" is the width the board actually has, measured, not the width of the
+ * window: the sidebar takes 240px of a laptop screen, so a 1,024px window has
+ * less room for a table than an 820px tablet does.
  */
+
+/**
+ * The narrowest the table is drawn at. Its fixed columns and the smallest
+ * range strip come to 640px; this leaves the player column the 270px that a
+ * name and a game need to share a line. Narrower than this, most rows would
+ * wrap, and a table of two-line rows is a worse list than the list.
+ */
+const TABLE_MIN_WIDTH = 912
+
+/** The bar bleeds into the page's side padding, 24px a side from `sm`. */
+const PAGE_GUTTERS = 48
 export default function RankingsPage() {
   const { position: positionParam } = useParams<{ position: string }>()
   const position = positionParam ? positionParam.toUpperCase() : null
@@ -80,8 +113,11 @@ export default function RankingsPage() {
   const setTeam = useCallback((value: string) => setState({ team: value }), [setState])
   const setView = useCallback((value: ViewMode) => setState({ view: value }), [setState])
 
-  const isCompact = useMediaQuery('(max-width: 639px)')
-  const effectiveView: ViewMode = isCompact ? 'cards' : view
+  const [density, setDensity] = useBoardDensity()
+  // The bar spans the page's content width plus its gutters, so it measures
+  // both things the board needs: where the bar ends, and how much room there is.
+  const [barRef, bar] = useElementSize<HTMLDivElement>()
+  const isCompact = bar.width > 0 && bar.width - PAGE_GUTTERS < TABLE_MIN_WIDTH
 
   // Exactly one of these is ever enabled, so the screen makes one request.
   const board = useBoard({ enabled: position === null })
@@ -154,6 +190,15 @@ export default function RankingsPage() {
   }, [position, setSearch])
 
   const showTiers = sort === 'rank' && direction === 'asc' && position !== null
+  const showsBoard = !unknownPosition && (projected || !support)
+  const filters = {
+    query: search,
+    onQueryChange: setSearch,
+    team,
+    onTeamChange: setTeam,
+    sort,
+    onSortChange,
+  }
   const total = active.data?.data.length ?? 0
   const filtered = deferredQuery.trim().length > 0 || team !== ''
 
@@ -169,7 +214,20 @@ export default function RankingsPage() {
         question="Who should I start this week, and how does everyone compare?"
       />
 
-      <PositionTabs active={position} />
+      {/* Full-bleed to the page gutter and opaque, so rows pass under it
+          rather than showing through it. */}
+      <div
+        ref={barRef}
+        className="bg-bg border-line sticky top-[calc(var(--spacing-shell-bar)+1px)] z-20 -mx-4 mb-4 flex flex-wrap items-end gap-x-6 gap-y-2 border-b px-4 pt-1 sm:-mx-6 sm:px-6"
+      >
+        <PositionTabs active={position} className="-mb-px min-w-0" />
+        {showsBoard && !isCompact && (
+          <RankingsFilters
+            {...filters}
+            className="mb-1.5 ml-auto max-w-2xl min-w-0 flex-1 basis-96 flex-nowrap gap-2"
+          />
+        )}
+      </div>
 
       {unknownPosition ? (
         <Card>
@@ -187,24 +245,29 @@ export default function RankingsPage() {
             {active.data && <NoticeList notices={boardNotices(active.data.meta)} />}
           </div>
 
-          <RankingsToolbar
-            query={search}
-            onQueryChange={setSearch}
-            team={team}
-            onTeamChange={setTeam}
-            sort={sort}
-            onSortChange={onSortChange}
-            view={effectiveView}
-            onViewChange={setView}
+          {/* On a phone the bar keeps only the tabs: three more controls
+              would take a fifth of the screen for the whole scroll. */}
+          {isCompact && (
+            <RankingsFilters {...filters} stacked={bar.width < 640} className="mb-3 gap-2" />
+          )}
+
+          <RankingsViewBar
             resultCount={entries.length}
             totalCount={total}
+            view={view}
+            onViewChange={setView}
+            density={density}
+            onDensityChange={setDensity}
+            showControls={!isCompact}
           />
 
           {showTiers && entries.length > 0 && <TierNote />}
 
-          <Card className="overflow-hidden">
+          {/* `clip`, not `hidden`: a hidden overflow would make the card a
+              scroll container and the column header would stick to it. */}
+          <Card className="overflow-clip">
             {active.isPending ? (
-              effectiveView === 'table' ? (
+              isCompact || view === 'table' ? (
                 <SkeletonTable rows={12} columns={6} />
               ) : (
                 <div className="p-4">
@@ -240,7 +303,14 @@ export default function RankingsPage() {
               />
             ) : (
               <Refreshing active={active.isPlaceholderData}>
-                {effectiveView === 'table' ? (
+                {isCompact ? (
+                  <ProjectionList
+                    entries={entries}
+                    rankMode={position === null ? 'overall' : 'positional'}
+                    showTiers={showTiers}
+                    showPosition={position === null}
+                  />
+                ) : view === 'table' ? (
                   <ProjectionTable
                     entries={entries}
                     sort={sort}
@@ -249,6 +319,8 @@ export default function RankingsPage() {
                     rankMode={position === null ? 'overall' : 'positional'}
                     showTiers={showTiers}
                     showTierColumn={position === null}
+                    density={density}
+                    stickyTop={`calc(var(--spacing-shell-bar) + 1px + ${bar.height}px)`}
                     caption={`${position ?? 'Overall'} rankings for week ${slate.week ?? ''}, ${formatScoringProfile(slate.scoringProfile)}`}
                   />
                 ) : (
@@ -281,7 +353,7 @@ export default function RankingsPage() {
  */
 function TierNote() {
   return (
-    <p className="text-ink-muted mb-3 flex items-start gap-1.5 text-xs leading-relaxed">
+    <p className="text-ink-muted mb-3 flex items-start gap-1.5 text-detail leading-relaxed">
       <Layers aria-hidden className="mt-0.5 size-3.5 shrink-0" />
       <span>
         Players are grouped into tiers. Within a tier the order barely matters — any player could

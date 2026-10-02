@@ -1,26 +1,27 @@
 import { memo, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { CloudRain } from 'lucide-react'
-
-import { Badge } from '@/components/ui/Badge'
 import { ShowMoreRows } from '@/components/domain/BoardBudget'
 import { useReorderAnimation } from '@/hooks/useReorderAnimation'
 import { useRenderBudget } from '@/hooks/useRenderBudget'
-import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { OutcomeRange, ProjectionValue } from '@/components/domain/ProjectionValue'
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
+import { RowFlags } from '@/components/domain/RowFlags'
 import { boardCeiling, groupByTier, orderSignature } from '@/utils/board'
 import { formatPercent, formatPoints, formatThreshold } from '@/utils/format'
 import type { RankedProjection } from '@/api/schemas'
 
 /**
- * The touch view.
+ * The card view: one player at a time.
  *
  * Not the table with the columns removed. A card leads with the projection —
- * the number the whole page is about — and puts the range under it, because on
- * a phone a manager is checking one player at a time rather than scanning a
- * ranking. The whole card is the tap target.
+ * the number the whole page is about — and puts the range under it, for a
+ * reader checking players one by one rather than scanning a ranking. The whole
+ * card is the link.
+ *
+ * A choice on a wide screen, and no longer what a phone is given: at about
+ * 235px a card it took 25 screens to reach the hundredth player, and
+ * `ProjectionList` draws the same rows in a quarter of the height.
  */
 export const ProjectionCards = memo(function ProjectionCards({
   entries,
@@ -75,7 +76,7 @@ export const ProjectionCards = memo(function ProjectionCards({
               */}
               <h2
                 id={`tier-${group.tier}`}
-                className="text-ink-secondary mb-2 text-xs font-semibold tracking-wide uppercase"
+                className="text-ink-secondary mb-2 text-caption font-semibold tracking-wide uppercase"
               >
                 Tier {group.tier}
                 <span className="text-ink-muted ml-2 font-normal normal-case">
@@ -137,25 +138,23 @@ const ProjectionCard = memo(function ProjectionCard({
 }) {
   const { projection } = entry
   const { points } = projection.prediction
-  const injury = projection.context.injury
-  const weather = projection.context.weather
 
   return (
     <li data-flip-key={projection.player.player_id} className="deferred-card">
       <Link
         to={`/players/${encodeURIComponent(projection.player.player_id)}`}
-        className="bg-surface border-line hover:border-line-strong focus-visible:outline-focus block rounded-[var(--radius-card)] border p-4 shadow-card transition-colors"
+        className="bg-surface border-line hover:border-line-strong focus-visible:outline-focus block rounded-[var(--radius-card)] border p-4 transition-colors"
       >
         <div className="flex items-start gap-3">
           {showRank && (
-            <span className="bg-surface-sunken text-ink-secondary tnum mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+            <span className="bg-surface-sunken text-ink-secondary tnum mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-detail font-semibold">
               {rankMode === 'positional' ? entry.positional_rank : entry.rank}
             </span>
           )}
           <PlayerAvatar player={projection.player} />
           <div className="min-w-0 flex-1">
             <p className="text-ink truncate text-sm font-medium">{projection.player.name}</p>
-            <p className="text-ink-muted truncate text-xs">
+            <p className="text-ink-muted truncate text-detail">
               {projection.player.position} · {projection.team}{' '}
               {projection.is_home ? 'vs' : '@'} {projection.opponent}
             </p>
@@ -166,7 +165,7 @@ const ProjectionCard = memo(function ProjectionCard({
               size="lg"
               actualPoints={projection.actual_points}
             />
-            <p className="text-ink-muted text-[0.625rem] tracking-wide uppercase">
+            <p className="text-ink-muted text-chip tracking-wide uppercase">
               Projected
             </p>
           </div>
@@ -182,7 +181,7 @@ const ProjectionCard = memo(function ProjectionCard({
             threshold={points.boom_threshold}
             scaleMax={scaleMax}
           />
-          <p className="text-ink-muted mt-1 flex justify-between text-[0.6875rem]">
+          <p className="text-ink-muted mt-1 flex justify-between text-chip">
             <span>
               Floor {formatPoints(points.floor)} · Ceiling {formatPoints(points.ceiling)}
             </span>
@@ -198,12 +197,7 @@ const ProjectionCard = memo(function ProjectionCard({
             opponent={projection.opponent}
             fpAllowed={projection.matchup?.fp_allowed_vs_position_l4}
           />
-          <InjuryBadge injury={injury} />
-          {weather?.is_adverse && (
-            <Badge tone="info" icon={<CloudRain className="size-3" />}>
-              Weather
-            </Badge>
-          )}
+          <RowFlags projection={projection} />
         </div>
       </Link>
     </li>

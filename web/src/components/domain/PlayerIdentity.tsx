@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 import type { Player } from '@/api/schemas'
 
-/** Rendered diameter of each avatar size, in CSS pixels. Matches `size-8/10/16/28`. */
-const AVATAR_PX = { sm: 32, md: 40, lg: 64, xl: 112 } as const
+/** Rendered diameter of each avatar size, in CSS pixels. Matches `size-6/8/10/16/28`. */
+const AVATAR_PX = { xs: 24, sm: 32, md: 40, lg: 64, xl: 112 } as const
 
 /** The transform segment nflverse's headshot URLs carry: format and quality only. */
 const HEADSHOT_TRANSFORM = /\/image\/(upload|private)\/f_auto,q_auto\//
@@ -39,12 +39,16 @@ export function PlayerAvatar({
   className,
 }: {
   player: Pick<Player, 'name' | 'headshot_url'>
-  size?: 'sm' | 'md' | 'lg' | 'xl'
+  /** `xs` is the board row's: 24px, so a 40px row has room to breathe. */
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   className?: string
 }) {
   const sizes = {
-    sm: 'size-8 text-[0.625rem]',
-    md: 'size-10 text-xs',
+    // Two initials at the smallest type token would touch the edge of a 24px
+    // disc, so this one size sets its own: see the same note in `TeamLogo`.
+    xs: 'size-6 text-[0.5625rem]',
+    sm: 'size-8 text-chip',
+    md: 'size-10 text-detail',
     lg: 'size-16 text-lg',
     xl: 'size-28 text-3xl',
   } as const
@@ -98,6 +102,12 @@ interface PlayerIdentityProps {
   size?: 'sm' | 'md' | 'lg'
   /** Rendered under the name instead of the default "POS · TEAM" line. */
   subtitle?: React.ReactNode
+  /**
+   * Let the name and the line under it wrap instead of ending in an ellipsis.
+   * For a narrow column where both must be readable in full — a roster on a
+   * phone, where the line under the name can carry an injury designation.
+   */
+  wrap?: boolean
   className?: string
 }
 
@@ -107,6 +117,7 @@ export function PlayerIdentity({
   link = true,
   size = 'md',
   subtitle,
+  wrap = false,
   className,
 }: PlayerIdentityProps) {
   const meta = [player.position, team ?? player.team].filter(Boolean).join(' · ')
@@ -114,7 +125,8 @@ export function PlayerIdentity({
   const name = (
     <span
       className={cn(
-        'text-ink truncate font-medium',
+        'text-ink font-medium',
+        wrap ? 'break-words' : 'truncate',
         size === 'lg' ? 'text-lg' : size === 'sm' ? 'text-sm' : 'text-sm',
       )}
     >
@@ -136,7 +148,7 @@ export function PlayerIdentity({
         ) : (
           name
         )}
-        <span className="text-ink-muted truncate text-xs">{subtitle ?? meta}</span>
+        <span className={cn('text-ink-muted text-detail', !wrap && 'truncate')}>{subtitle ?? meta}</span>
       </span>
     </span>
   )

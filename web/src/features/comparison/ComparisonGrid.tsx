@@ -172,7 +172,7 @@ export function ComparisonGrid({ entries }: { entries: ComparisonEntry[] }) {
             <tr className="border-line border-b">
               <th
                 scope="col"
-                className="bg-surface text-ink-muted sticky left-0 z-10 w-40 px-4 py-3 text-left text-xs font-medium tracking-wide uppercase"
+                className="bg-surface text-ink-muted sticky left-0 z-10 w-40 px-4 py-3 text-left text-caption font-medium tracking-wide uppercase"
               >
                 Metric
               </th>
@@ -194,7 +194,7 @@ export function ComparisonGrid({ entries }: { entries: ComparisonEntry[] }) {
                 className="bg-surface text-ink-secondary sticky left-0 z-10 px-4 py-3 text-left text-sm font-normal"
               >
                 Range
-                <span className="text-ink-muted ml-1 text-xs">floor to ceiling</span>
+                <span className="text-ink-muted ml-1 text-detail">floor to ceiling</span>
               </th>
               {entries.map((entry) => (
                 <td key={entry.projection.player.player_id} className="px-4 py-3">
@@ -220,7 +220,7 @@ export function ComparisonGrid({ entries }: { entries: ComparisonEntry[] }) {
                     className="bg-surface text-ink-secondary sticky left-0 z-10 px-4 py-3 text-left text-sm font-normal"
                   >
                     {metric.label}
-                    {metric.hint && <span className="text-ink-muted ml-1 text-xs">{metric.hint}</span>}
+                    {metric.hint && <span className="text-ink-muted ml-1 text-detail">{metric.hint}</span>}
                   </th>
                   {entries.map((entry) => (
                     <td
@@ -282,7 +282,7 @@ export function ComparisonGrid({ entries }: { entries: ComparisonEntry[] }) {
       </div>
 
       <CardBody className="border-line border-t py-3">
-        <p className="text-ink-muted text-xs leading-relaxed">
+        <p className="text-ink-muted text-detail leading-relaxed">
           The highlighted cell is just the best number in that row, not a recommendation. The
           gap between two projections is usually much smaller than how much either player&apos;s
           score can swing — the head-to-head chances below take that into account.
@@ -367,7 +367,7 @@ function PlayerColumnHeader({ entry }: { entry: ComparisonEntry }) {
           </Link>
           <InjuryBadge injury={entry.projection.context.injury} />
         </span>
-        <span className="text-ink-muted block truncate text-xs font-normal">
+        <span className="text-ink-muted block truncate text-detail font-normal">
           {[player.position, entry.projection.team].filter(Boolean).join(' · ')}
         </span>
       </span>

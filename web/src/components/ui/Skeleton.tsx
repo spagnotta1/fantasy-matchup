@@ -38,18 +38,25 @@ export function SkeletonText({ lines = 3, className }: { lines?: number; classNa
  * header does not jump sideways when rows arrive.
  */
 export function SkeletonTable({ rows = 8, columns = 5 }: { rows?: number; columns?: number }) {
+  const template = { gridTemplateColumns: `1.5rem 2fr repeat(${Math.max(columns - 2, 1)}, 1fr)` }
   return (
-    <div role="status" aria-label="Loading data" className="space-y-2 p-4">
+    // The shared table's own geometry — a 32px header over 40px rows, ruled
+    // the same way — so the page does not move when the rows arrive.
+    <div role="status" aria-label="Loading data">
+      <div className="border-line-strong h-row-compact grid items-center gap-4 border-b px-2.5" style={template}>
+        <span />
+        <Skeleton className="h-3 w-12" />
+      </div>
       {Array.from({ length: rows }, (_, rowIndex) => (
         <div
           key={rowIndex}
-          className="grid items-center gap-4"
-          style={{ gridTemplateColumns: `2.5rem 2fr repeat(${Math.max(columns - 2, 1)}, 1fr)` }}
+          className="border-line h-row grid items-center gap-4 border-b px-2.5 last:border-b-0"
+          style={template}
         >
-          <Skeleton className="h-4 w-6" />
-          <Skeleton className="h-4 w-full max-w-44" />
+          <Skeleton className="size-6 rounded-full" />
+          <Skeleton className="h-3.5 w-full max-w-44" />
           {Array.from({ length: Math.max(columns - 2, 1) }, (_, cellIndex) => (
-            <Skeleton key={cellIndex} className="h-4 w-12 justify-self-end" />
+            <Skeleton key={cellIndex} className="h-3.5 w-10 justify-self-end" />
           ))}
         </div>
       ))}

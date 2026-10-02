@@ -88,7 +88,7 @@ export function RiskOpportunity() {
               </li>
             ))}
           </ul>
-          <p className="text-ink-muted border-line border-t px-5 py-3 text-xs leading-relaxed">
+          <p className="text-ink-muted border-line border-t px-5 py-3 text-detail leading-relaxed">
             {FOOTNOTE[lens]}
           </p>
         </CardBody>

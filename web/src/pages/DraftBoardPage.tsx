@@ -1,29 +1,118 @@
-import { memo, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ListOrdered } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
+import { DataTable, RowLink, type DataTableColumn } from '@/components/ui/DataTable'
+import { FilterChoice, FilterToolbar } from '@/components/ui/FilterToolbar'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Select } from '@/components/ui/Select'
 import { SkeletonTable } from '@/components/ui/Skeleton'
-import { InfoTip } from '@/components/ui/Tooltip'
 import { EmptyState, ErrorState, NoticeList, Refreshing } from '@/components/feedback/States'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
 import { useValueBoard } from '@/hooks/useInsights'
 import { useDraftConfig } from '@/hooks/useMockDraft'
 import { useUrlState } from '@/hooks/useUrlState'
-import { cn } from '@/utils/cn'
 import { formatPoints, formatScoringProfile } from '@/utils/format'
+import { parseSort } from '@/utils/tableSort'
 import type { ValueEntry } from '@/api/schemas'
 
 type Lens = 'all' | 'value' | 'reach'
 
-const DEFAULT_STATE = { season: '', position: '', lens: 'all' }
+// The board opens the way a draft runs: by average draft position, first pick
+// first. The sort lives in the URL with the filters, so a link to "biggest
+// disagreements first" is a link.
+const DEFAULT_STATE = { season: '', position: '', lens: 'all', sort: 'adp', dir: 'asc' }
 
 /** Rank gaps this small are inside the ordinary spread of any two boards. */
 const NOTABLE_GAP = 3
+
+const signedGap = (gap: number) => (gap > 0 ? `+${gap}` : `−${Math.abs(gap)}`)
+
+/**
+ * The board's columns.
+ *
+ * The player comes first and is the row's header, so it is the column that
+ * stays in view when a phone scrolls the rest sideways, and the one a screen
+ * reader names each number by. Nothing is dropped at narrow widths: "per game
+ * × games" is how the season value was arrived at, and it used to disappear
+ * below 768px.
+ */
+const COLUMNS: DataTableColumn<ValueEntry>[] = [
+  {
+    id: 'player',
+    header: 'Player',
+    rowHeader: true,
+    sortValue: (entry) => entry.player.name,
+    className: 'max-sm:max-w-44',
+    cell: ({ player }) => (
+      <>
+        <RowLink to={`/players/${encodeURIComponent(player.player_id)}`}>{player.name}</RowLink>{' '}
+        <span className="text-ink-muted text-detail whitespace-nowrap">
+          {player.position} · {player.team ?? '—'}
+        </span>
+      </>
+    ),
+  },
+  {
+    id: 'adp',
+    header: 'ADP',
+    numeric: true,
+    // The one number here where smaller is first: pick 1 opens the board.
+    sortFirst: 'asc',
+    sortValue: (entry) => entry.adp,
+    className: 'text-ink-secondary',
+    cell: (entry) => entry.adp_formatted ?? formatPoints(entry.adp),
+  },
+  {
+    id: 'gap',
+    header: 'Drafters → us',
+    numeric: true,
+    sortValue: (entry) => entry.rank_gap,
+    tip: 'The player’s rank at their position by draft position, then by our season value (only counting players who have both). A positive gap means we value the player more than drafters do.',
+    className: 'whitespace-nowrap',
+    cell: (entry) => {
+      const { position } = entry.player
+      return (
+        <>
+          <span data-rank-pair className="text-ink-secondary text-detail">
+            {position}
+            {entry.market_rank} → {position}
+            {entry.value_rank}
+          </span>
+          {Math.abs(entry.rank_gap) >= NOTABLE_GAP && (
+            <Badge tone={entry.rank_gap > 0 ? 'positive' : 'caution'} className="ml-2">
+              {signedGap(entry.rank_gap)}
+            </Badge>
+          )}
+        </>
+      )
+    },
+  },
+  {
+    id: 'value',
+    header: 'Season value',
+    numeric: true,
+    sortValue: (entry) => entry.player.season_value,
+    className: 'font-medium',
+    cell: (entry) => formatPoints(entry.player.season_value, 0),
+  },
+  {
+    id: 'rate',
+    header: 'Per game × games',
+    numeric: true,
+    sortValue: (entry) => entry.player.projected_points_per_game,
+    className: 'text-ink-muted whitespace-nowrap',
+    cell: ({ player }) => (
+      <>
+        {formatPoints(player.projected_points_per_game)} × {formatPoints(player.expected_games)}
+      </>
+    ),
+  },
+]
+
+const SORTABLE = COLUMNS.filter((column) => column.sortValue).map((column) => column.id)
 
 /**
  * The draft pool beside the market: where the model's value and ADP disagree.
@@ -46,6 +135,7 @@ export default function DraftBoardPage() {
   const seasons = config.data?.data.draftable_seasons ?? []
   const season = state.season ? Number(state.season) : (seasons[0] ?? null)
   const lens = state.lens as Lens
+  const sort = parseSort(state.sort, state.dir, SORTABLE, { key: 'adp', direction: 'asc' })
 
   const { data, isPending, isError, error, refetch, isPlaceholderData } = useValueBoard(season)
   const board = data?.data
@@ -66,27 +156,30 @@ export default function DraftBoardPage() {
         question="Which players do our projections value more (or less) than where they are being drafted?"
       />
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
+      <FilterToolbar label="Choose a season and filter the board">
+        {/* Each option names the season, since the label is not drawn and a
+            closed select shows only its value. */}
         <Select
           label="Season"
+          hideLabel
           size="sm"
           value={season === null ? '' : String(season)}
           onChange={(event) => setState({ season: event.target.value })}
-          className="w-32"
+          className="w-36 shrink-0"
           options={
             seasons.length
-              ? seasons.map((s) => ({ value: String(s), label: String(s) }))
-              : [{ value: '', label: config.isPending ? 'Loading…' : 'None' }]
+              ? seasons.map((s) => ({ value: String(s), label: `${s} season` }))
+              : [{ value: '', label: config.isPending ? 'Loading…' : 'No season' }]
           }
           disabled={seasons.length === 0}
         />
-        <SegmentedControl
+        <FilterChoice
           label="Position"
           value={state.position}
           onChange={(value) => setState({ position: value })}
           options={[{ value: '', label: 'All' }, ...['QB', 'RB', 'WR', 'TE'].map((p) => ({ value: p, label: p }))]}
         />
-        <SegmentedControl<Lens>
+        <FilterChoice<Lens>
           label="Show"
           value={lens}
           onChange={(value) => setState({ lens: value })}
@@ -96,10 +189,11 @@ export default function DraftBoardPage() {
             { value: 'reach', label: 'Drafters rank higher' },
           ]}
         />
-        <Link to="/mock-draft" className="text-accent-text ml-auto pb-1.5 text-xs hover:underline">
+        {/* Where the pool goes next, at the row's trailing edge as before. */}
+        <Link to="/mock-draft" className="text-accent-text text-detail ml-auto rounded-sm hover:underline">
           Run a mock draft on this pool
         </Link>
-      </div>
+      </FilterToolbar>
 
       {data && <NoticeList notices={data.meta.notices} className="mb-6" />}
 
@@ -121,11 +215,13 @@ export default function DraftBoardPage() {
         </Card>
       ) : (
         <Refreshing active={isPlaceholderData}>
-          <Card className="overflow-hidden">
+          {/* `clip`, not `hidden`: a hidden overflow would make the card a
+              scroll container and the table's header would stick to it. */}
+          <Card className="overflow-clip">
             <CardHeader
               as="h2"
               title={`${board.season} value against ADP`}
-              description={`${formatScoringProfile(board.scoring_profile)} scoring. Ordered by average draft position (ADP). Ranks are within each position.`}
+              description={`${formatScoringProfile(board.scoring_profile)} scoring. ADP is average draft position. Ranks are within each position.`}
               action={
                 <span className="flex items-center gap-1.5">
                   <ProvenanceBadge provenance="derived" />
@@ -134,46 +230,28 @@ export default function DraftBoardPage() {
               }
             />
             {board.market && (
-              <CardBody className="border-line text-ink-muted border-b py-2.5 text-xs">
+              <CardBody className="border-line text-ink-muted border-b py-2.5 text-detail">
                 ADP from {board.market.total_drafts?.toLocaleString() ?? 'an unknown number of'} drafts in{' '}
                 {board.market.teams ?? '—'}-team leagues, {board.market.window_start} to {board.market.window_end}
                 {board.market.is_preseason === false && ' (drafts made during the season, not before it)'}.
               </CardBody>
             )}
-            {entries.length === 0 ? (
-              <EmptyState
-                title="No players match"
-                description="Nothing on the board fits this position and lens."
-              />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <caption className="sr-only">Season value against ADP, ordered by ADP</caption>
-                  <thead>
-                    <tr className="border-line text-ink-muted border-b text-xs font-medium tracking-wide uppercase">
-                      <th scope="col" className="px-3 py-2 text-left">ADP</th>
-                      <th scope="col" className="px-3 py-2 text-left">Player</th>
-                      <th scope="col" className="px-3 py-2 text-right">
-                        <span className="inline-flex items-center gap-1">
-                          Drafters → us
-                          <InfoTip
-                            label="About the ranks"
-                            content="The player's rank at their position by draft position, then by our season value (only counting players who have both). A positive gap means we value the player more than drafters do."
-                          />
-                        </span>
-                      </th>
-                      <th scope="col" className="px-3 py-2 text-right">Season value</th>
-                      <th scope="col" className="hidden px-3 py-2 text-right md:table-cell">Per game × games</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.map((entry) => (
-                      <ValueRow key={entry.player.player_id} entry={entry} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DataTable
+              caption={`${board.season} season value against ADP`}
+              columns={COLUMNS}
+              rows={entries}
+              rowKey={(entry) => entry.player.player_id}
+              sort={sort}
+              onSortChange={(next) => setState({ sort: next.key, dir: next.direction })}
+              minWidth="42rem"
+              freezeFirstColumn
+              empty={
+                <EmptyState
+                  title="No players match"
+                  description="Nothing on the board fits this position and lens."
+                />
+              }
+            />
           </Card>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -192,12 +270,12 @@ export default function DraftBoardPage() {
               >
                 {board.market_only.map((m) => (
                   <li key={`${m.name}-${m.adp}`} className="flex items-start gap-3 px-4 py-2">
-                    <span className="tnum text-ink-muted w-10 text-xs">{formatPoints(m.adp)}</span>
+                    <span className="tnum text-ink-muted w-10 text-detail">{formatPoints(m.adp)}</span>
                     <span className="min-w-0 flex-1">
                       <span className="text-ink block text-sm font-medium">
-                        {m.name} <span className="text-ink-muted text-xs font-normal">{m.position} · {m.team ?? '—'}</span>
+                        {m.name} <span className="text-ink-muted text-detail font-normal">{m.position} · {m.team ?? '—'}</span>
                       </span>
-                      <span className="text-ink-muted block text-xs">{m.reason}</span>
+                      <span className="text-ink-muted block text-detail">{m.reason}</span>
                     </span>
                   </li>
                 ))}
@@ -216,7 +294,7 @@ export default function DraftBoardPage() {
                       <Link to={`/players/${encodeURIComponent(p.player_id)}`} className="text-ink hover:text-accent-text block truncate text-sm font-medium">
                         {p.name}
                       </Link>
-                      <span className="text-ink-muted block text-xs">{p.position} · {p.team ?? '—'}</span>
+                      <span className="text-ink-muted block text-detail">{p.position} · {p.team ?? '—'}</span>
                     </span>
                     <span className="tnum text-ink text-sm font-medium">{formatPoints(p.season_value, 0)}</span>
                   </li>
@@ -229,40 +307,3 @@ export default function DraftBoardPage() {
     </>
   )
 }
-
-const ValueRow = memo(function ValueRow({ entry }: { entry: ValueEntry }) {
-  const { player } = entry
-  const gap = entry.rank_gap
-  const notable = Math.abs(gap) >= NOTABLE_GAP
-  return (
-    <tr className="border-line border-b last:border-b-0">
-      <td className="tnum text-ink-secondary px-3 py-2 text-xs">
-        {entry.adp_formatted ?? formatPoints(entry.adp)}
-      </td>
-      <td className="px-3 py-2">
-        <Link to={`/players/${encodeURIComponent(player.player_id)}`} className="text-ink hover:text-accent-text font-medium">
-          {player.name}
-        </Link>
-        <span className="text-ink-muted block text-xs">
-          {player.position} · {player.team ?? '—'}
-        </span>
-      </td>
-      <td className="px-3 py-2 text-right">
-        <span className="tnum text-ink-secondary text-xs">
-          {player.position}
-          {entry.market_rank} → {player.position}
-          {entry.value_rank}
-        </span>
-        {notable && (
-          <Badge tone={gap > 0 ? 'positive' : 'caution'} className="ml-2">
-            {gap > 0 ? `+${gap}` : `−${Math.abs(gap)}`}
-          </Badge>
-        )}
-      </td>
-      <td className={cn('tnum text-ink px-3 py-2 text-right font-medium')}>{formatPoints(player.season_value, 0)}</td>
-      <td className="tnum text-ink-muted hidden px-3 py-2 text-right text-xs md:table-cell">
-        {formatPoints(player.projected_points_per_game)} × {formatPoints(player.expected_games)}
-      </td>
-    </tr>
-  )
-})

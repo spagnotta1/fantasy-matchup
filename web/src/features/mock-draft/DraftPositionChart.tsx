@@ -82,7 +82,7 @@ export function DraftPositionChart({
                 >
                   <span
                     className={cn(
-                      'text-ink-secondary tnum w-6 shrink-0 text-right text-xs font-semibold',
+                      'text-ink-secondary tnum w-6 shrink-0 text-right text-detail font-semibold',
                       isSelected && 'text-ink',
                     )}
                   >
@@ -117,7 +117,7 @@ export function DraftPositionChart({
           })}
         </ul>
 
-        <p className="text-ink-muted mt-4 text-xs leading-relaxed">
+        <p className="text-ink-muted mt-4 text-detail leading-relaxed">
           Bars start at {formatNumber(floor)} (the weakest position) so the differences
           are easier to see. Values are the average draft value — points your starters
           score above easy-to-find replacements — across{' '}
@@ -133,7 +133,7 @@ export function DraftPositionChart({
 
         {/* The same numbers, for a reader who cannot use the bars. */}
         <details className="mt-3">
-          <summary className="text-ink-secondary hover:text-ink cursor-pointer text-xs font-medium">
+          <summary className="text-ink-secondary hover:text-ink cursor-pointer text-detail font-medium">
             View as a table
           </summary>
           <div className="mt-2 overflow-x-auto">
@@ -142,7 +142,7 @@ export function DraftPositionChart({
                 Mean simulated roster value and projected points by draft position
               </caption>
               <thead>
-                <tr className="text-ink-secondary border-line border-b text-xs">
+                <tr className="text-ink-secondary border-line border-b text-caption">
                   <th scope="col" className="py-1.5 pr-3 text-left font-medium">
                     Position
                   </th>

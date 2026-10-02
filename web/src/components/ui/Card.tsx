@@ -6,14 +6,18 @@ import { cn } from '@/utils/cn'
  * The single container primitive.
  *
  * Every panel in the product is one of these. That is the point: one border
- * radius, one border colour, one shadow, so the interface reads as one system
- * rather than as a collection of screens built on different weeks.
+ * radius and one border colour, so the interface reads as one system rather
+ * than as a collection of screens built on different weeks.
+ *
+ * A hairline and no shadow. Elevation is kept for what actually sits above the
+ * page — overlays, and the one panel a screen may lift (`shadow-raised`) — so
+ * that when something is raised it means something.
  */
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        'bg-surface border-line rounded-[var(--radius-card)] border shadow-card',
+        'bg-surface border-line-strong rounded-card border',
         className,
       )}
       {...props}
@@ -50,12 +54,17 @@ export function CardHeader({
       {...props}
     >
       <div className="min-w-0">
-        <Heading className="text-ink text-sm font-semibold tracking-tight">{title}</Heading>
+        <Heading className="text-ink text-section">{title}</Heading>
         {description && (
-          <p className="text-ink-muted mt-1 text-xs leading-relaxed">{description}</p>
+          <p className="text-ink-muted text-detail mt-1">{description}</p>
         )}
       </div>
-      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+      {/* Capped at the header's width and allowed to wrap: a long action —
+          a badge beside a primary link — otherwise ran off a phone-width card
+          and was clipped by it. */}
+      {action && (
+        <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">{action}</div>
+      )}
     </div>
   )
 }
@@ -67,7 +76,7 @@ export function CardBody({ className, ...props }: HTMLAttributes<HTMLDivElement>
 export function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('border-line text-ink-muted border-t px-5 py-3 text-xs', className)}
+      className={cn('border-line text-ink-muted border-t px-5 py-3 text-detail', className)}
       {...props}
     />
   )

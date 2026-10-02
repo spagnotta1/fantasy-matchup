@@ -2,7 +2,10 @@ import { sizedLogo, useTeamBrand } from '@/hooks/useTeamBrand'
 import { cn } from '@/utils/cn'
 
 const PX = { xs: 16, sm: 24, md: 32, lg: 56 } as const
-const BOX = { xs: 'size-4 text-[0.5rem]', sm: 'size-6 text-[0.5625rem]', md: 'size-8 text-[0.625rem]', lg: 'size-14 text-xs' } as const
+// The one place type is set off the scale, on purpose. These are initials
+// inside a disc of fixed size, standing in for a logo that failed to load: the
+// letters have to fit the disc, and at 16-32px the smallest type token does not.
+const BOX = { xs: 'size-4 text-[0.5rem]', sm: 'size-6 text-[0.5625rem]', md: 'size-8 text-[0.625rem]', lg: 'size-14 text-detail' } as const
 
 /**
  * A team's logo, or its abbreviation where there is none.

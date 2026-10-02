@@ -145,7 +145,7 @@ export function LinesBoard() {
                   Betting lines for the week's games, highest total first.
                 </caption>
                 <thead>
-                  <tr className="border-line text-ink-muted border-b text-xs font-medium tracking-wide uppercase">
+                  <tr className="border-line text-ink-muted border-b text-caption font-medium tracking-wide uppercase">
                     <th scope="col" className="px-3 py-2 text-left">Game</th>
                     <th scope="col" className="hidden px-3 py-2 text-left sm:table-cell">Kickoff</th>
                     <th scope="col" className="px-3 py-2 text-right">Spread</th>
@@ -169,7 +169,7 @@ export function LinesBoard() {
                 </tbody>
               </table>
             </div>
-            <CardBody className="border-line text-ink-muted border-t py-3 text-xs">
+            <CardBody className="border-line text-ink-muted border-t py-3 text-detail">
               {rows[0]?.book
                 ? `Lines from ${rows[0].book}${rows[0].capturedAt ? `, captured ${formatGameDay(rows[0].capturedAt)}` : ''}. `
                 : ''}
@@ -225,12 +225,12 @@ function LineTableRow({ row }: { row: LineRow }) {
         </span>
         <Link
           to={`/matchups/${encodeURIComponent(row.game.game_id)}`}
-          className="text-ink-muted hover:text-accent-text block text-xs font-normal"
+          className="text-ink-muted hover:text-accent-text block text-detail font-normal"
         >
           Open game
         </Link>
       </th>
-      <td className="text-ink-secondary hidden px-3 py-2 text-xs sm:table-cell">
+      <td className="text-ink-secondary hidden px-3 py-2 text-detail sm:table-cell">
         {formatGameDay(row.game.gameday)}
       </td>
       <td className="tnum text-ink px-3 py-2 text-right">
@@ -239,12 +239,12 @@ function LineTableRow({ row }: { row: LineRow }) {
           : '—'}
       </td>
       <td className="tnum text-ink px-3 py-2 text-right font-medium">{formatPoints(row.total)}</td>
-      <td className="tnum text-ink-secondary px-3 py-2 text-right text-xs">
+      <td className="tnum text-ink-secondary px-3 py-2 text-right text-detail">
         {row.away.team} {formatPoints(row.away.implied)}
         <br />
         {row.home.team} {formatPoints(row.home.implied)}
       </td>
-      <td className="tnum text-ink-secondary hidden px-3 py-2 text-right text-xs md:table-cell">
+      <td className="tnum text-ink-secondary hidden px-3 py-2 text-right text-detail md:table-cell">
         {move === null ? (
           '—'
         ) : (

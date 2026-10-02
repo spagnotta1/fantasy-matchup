@@ -130,7 +130,7 @@ export function ScheduleGrid() {
       ) : (
         <Refreshing active={isPlaceholderData}>
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full border-collapse text-xs">
+            <table className="w-full border-collapse text-caption">
               <caption className="sr-only">
                 How easy each team&apos;s remaining schedule is for {position}, from week{' '}
                 {data?.data.from_week}. Scores run 0 to 100, where 100 is the easiest schedule.
@@ -165,7 +165,7 @@ export function ScheduleGrid() {
               </tbody>
             </table>
           </div>
-          <CardBody className="border-line text-ink-muted border-t py-3 text-xs leading-relaxed">
+          <CardBody className="border-line text-ink-muted border-t py-3 text-detail leading-relaxed">
             Each cell shows the opponent (@ means away) and how easy they currently are for{' '}
             {position}. A dash means the opponent has played fewer than three games, so it is not
             graded yet. Grades compare defences with each other, not against an absolute standard.
@@ -213,7 +213,7 @@ export const ScheduleRow = memo(function ScheduleRow({ team }: { team: TeamSched
 function GridCell({ cell }: { cell: ScheduleCell }) {
   if (!cell.opponent) {
     return (
-      <td className="text-ink-muted px-1 py-1.5 text-center text-[0.625rem] font-medium">BYE</td>
+      <td className="text-ink-muted px-1 py-1.5 text-center text-chip font-medium">BYE</td>
     )
   }
   const grade = cell.grade
@@ -226,7 +226,7 @@ function GridCell({ cell }: { cell: ScheduleCell }) {
           graded ? CELL_TONES[toneForLetter(grade.letter as string)] : 'text-ink-muted',
         )}
       >
-        <span className="text-[0.625rem]">
+        <span className="text-chip">
           {cell.is_home ? '' : '@'}
           {cell.opponent}
         </span>

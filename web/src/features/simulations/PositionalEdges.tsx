@@ -60,7 +60,7 @@ export function PositionalEdges({
 
         return (
           <div key={edge.position} className="grid grid-cols-[2.5rem_1fr_5rem] items-center gap-3">
-            <span className="text-ink-secondary text-xs font-semibold">{edge.position}</span>
+            <span className="text-ink-secondary text-detail font-semibold">{edge.position}</span>
 
             <div
               className="bg-surface-sunken relative h-6 overflow-hidden rounded-[var(--radius-control)]"
@@ -88,10 +88,10 @@ export function PositionalEdges({
                   }
                 />
               )}
-              <span className="text-ink-muted tnum absolute inset-y-0 left-2 flex items-center text-[0.6875rem]">
+              <span className="text-ink-muted tnum absolute inset-y-0 left-2 flex items-center text-chip">
                 {formatPoints(edge.b)}
               </span>
-              <span className="text-ink-muted tnum absolute inset-y-0 right-2 flex items-center text-[0.6875rem]">
+              <span className="text-ink-muted tnum absolute inset-y-0 right-2 flex items-center text-chip">
                 {formatPoints(edge.a)}
               </span>
             </div>
@@ -115,7 +115,7 @@ export function PositionalEdges({
         )
       })}
 
-      <p className="text-ink-muted pt-1 text-xs leading-relaxed">
+      <p className="text-ink-muted pt-1 text-detail leading-relaxed">
         Average simulated points at each position, {labelA} minus {labelB}. These add up to the
         totals above. Each gap is an average, not a guaranteed result — the win chance above
         accounts for how much the two sides overlap; this breakdown does not.

@@ -30,7 +30,10 @@ npm run dev          # http://localhost:5173
 | `npm run build` | typecheck (`tsc -b`) then production build |
 | `npm run preview` | serve the built output |
 | `npm run lint` | oxlint |
+| `npm test` | unit tests (Vitest) for the pure logic under `src/` |
 | `npm run contract-check` | drive every endpoint against a running API |
+| `npm run test:e2e` | Playwright against a local build and the local API |
+| `npm run test:visual` | compare eleven screens against committed screenshots |
 
 ## How this is served in production
 
@@ -103,6 +106,250 @@ src/
 Components never call `fetch`. They call a hook, which calls a typed function in
 `src/api`, which is the only place that knows a URL exists.
 
+## The design system
+
+Small on purpose: tokens, two primitives everything else is built from, and one
+page that shows all of it. Open `/specimens` (routed, but not in the navigation
+or the palette) to see every part in every state with the real tokens.
+
+### Tokens
+
+All in `src/styles/index.css`. Colour is defined once per theme on
+`[data-theme]`; everything else is in `@theme` and is the same in both.
+
+| | utilities | values |
+|---|---|---|
+| type | `text-hero` `text-title` `text-section` `text-body` `text-detail` `text-caption` `text-chip` | 56, 24, 17, 14, 13, 12.5, 11.5px |
+| radius | `rounded-card` `rounded-control` `rounded-chip`, and `rounded-full` | 10, 6, 4px; the pill is for status and provenance labels only |
+| control height | `h-control` `h-control-sm` `h-control-xs` `h-touch` | 40, 32, 28px; 44px under a finger |
+| row height | `h-row-compact` `h-row` `h-row-comfortable` | 32, 40, 48px |
+| elevation | `shadow-raised` `shadow-overlay` | the one lifted panel; overlays. A card is a hairline and no shadow. |
+
+A type token carries its own line height, and the two headings their weight,
+so a role is one class. `text-hero` is not tabular: tabular figures are for
+columns. A size off this scale needs its reason written beside it; today that
+is the initials inside `TeamLogo`'s fixed discs and the player page's
+decorative jersey numeral.
+
+New token names must be registered with tailwind-merge in `utils/cn.ts`.
+Unregistered, `text-caption` is read as a colour and silently dropped beside
+`text-ink`. `cn.test.ts` pins the cases.
+
+**Themes.** `data-theme` is always set to `light` or `dark` — "follow my
+device" is resolved by the inline script in `index.html` before first paint and
+kept in step by `useTheme` — so each palette is written once. Because the
+palettes are scoped to the attribute and not to the root, any element can carry
+one: `<div data-theme="dark">` is a dark island, which is how a second dark
+palette can be judged beside the first.
+
+### Buttons
+
+`components/ui/Button.tsx`. Four components over one class builder
+(`buttonStyles.ts`), so a link drawn as a button cannot drift from the button
+beside it:
+
+| component | element | notes |
+|---|---|---|
+| `Button` | `<button>` | `loading` shows a spinner in the icon's place, keeps the width and keeps focus |
+| `ButtonLink` | router `<Link>` | no `disabled`: a link that cannot be followed should not be drawn |
+| `IconButton` | square `<button>` | `label` is required; it is the accessible name and the hover title |
+| `IconButtonLink` | square `<Link>` | the same, navigating |
+
+`variant`: `primary`, `secondary` (default), `ghost`, `danger`, `link`.
+`size`: `md` 40px for a page's primary action, `sm` 32px in toolbars, `xs`
+28px inside table rows. On a touch device `md` and `sm` grow to 44px; `xs`
+keeps its size, so it cannot make its row taller, and is given a 40px-tall hit
+area instead. Pass a glyph as `icon` rather than as a child when the button can
+load.
+
+### Tables
+
+`components/ui/DataTable.tsx`. A real `<table>` with a caption and scoped
+headers, sentence-case headers in one size, numbers right-aligned in tabular
+figures, a sticky header and three densities (`compact` 32, `default` 40,
+`comfortable` 48).
+
+```tsx
+<DataTable
+  caption="2026 season value against ADP"
+  columns={COLUMNS}            // id, header, cell, numeric?, rowHeader?, sortValue?, tip?
+  rows={entries}
+  rowKey={(entry) => entry.player.player_id}
+  sort={sort}                  // the caller owns it, so it can live in the URL
+  onSortChange={(next) => setState({ sort: next.key, dir: next.direction })}
+  minWidth="42rem"             // below this the table scrolls sideways...
+  freezeFirstColumn            // ...with its first column kept in view
+/>
+```
+
+- **Sorting** is a button in the header, `aria-sort` on the sorted column and
+  the sort spoken in the caption. Missing values sort last in both directions.
+  The helpers are in `utils/tableSort.ts`.
+- **A column that needs explaining** takes a `tip`. The header's own label is
+  the trigger, marked with a dotted underline: no icon and no extra width. On a
+  sortable column the tip is the sort button's description, so the pair is one
+  tab stop.
+- **`layout="fixed"`** sizes columns from the header alone, so the table
+  cannot outgrow its frame and the one column without a width takes the rest.
+  **`stickyTop`** moves the header's stopping point for a page with a sticky
+  toolbar of its own.
+- **A row that goes somewhere** holds one `RowLink` in the cell that names it.
+  That link is the keyboard and screen-reader path; for a pointer the whole row
+  follows it, except on a control of its own.
+- **Narrow screens.** Nothing is hidden to make a table fit. Given `minWidth`,
+  a table with less room than that becomes its own scroller, no taller than
+  the screen, so the header stays at its top and the first column at its left.
+  With enough room nothing scrolls but the page, and the header sticks under
+  the application bar. Under 480px of room a table of players is not a table
+  at all: see "Row list" below.
+- **A card around a sticky table** clips with `overflow-clip`, not
+  `overflow-hidden`, which would make the card the thing the header sticks to.
+- For a body that is not a flat list — tier groups, memoised rows — compose the
+  parts the wrapper is built from: `Table`, `TableHead`, `ColumnHeader`,
+  `TableBody`, `GroupHeaderRow`, `TableRow`, `RowHeaderCell`, `TableCell`.
+
+- **A group of rows** gets its own `TableBody` opened by a `GroupHeaderRow`: a
+  tier, a designation, a position. Its words are held at the left edge, so they
+  stay readable while a narrow table scrolls sideways.
+- **`highlighted`** on a `TableRow` tints a row that belongs to a set the
+  reader marked (a player on their own roster). The row says so in words too.
+  It is not `selected`, which is the one row in question.
+- **`stickyHeader={false}`** for a short table in the middle of a long page.
+  A sticky header is also what caps a scrolling table at the screen's height,
+  and twenty rows do not need a second scrollbar.
+
+`PlayerCell` (`components/domain`) is the first cell of every table of
+players: a 24px headshot, the name as the row's link, the grey line that
+places the player this week, then any designation. One line where there is
+room and wrapping where there is not.
+
+Seven screens are on it:
+
+| screen | built with | too narrow for its columns | under 480px of room |
+|---|---|---|---|
+| Rankings | parts, tier groups | the list replaces it, from 912px down (see "The board") | the list |
+| Draft board | `DataTable`, sortable | scrolls in its frame, player held | the same: it sorts from its headers, and a list has none |
+| Live | parts, memoised rows | scrolls in its frame; live points and the projection come first after the player | a list |
+| Usage | `DataTable` | scrolls in its frame; the change comes first | a list |
+| Injuries | parts, one group per designation | scrolls in its frame | a list |
+| Teams | parts, one group per position | scrolls in its frame | a list |
+| My team | parts, two tables | never scrolls: under 42rem each player folds onto two lines | the same |
+
+Only Rankings and the draft board sort from their headers. The other five each
+have one order that is the point of the page (highest live points, largest
+change, designation then projection, position then rank, lineup slot), and the
+caption says which.
+
+My team is the exception in two more ways, both because its rows hold Bench,
+Start and Remove. The name is an ordinary link and the row is not one, so a
+press that just misses a button does not leave the page. And the range strip
+has a column only from 60rem of table width; below that the actions keep the
+room.
+
+Still hand-built: the matchup boards and the schedule grid (including the one
+row of it on a team page), the mock draft's tables, compare and the track
+record. The player page's game log is on `DataTable` (see "The player page"):
+a table at every width, with the week held while a phone scrolls the rest.
+
+### Row list
+
+`components/ui/RowList.tsx`. What a table of players becomes on a phone. It is
+the board's phone list (`ProjectionList`) with its frame, sections and rows
+taken out as parts, so Live, Usage, Injuries and Teams fold the same way and
+the board is built from the same parts as they are.
+
+```tsx
+const [frameRef, asList] = useRowList<HTMLDivElement>()   // hooks/useRowList
+
+<div ref={frameRef}>
+  {asList ? (
+    <RowList value="Projection">                 {/* what the right-hand number is */}
+      <RowListGroup id="report-out" heading="Ruled out" note="18 players">
+        <RowListRows>
+          <RowListItem to={`/players/${id}`}>    {/* the whole row is this one link */}
+            <PlayerAvatar player={player} size="xs" />
+            <RowListTitle name={player.name} meta="QB · CHI vs PHI" />
+            <ProjectionValue points={points} className="justify-self-end" />
+            <RowListLine>...</RowListLine>         {/* a further line under the name */}
+          </RowListItem>
+        </RowListRows>
+      </RowListGroup>
+    </RowList>
+  ) : (
+    <Table ...>
+  )}
+</div>
+```
+
+**Why a list there.** A table scrolling sideways on a phone holds the name and
+shows one other column beside it. So the two things each page sets side by
+side were never on screen together: live points and the projection, a
+designation and the number it qualifies, a change in share and the bar that
+explains it. On Live and Usage the table was also a second scroller, capped at
+the height of the screen. The list is the page scrolling, with every column of
+the row in it.
+
+| screen | line one | under it |
+|---|---|---|
+| Live | name, team, where the game stands, "My team", "Past the 20"; live points | the field strip and the projection; the stat line and, once final, the difference |
+| Usage | place, name, team, designation; the change | the average-to-last bar, full width; the projection |
+| Injuries | name, both teams; the projection | the designation, the injury and "will not play" under the number; the practice line |
+| Teams | name, designation; the projection | the board's own second line: grade, range strip, chance of 20+ |
+
+- **`useRowList`** measures the room the table has (`ROW_LIST_BELOW`, 480px: a
+  frozen player column and two columns of numbers) and not the window, like
+  everything else here that chooses what to draw. Put the ref on an element
+  that is mounted for as long as the component is.
+- **A list has no header row**, so `RowList` prints once what the right-hand
+  number is (`value`), and a `note` where a table's header had a tip. A number
+  that is not the headline is named where it is printed ("Proj. 14.2").
+- **One link per row.** The row is the link to the player and holds no second
+  one, so a team abbreviation that is a link in the Injuries table is text in
+  the list. Groups are sections named by an `h3` (`h2` on the board, where the
+  page's `h1` is the only heading above).
+- **The draft board stays a table**: its order is chosen from its column
+  headers. **My team** keeps its own two-line table, because its rows hold
+  Bench, Start and Remove.
+
+### Filter toolbar
+
+`components/ui/FilterToolbar.tsx`. The controls that decide which rows a table
+holds, laid out one way. It is layout and behaviour only and owns no state:
+each page keeps its filters in the URL through `useUrlState`, as before.
+
+```tsx
+<FilterToolbar label="Filter players" summary="12 of 214 players">
+  <FilterSearch label="Search players" value={search} onChange={setSearch} />
+  <FilterChoice label="Position" value={position} onChange={setPosition} options={POSITIONS} />
+  <Select label="Team" hideLabel size="sm" ... />
+  <FilterChip removeLabel="Show every game" onRemove={clearGame}>DET @ CAR</FilterChip>
+</FilterToolbar>
+```
+
+- **One height.** 32px, and 44px under a finger, for every control in it. A
+  search box and a select are given the touch height by the toolbar; the
+  segmented control and buttons already had it.
+- **It wraps between controls, never inside one.** A `FilterChoice` is a
+  segmented control where its options fit the toolbar's own measured width and
+  a native select where they do not, with each option prefixed by the filter's
+  name ("Designation: All"), since a closed select shows only one.
+- **`summary`** is the count at the trailing edge, announced when it changes.
+- **`FilterChip`** is a filter set somewhere else on the page (a game picked
+  from the Live ticker) with a named button to drop it. Squared, not a pill.
+
+Rankings, Live, Usage, Injuries and the draft board use it. Rankings keeps its
+position tabs as links, because the position is part of its path. On the draft
+board the season is a `Select` whose options name it ("2026 season"), since
+its label is not drawn, and the link to the mock draft sits at the row's
+trailing edge. Its lens ("Everyone, We rank higher, Drafters rank higher")
+used to stay a segmented control on a phone and wrap its labels onto two
+lines; as a `FilterChoice` it is a select there.
+
+On a phone the board's search, team and sort are 44px like its position tabs
+above them and like every other toolbar. They were 32px before the toolbar,
+which was the one place a control under a finger was smaller than the rule in
+"Tokens" says. It costs 24px of height over the two lines.
+
 ## Three rules this codebase holds to
 
 **Provenance is not decoration.** Every block of numbers the API returns is
@@ -150,6 +397,103 @@ out of one response and the frontend infers nothing. A remembered season that is
 no longer published is dropped rather than restored. An explicit `?season=&week=`
 always wins, including for a season with no board; the week control explains
 what is missing rather than the selection being overridden.
+
+## The board
+
+`/rankings` is the one board, and it is drawn three ways from the same rows.
+
+| room the board has | drawing | a row |
+|---|---|---|
+| 912px or more | a table (`ProjectionTable`, on the shared table parts) | one line, 40px; 48px with "Roomy" |
+| less | a list (`ProjectionList`) | two lines, about 65px |
+| any, by choice | cards (`ProjectionCards`, `?view=cards`) | one player at a time |
+
+**The range strip is on every row at every width.** It used to be a column only
+from 1,280px; a tablet saw none. In the table its width is what the table has
+to spare after the fixed columns and a 21rem player cell, never under 13rem and
+never over 38% — sized in container units, so it is right whether the sidebar
+is open or not. Floor and ceiling are printed either side of the strip in every
+drawing, which is why the separate Floor and Ceiling columns are gone; both
+still sort, from the toolbar. In the list the strips share a left edge and a
+width, so the yard lines of one row line up with the next.
+
+**On a week with an ungraded matchup the list folds once more below 412px.**
+The grade's slot is then as wide as the words "Not graded", and the second
+line needs 322px: a 412px phone has exactly that, and at 390px and 360px the
+ceiling was printed under the chance of 20+. There the strip takes the whole
+line and the grade and the chance go under it (`ProjectionLine`). With every
+matchup graded the two lines fit down to 360px and are as they were.
+
+**"Room" is measured, not guessed from the window.** The sidebar takes 240px,
+so a 1,100px laptop window has less room than an 820px tablet. The page
+measures its own content width and draws the table only where a name and a
+game fit on one line beside six other columns (`TABLE_MIN_WIDTH`).
+
+**One bar stays in view.** Position tabs, search, team and sort sit in a bar
+that sticks under the application header, and the table's column header sticks
+under that. The bar wraps on a narrow screen, so its height is measured and
+handed to the table as `stickyTop`. On a phone only the tabs stick; three more
+controls would cost a fifth of the screen for the whole scroll.
+
+**A designation is on the board in every drawing.** "Out" or "Questionable"
+sits beside the name it qualifies, in the table, the list and the cards
+(`RowFlags`). It used to be on the cards only, so the desktop table printed a
+ruled-out player's projection with nothing beside it.
+
+**Row height is a preference, not a filter.** "Compact" and "Roomy" are kept in
+this browser's storage with the theme, not in the URL with the sort: a shared
+link should not set the row height of whoever opens it.
+
+## The player page
+
+`/players/:id` is where one player's week is read, and where the week before
+it is one press away.
+
+**A bar stays in view** (`PlayerBar`), under the application bar, for the
+whole scroll. It holds three things:
+
+| | where | why |
+|---|---|---|
+| the week stepper | always, at the trailing edge | one press moves the page a week from wherever the reader is |
+| who and how much: name and projection, and with room (960px of bar) the chance of 20+, the header's two actions and, from 1,280px, the range strip | once the header has scrolled away | until then the header says it, and the bar does not say it twice |
+| links to This week, Game log, Usage, Matchup, Context | from 720px of bar | on a phone the bar is one line and the links sit under the header instead |
+
+The summary repeats the header for the eye and is hidden from assistive
+technology. A link scrolls its section to just under the bar (the bar's height
+is measured and published as `--player-bar`, since it is two lines where it
+wraps) and moves focus there, so the next Tab carries on from the section.
+
+**Stepping a week keeps the page.** The stepper writes the same `?week=` every
+screen reads, through `SlateProvider`, and walks only the published weeks. Two
+things make it usable half-way down a page. The profile query keeps the same
+player's previous week on screen until the new one arrives, so the page dims
+instead of collapsing to a skeleton. And a change of week no longer scrolls
+the page to its top: the slate's setters navigate with `preventScrollReset`,
+on every screen. At the first or last published week the button stays, says
+why it does nothing, and keeps the keyboard's focus; a disabled button would
+drop it.
+
+**The header is beside its scoreboard** from 64rem of its own width, which is
+what puts the projection card and the top of the game log on a laptop's first
+screen (the page went from 3,153px to about 2,700px at 1440). The outline
+jersey number is not drawn in that layout; it is still in the meta line.
+
+**The game log** draws each game's stored projection as an ink tick across its
+column, with a legend, and the table has a Difference column (points minus
+projection). The table is on the shared `DataTable` and scrolls with the page,
+not in a box. A select chooses the last 17 games or one season, and the usage
+trend under it draws the same games. Earlier seasons are loaded on request
+(`weeks=120` on the profile endpoint): the page opens with 24 games, and a
+season cut off by that limit is not offered until the rest of it is loaded.
+The accuracy figures under the chart are over every loaded game and say how
+many that is.
+
+**The lists are narrower.** Injury, weather and the betting line sit side by
+side from 56rem of card; usage and matchup rows go to two columns where their
+card is wide enough. Label and value used to be up to 1,100px apart.
+
+The order of the sections is unchanged and deliberate: nearest the model
+first. See the note at the top of `pages/PlayerDetailPage.tsx`.
 
 ## Three decisions in the Phase 3 views
 
@@ -245,39 +589,75 @@ Everything a `VITE_`-prefixed variable holds ends up in the client bundle. There
 are no secrets here and there must never be: the API is anonymous, requires no
 credentials, and nothing in this directory should ever hold one.
 
-## Browser QA
+## Tests
+
+Three kinds, by what each can see.
+
+### Unit tests
+
+`npm test` runs Vitest over `src/**/*.test.ts(x)`: the pure logic a redesign is
+most likely to disturb without anyone noticing. Board sorting and tier
+grouping, search ranking, tie handling, lineup parsing, share links, trade
+arithmetic, the formatters. No DOM and no server; the whole suite takes about a
+second. Fixtures in `src/test/factories.ts` are built through the real Zod
+contracts, so a fixture cannot describe a response the API could not send.
+
+A component is unit-tested only by rendering it to a string, for what it
+*says* (`CalibrationNotice.test.tsx`). How it looks is a screenshot's job and
+how it behaves is Playwright's.
+
+### Browser QA
 
 `tests/e2e` is a Playwright suite covering what unit tests cannot: rendered
 colour, focus order, tap targets, and whether a phone-width layout overflows.
 
 ```bash
-npm run test:e2e                       # both viewports, against the deployment
-E2E_BASE_URL=http://localhost:4173 npm run test:e2e   # against a local build
+npm run test:e2e                       # both viewports, against a local build and the local API
 npm run test:contrast                  # design-token contrast audit, no server
 ```
 
-The default target is the deployed origin, because most of what the suite asks
-about — a published week with real projections in it, gzip, SPA deep links —
-only exists there. To test a change before it ships, build it and point the
-suite at a local preview:
+**Local first.** With `E2E_BASE_URL` unset the suite builds nothing itself: it
+starts `vite preview` on port 4173 over the bundle in `dist/`, which proxies
+`/api` to the local API (`python -m nflfp.api --port 8010`, or whatever
+`VITE_DEV_API_PROXY` names). So the usual run is:
 
 ```bash
 npm run build
-VITE_DEV_API_PROXY=https://<your-api-host> npm run preview -- --port 4173
-E2E_BASE_URL=http://localhost:4173 npm run test:e2e
+npm run test:e2e
 ```
 
-`preview` proxies `/api` exactly as `dev` does, so a production bundle can be
-exercised against the real API without deploying it first.
+The suite used to default to the deployed origin. That made a failing test
+ambiguous — a change in this checkout, or a change in this week's data — and
+it meant a fix could not be tested before it shipped. The deployment is still
+one variable away, for the things that only exist there (gzip, SPA deep links,
+a cold start):
 
-Four specs, by what they protect:
+```bash
+E2E_BASE_URL=https://<the-deployed-origin> npm run test:e2e
+```
+
+Eleven specs, by what they protect:
 
 | spec | what breaks without it |
 |---|---|
 | `a11y.spec.ts` | axe (WCAG 2.1 AA) on every route, one `h1` per page, no skipped heading levels, skip link, focus-on-navigation, visible focus rings, labelled controls, keyboard-only simulation |
 | `walkthrough.spec.ts` | the dashboard→board→player→matchup path, slate state surviving a reload, share links, the error/empty states, a full simulation |
-| `responsive.spec.ts` | horizontal overflow at phone width, the fixed nav not covering content, cards replacing the table, 44px tap targets |
+| `responsive.spec.ts` | horizontal overflow at phone width, the fixed nav not covering content, the list replacing the table, 44px tap targets |
 | `data-states.spec.ts` | K/DST refusals, nothing published, an empty board, slow and failed requests, a missing projection, a 400-player board |
+| `weather.spec.ts` | a rain chance printed as a percentage on every screen that shows one, and the bad-weather flag following its threshold |
+| `my-team.spec.ts` | a populated roster at 360, 390 and 412px and on desktop, both themes: no sideways scroll, every row's Start, Bench and Remove on screen; a press on a row not leaving the page |
+| `search.spec.ts` | the first result being the player meant: projected players first, exact names first, retired players still listed |
+| `board.spec.ts` | the board at every width: a range strip on every row, 40px rows and the remembered 48px choice, the toolbar and column header staying in view, the row as the link, headers that explain themselves, the table giving way to the list by measured room, nothing in a list row printed over anything else at 412, 390 and 360px on a graded and an ungraded week, an injury designation on the board |
+| `player.spec.ts` | the player page: the bar following the page down with the name and the projection in it, each section link landing its section under the bar with the focus, the week stepper keeping the scroll position and the focus and saying why it stops at the last week, a projection tick for every game that had one, the table's difference column, a season choice the usage trend follows, earlier seasons loaded on request, a week with no projection; axe in both themes; no overflow at 1024, 820, 412, 390 and 360px; the one-line bar and 44px targets on a phone |
+| `primitives.spec.ts` | the shared `Button`, `DataTable` and `FilterToolbar` on `/specimens`: sorting from the keyboard, the row link, the sticky header, row heights, target sizes, a loading button keeping its width and focus, a filter choice becoming a select only where it does not fit |
+| `tables.spec.ts` | Live, Usage, Injuries, Teams and the draft board on the shared table and toolbar: filters working together and living in the URL, a filter leaving the sort alone, the row as the link, row groups announced as headings, a Live refresh keeping focus, scroll and filters, an empty filter told apart from no data, loading and failed requests; and all six screens (My team included) at 1440, 1024, 820, 768, 412, 390 and 360px: no page overflow, no clipped or wrapped control, no dropped column, the player column held while a table scrolls in its frame, and at the three phone widths the list in its place with every column of the table in each row, nothing printed over anything else, one link per row; every toolbar control 44px on a phone |
+
+`capture.mjs` is not a test. It opens a visible browser and photographs a set
+of routes at 1440, 820 and Pixel 7 widths in both themes (or at any width in
+pixels: `--widths 1024,768,360`, with `--roster` to seed My team), flagging sideways
+overflow and console errors, for looking at a change rather than asserting on
+it. The whole verification sequence, with this in it, is the `frontend-verify`
+skill in `.claude/skills`.
 
 `token-contrast.mjs` is the one to run when touching the palette. It parses the
 token blocks out of `styles/index.css` — not a copy of them — resolves every
@@ -288,3 +668,36 @@ on the page it is given; this sees the ones a future component will reach for.
 
 Two workers, always. Every run goes through one API instance behind one cache,
 and the default worker count measures contention rather than the app.
+
+### Screenshots
+
+`tests/visual` holds a picture of fourteen screens — dashboard, board, player,
+game, team, My team, Live, usage, injuries, compare, the simulation builder,
+the track record, the draft board and the specimen page — at 1440px and 412px,
+with the dashboard, board, player page, Live, injuries and specimens also in
+the dark theme. The five screens whose tables change shape between a laptop
+and a phone (team, My team, Live, usage, injuries) are also held at 820px. A token or primitive change touches every page, including the
+ones nobody opened; these turn that into image diffs to approve.
+
+```bash
+npm run test:visual            # compare against the committed baselines
+npm run test:visual:update     # accept the current pictures as the new baselines
+npm run test:visual:record     # re-record the API fixtures (needs the local API), then update
+npm run test:visual:record -- specimens draft-board   # the named screens only; the rest untouched
+npm run test:visual:record -- --project visual-tablet team   # ...and at one width only
+```
+
+The API is recorded, not live. Each screen's traffic is saved once under
+`tests/visual/fixtures` and replayed, so a picture moves only when the frontend
+does and the comparison needs no backend. A request the recording does not hold
+is aborted on purpose: a screen that starts calling a new endpoint shows an
+error in its picture, and the fix is `test:visual:record`. Headshots and team
+logos come from other hosts and are blocked, so avatars show initials on every
+run.
+
+Baselines are per platform (`__screenshots__/win32`, `__screenshots__/linux`)
+because text is rasterised differently on each. The Windows set is the one
+committed; CI produces the Linux set as an artifact until one is committed too.
+
+Not every route and not every state is photographed. Behaviour belongs in
+`tests/e2e`, where it is asserted rather than pictured.

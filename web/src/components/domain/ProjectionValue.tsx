@@ -71,7 +71,7 @@ export function ProjectionValue({
       )}
       {actualPoints !== null && actualPoints !== undefined && (
         <Tooltip content="What the player actually scored in this finished game.">
-          <span className="text-ink-muted tnum text-xs font-medium">
+          <span className="text-ink-muted tnum text-detail font-medium">
             actual {formatPoints(actualPoints)}
           </span>
         </Tooltip>
@@ -147,7 +147,7 @@ export function OutcomeRange({
 }) {
   const large = size === 'lg'
   if (floor === null || floor === undefined || ceiling === null || ceiling === undefined) {
-    return <span className="text-ink-muted text-xs">Range unavailable</span>
+    return <span className="text-ink-muted text-detail">Range unavailable</span>
   }
 
   // Round the scale up to a whole yard line so the rules land on 5, 10, 15…
@@ -181,7 +181,7 @@ export function OutcomeRange({
   return (
     <div className={cn('flex items-center gap-2', className)}>
       {!hideEndpoints && (
-        <span className="tnum text-ink-muted w-9 shrink-0 text-right text-xs">
+        <span className="tnum text-ink-muted w-9 shrink-0 text-right text-detail">
           {formatPoints(floor)}
         </span>
       )}
@@ -249,7 +249,7 @@ export function OutcomeRange({
       </div>
       </YardReadout>
       {!hideEndpoints && (
-        <span className="tnum text-ink-muted w-9 shrink-0 text-xs">{formatPoints(ceiling)}</span>
+        <span className="tnum text-ink-muted w-9 shrink-0 text-detail">{formatPoints(ceiling)}</span>
       )}
     </div>
   )
@@ -289,7 +289,7 @@ function YardReadout({ max, children }: { max: number; children: ReactNode }) {
           />
           <span
             aria-hidden
-            className="bg-ink text-surface tnum pointer-events-none absolute -top-5 z-10 -translate-x-1/2 rounded px-1.5 py-px text-[0.625rem] font-semibold whitespace-nowrap shadow-card"
+            className="bg-ink text-surface tnum pointer-events-none absolute -top-5 z-10 -translate-x-1/2 rounded px-1.5 py-px text-chip font-semibold whitespace-nowrap"
             style={{ left: `${at * 100}%` }}
           >
             {Math.round(at * max)} pts

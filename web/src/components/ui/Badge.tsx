@@ -31,7 +31,7 @@ export function Badge({ tone = 'neutral', size = 'sm', icon, className, children
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-full border font-medium whitespace-nowrap',
-        size === 'sm' ? 'px-2 py-0.5 text-[0.6875rem]' : 'px-2.5 py-1 text-xs',
+        size === 'sm' ? 'text-chip px-2 py-0.5' : 'text-caption px-2.5 py-1',
         TONES[tone],
         className,
       )}

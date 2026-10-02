@@ -71,7 +71,7 @@ function TopRow({ entry }: { entry: RankedProjection }) {
 
   return (
     <li className="hover:bg-surface-hover flex items-center gap-3 px-5 py-2.5 transition-colors">
-      <span className="text-ink-muted tnum w-5 shrink-0 text-xs font-medium">{entry.rank}</span>
+      <span className="text-ink-muted tnum w-5 shrink-0 text-detail font-medium">{entry.rank}</span>
 
       <PlayerIdentity
         player={projection.player}

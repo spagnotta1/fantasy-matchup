@@ -1,72 +1,194 @@
-import { forwardRef, type ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, MouseEvent, ReactNode, Ref } from 'react'
+import { Link, type LinkProps } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 
-import { cn } from '@/utils/cn'
+import { buttonClasses, type ButtonSize, type ButtonVariant } from './buttonStyles'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
-export type ButtonSize = 'sm' | 'md' | 'lg'
+export type { ButtonSize, ButtonVariant }
 
-const VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    'bg-accent text-on-accent hover:bg-accent-hover shadow-card disabled:hover:bg-accent',
-  secondary:
-    'bg-surface text-ink border border-line-input hover:bg-surface-hover hover:border-line-strong disabled:hover:bg-surface',
-  ghost: 'text-ink-secondary hover:bg-surface-hover hover:text-ink disabled:hover:bg-transparent',
-  danger:
-    'bg-negative text-white hover:brightness-110 shadow-card disabled:hover:brightness-100',
-}
-
-const SIZES: Record<ButtonSize, string> = {
-  /*
-   * `sm` is for dense toolbars, and at 32px tall it is below the 44px touch
-   * floor — which only matters on a device where the pointer is a finger. The
-   * `pointer-coarse` variant grows it to 44 there and leaves the mouse layout
-   * exactly as designed.
-   *
-   * Grown rather than given an invisible 44px overlay, which is the other
-   * usual fix. These buttons sit in a row a few pixels apart, so overlays
-   * would overlap each other, and the control they would overlap is "Clear
-   * lineup" — a mis-tap that silently throws away fourteen slots. A control
-   * that is physically as big as its hit area cannot lie about where it ends.
-   */
-  sm: 'h-8 pointer-coarse:h-11 px-3 pointer-coarse:px-3.5 text-xs gap-1.5 rounded-[var(--radius-control)]',
-  md: 'h-10 pointer-coarse:h-11 px-4 text-sm gap-2 rounded-[var(--radius-control)]',
-  lg: 'h-12 px-6 text-base gap-2.5 rounded-[var(--radius-control)]',
-}
+/**
+ * Buttons, links that look like buttons, and icon buttons.
+ *
+ * Four components over one class builder, rather than one component with an
+ * `asLink` and an `iconOnly` switch. The switches read well in a sentence and
+ * badly in a type: a link has no `disabled` and no `loading`, an icon button
+ * has no visible label and so must be given one, and a single props object
+ * that admits every combination admits the wrong ones too. Each of these takes
+ * exactly what its element can do:
+ *
+ *   - `Button`          a `<button>`
+ *   - `ButtonLink`      a router `<Link>` drawn as a button
+ *   - `IconButton`      a square `<button>` holding one glyph; `label` required
+ *   - `IconButtonLink`  the same, navigating
+ *
+ * What they share is `buttonClasses` (`buttonStyles.ts`), so hover, focus,
+ * press and disabled are written once and a link cannot drift from the button
+ * beside it.
+ */
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   size?: ButtonSize
-  /** Shows a spinner and disables the button. Keeps the label for stable width. */
-  loading?: boolean
   fullWidth?: boolean
+  /**
+   * A glyph set before the label.
+   *
+   * A glyph passed as a child works too. Passing it here is what lets a
+   * loading button put the spinner where the glyph was, so the label does not
+   * move.
+   */
+  icon?: ReactNode
+  /**
+   * The action is in progress. Shows a spinner in place of the icon and
+   * refuses further presses, without changing width.
+   */
+  loading?: boolean
+  ref?: Ref<HTMLButtonElement>
 }
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', loading = false, fullWidth, className, children, disabled, type = 'button', ...props },
+export function Button({
+  variant,
+  size,
+  fullWidth,
+  icon,
+  loading = false,
+  className,
+  children,
+  type = 'button',
+  onClick,
   ref,
-) {
+  ...props
+}: ButtonProps) {
+  const spinner = <Loader2 aria-hidden className="animate-spin" />
+  // No icon to stand in for: the spinner takes the label's place, and the
+  // label stays in the layout (and in the accessible name) to hold the width.
+  const overlay = loading && !icon
+
   return (
     <button
       ref={ref}
       type={type}
-      disabled={disabled || loading}
       // `aria-busy` rather than swapping the label: a screen reader user should
       // hear that the same action is in progress, not that it disappeared.
       aria-busy={loading || undefined}
-      className={cn(
-        'inline-flex items-center justify-center font-medium whitespace-nowrap',
-        'transition-[background-color,border-color,color,box-shadow,transform] duration-150',
-        'active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-55 disabled:active:scale-100',
-        VARIANTS[variant],
-        SIZES[size],
-        fullWidth && 'w-full',
-        className,
-      )}
+      // Not the `disabled` attribute. A button that disables itself while it
+      // works drops keyboard focus on the floor, and the person who pressed it
+      // has to find their place again when it finishes.
+      aria-disabled={loading || undefined}
+      onClick={loading ? swallow : onClick}
+      className={buttonClasses({ variant, size, fullWidth, className })}
       {...props}
     >
-      {loading && <Loader2 aria-hidden className="size-4 animate-spin" />}
-      {children}
+      {overlay ? (
+        <>
+          <span aria-hidden className="absolute inset-0 flex items-center justify-center">
+            {spinner}
+          </span>
+          <span className="inline-flex items-center gap-[inherit] opacity-0">{children}</span>
+        </>
+      ) : (
+        <>
+          {loading ? spinner : icon}
+          {children}
+        </>
+      )}
     </button>
   )
-})
+}
+
+/** Also stops a submit button from submitting: the click is the submission. */
+function swallow(event: MouseEvent) {
+  event.preventDefault()
+}
+
+export interface ButtonLinkProps extends LinkProps {
+  variant?: ButtonVariant
+  size?: ButtonSize
+  fullWidth?: boolean
+  icon?: ReactNode
+  ref?: Ref<HTMLAnchorElement>
+}
+
+/**
+ * A link drawn as a button. Navigation stays navigation: it opens in a new
+ * tab, shows its address on hover and is announced as a link. There is no
+ * `disabled` — a link that cannot be followed should not be rendered as one.
+ */
+export function ButtonLink({ variant, size, fullWidth, icon, className, children, ...props }: ButtonLinkProps) {
+  return (
+    <Link className={buttonClasses({ variant, size, fullWidth, className })} {...props}>
+      {icon}
+      {children}
+    </Link>
+  )
+}
+
+interface IconOnly {
+  /**
+   * What the control does, in words. It is the accessible name and the hover
+   * title. Required, because a glyph is a guess: this is the only text an
+   * icon button has.
+   */
+  label: string
+  /** The glyph. Hidden from assistive technology; `label` speaks for it. */
+  children: ReactNode
+}
+
+export interface IconButtonProps
+  extends Omit<ButtonProps, 'icon' | 'fullWidth' | 'children' | 'aria-label'>, IconOnly {}
+
+export function IconButton({
+  label,
+  variant = 'ghost',
+  size = 'sm',
+  loading = false,
+  className,
+  children,
+  type = 'button',
+  onClick,
+  ref,
+  ...props
+}: IconButtonProps) {
+  return (
+    <button
+      ref={ref}
+      type={type}
+      aria-label={label}
+      title={label}
+      aria-busy={loading || undefined}
+      aria-disabled={loading || undefined}
+      onClick={loading ? swallow : onClick}
+      className={buttonClasses({ variant, size, square: true, className })}
+      {...props}
+    >
+      <span aria-hidden className="contents">
+        {loading ? <Loader2 className="animate-spin" /> : children}
+      </span>
+    </button>
+  )
+}
+
+export interface IconButtonLinkProps
+  extends Omit<ButtonLinkProps, 'icon' | 'fullWidth' | 'children' | 'aria-label'>, IconOnly {}
+
+export function IconButtonLink({
+  label,
+  variant = 'ghost',
+  size = 'sm',
+  className,
+  children,
+  ...props
+}: IconButtonLinkProps) {
+  return (
+    <Link
+      aria-label={label}
+      title={label}
+      className={buttonClasses({ variant, size, square: true, className })}
+      {...props}
+    >
+      <span aria-hidden className="contents">
+        {children}
+      </span>
+    </Link>
+  )
+}

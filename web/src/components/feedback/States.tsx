@@ -48,24 +48,24 @@ export function ErrorState({
       <p className="text-ink-secondary max-w-sm text-sm leading-relaxed">{description}</p>
 
       {canRetry && onRetry && (
-        <Button variant="secondary" size="sm" onClick={onRetry} className="mt-1">
-          <RefreshCw aria-hidden className="size-3.5" />
+        <Button size="sm" icon={<RefreshCw aria-hidden />} onClick={onRetry} className="mt-1">
           Try again
         </Button>
       )}
 
       {operatorDetail && (
         <div className="mt-2">
-          <button
-            type="button"
+          <Button
+            variant="link"
+            size="sm"
+            className="text-ink-muted underline"
             onClick={() => setShowDetail((current) => !current)}
-            className="text-ink-muted hover:text-ink-secondary text-xs underline underline-offset-2"
             aria-expanded={showDetail}
           >
             {showDetail ? 'Hide technical detail' : 'Technical detail'}
-          </button>
+          </Button>
           {showDetail && (
-            <p className="bg-surface-sunken text-ink-muted mt-2 max-w-md rounded-md px-3 py-2 text-left font-mono text-xs break-words">
+            <p className="bg-surface-sunken text-ink-muted mt-2 max-w-md rounded-md px-3 py-2 text-left font-mono text-detail break-words">
               {operatorDetail}
             </p>
           )}
@@ -165,7 +165,7 @@ export function Refreshing({
     <div className={cn('relative', className)} aria-busy={active || undefined}>
       {active && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center p-3">
-          <span className="bg-surface-raised border-line text-ink-secondary shadow-raised flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium">
+          <span className="bg-surface-raised border-line text-ink-secondary shadow-raised flex items-center gap-2 rounded-full border px-3 py-1.5 text-detail font-medium">
             <Loader2 aria-hidden className="text-accent size-3.5 animate-spin" />
             {label}
           </span>
@@ -228,9 +228,9 @@ export function NoticeList({
         <Info aria-hidden className="text-info-text mt-0.5 size-4 shrink-0" />
         <div className="min-w-0">
           {showTitle && (
-            <p className="text-info-text mb-1 text-xs font-semibold">{title}</p>
+            <p className="text-info-text mb-1 text-detail font-semibold">{title}</p>
           )}
-          <ul className="text-info-text space-y-1.5 text-xs leading-relaxed">
+          <ul className="text-info-text space-y-1.5 text-detail leading-relaxed">
             {notices.map((notice) => (
               <li key={notice}>{notice}</li>
             ))}
@@ -243,6 +243,6 @@ export function NoticeList({
 
 function Eyebrow({ children }: { children: ReactNode }) {
   return (
-    <p className="text-ink-muted -mb-2 text-[0.6875rem] font-bold tracking-[0.14em] uppercase">{children}</p>
+    <p className="text-ink-muted -mb-2 text-chip font-bold tracking-[0.14em] uppercase">{children}</p>
   )
 }

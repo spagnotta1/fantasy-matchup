@@ -43,7 +43,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       <label
         htmlFor={selectId}
         className={cn(
-          'text-ink-secondary text-xs font-medium',
+          'text-ink-secondary text-caption font-medium',
           hideLabel && 'sr-only',
         )}
       >
@@ -55,10 +55,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           id={selectId}
           aria-describedby={hintId}
           className={cn(
-            'bg-surface border-line-input text-ink w-full appearance-none rounded-[var(--radius-control)] border',
+            'bg-surface border-line-input text-ink rounded-control w-full appearance-none border',
             'pr-9 font-medium transition-colors',
             'hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-55',
-            size === 'sm' ? 'h-8 pl-2.5 text-xs' : 'h-10 pl-3 text-sm',
+            size === 'sm' ? 'h-control-sm text-detail pl-2.5' : 'h-control text-body pl-3',
           )}
           {...props}
         >
@@ -74,7 +74,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         />
       </div>
       {hint && (
-        <p id={hintId} className="text-ink-muted text-xs">
+        <p id={hintId} className="text-ink-muted text-detail">
           {hint}
         </p>
       )}
