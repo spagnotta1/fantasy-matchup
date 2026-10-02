@@ -9,7 +9,14 @@
  *
  *   node tests/e2e/capture.mjs <baseURL> [--out dir] [--routes a,b] [--route "c?x=1,2"] [--headless]
  *                              [--themes light,dark] [--widths desktop,tablet,phone,1024,360]
- *                              [--roster id,id,id]
+ *                              [--roster id,id,id] [--press "Run simulation"] [--fold]
+ *
+ * `--press` clicks the button of that name once the page has loaded and waits
+ * for what it started, for a screen that only exists after an action: a
+ * finished simulation, from a matchup link (`--route "simulation?a=…&b=…"`).
+ * `--fold` also saves the first screenful (`<name>.fold.png`), taken where the
+ * page was left, for judging what a reader sees without scrolling. Every line
+ * prints the page's height.
  *
  * The browser is headed by default, on purpose: the point is to watch the
  * pages load. `--headless` is for a quick re-run. See the `frontend-verify`
@@ -69,8 +76,13 @@ const widths = flag('widths')?.split(',') ?? Object.keys(VIEWPORTS)
 const themes = flag('themes')?.split(',') ?? ['light', 'dark']
 // Seeds My team, for the screens that read it: `--roster id,id,id`.
 const roster = flag('roster')?.split(',') ?? null
+const press = flag('press') ?? null
+const fold = args.includes('--fold')
 
-const slug = (route) => route.replace(/^\//, '').replace(/[/?=&,]+/g, '-') || 'home'
+// A file name from a route. A matchup link is two lineups long and holds
+// colons, which Windows will not have in a name: cut at the first 40
+// characters, which is the page and the start of what it was asked for.
+const slug = (route) => route.replace(/^\//, '').replace(/[/?=&,:]+/g, '-').slice(0, 40).replace(/-$/, '') || 'home'
 
 mkdirSync(outDir, { recursive: true })
 const browser = await chromium.launch({ headless })
@@ -101,19 +113,52 @@ for (const width of widths) {
       await page.locator('main [role="status"]').first().waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {})
       await page.evaluate(() => document.fonts.ready)
 
+      if (press) {
+        const button = page.getByRole('button', { name: press, exact: true }).first()
+        if ((await button.count()) > 0 && (await button.isEnabled())) {
+          await button.click()
+          await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {})
+          await page.locator('main [aria-live="polite"] .animate-indeterminate').waitFor({ state: 'detached', timeout: 60_000 }).catch(() => {})
+          // The page scrolls to what the press produced; let it arrive.
+          await page.waitForTimeout(1200)
+        } else {
+          errors.push(`PRESS no enabled "${press}" button`)
+        }
+      }
+
       const overflow = await page.evaluate(() => {
         const doc = document.documentElement
         return doc.scrollWidth - doc.clientWidth
       })
+      const height = await page.evaluate(() => document.documentElement.scrollHeight)
+      // What is too wide, not only that something is: the innermost elements
+      // that reach past the screen, which is where the fix goes.
+      const culprits =
+        overflow > 0
+          ? await page.evaluate(() => {
+              const edge = document.documentElement.clientWidth + 1
+              const past = (element) => element.getBoundingClientRect().right > edge
+              return [...document.querySelectorAll('main *')]
+                .filter((element) => past(element) && ![...element.children].some(past))
+                .slice(0, 3)
+                .map(
+                  (element) =>
+                    `<${element.tagName.toLowerCase()} class="${String(element.getAttribute('class') ?? '').slice(0, 70)}"> "${(element.textContent ?? '').trim().slice(0, 32)}"`,
+                )
+            })
+          : []
       const file = join(outDir, `${slug(route)}.${width}.${theme}.png`)
+      // The first screenful before the full page: a full-page capture is free
+      // to move the scroll position.
+      if (fold) await page.screenshot({ path: file.replace(/\.png$/, '.fold.png'), animations: 'disabled' })
       await page.screenshot({ path: file, fullPage: true, animations: 'disabled' })
 
       const notes = [
-        overflow > 0 ? `OVERFLOW-X ${overflow}px` : null,
+        overflow > 0 ? `OVERFLOW-X ${overflow}px\n        ${culprits.join('\n        ')}` : null,
         errors.length ? `CONSOLE ${JSON.stringify(errors.slice(0, 3))}` : null,
       ].filter(Boolean)
       if (notes.length) problems += 1
-      console.log(`${notes.length ? '!!' : 'ok'}  ${width.padEnd(7)} ${theme.padEnd(5)} ${route.padEnd(18)} ${file}${notes.length ? `\n      ${notes.join('\n      ')}` : ''}`)
+      console.log(`${notes.length ? '!!' : 'ok'}  ${width.padEnd(7)} ${theme.padEnd(5)} ${String(height).padStart(5)}px ${route.slice(0, 40).padEnd(18)} ${file}${notes.length ? `\n      ${notes.join('\n      ')}` : ''}`)
     }
     await context.close()
   }

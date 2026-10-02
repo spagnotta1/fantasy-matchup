@@ -31,6 +31,16 @@ interface Edge {
  * points at running back and still be a coin flip, because these are averages
  * over distributions that overlap. The win probability is the only number on
  * this page that accounts for that, and it comes from the API.
+ *
+ * In a container at least 44rem wide the positions sit two to a line, which
+ * halves the block's height in the result summary. The bars keep one scale
+ * and the two columns are the same width, so a bar is still comparable with
+ * every other.
+ *
+ * Each side's points are printed either side of the bar, under that side's
+ * name. They used to be printed inside it, where the bar ran over them: the
+ * larger a lead, the less legible the number that made it, and nothing said
+ * which number was whose.
  */
 export function PositionalEdges({
   labelA,
@@ -52,18 +62,23 @@ export function PositionalEdges({
   const widest = Math.max(...edges.map((edge) => Math.abs(edge.difference)), 0.001)
 
   return (
-    <div className="space-y-3">
+    <div>
+      <div className="grid gap-x-10 gap-y-2 @[44rem]:grid-cols-2">
+      {/* Whose number is on which side, once per column of rows. */}
+      <EdgeKey labelA={labelA} labelB={labelB} />
+      {edges.length > 1 && <EdgeKey labelA={labelA} labelB={labelB} className="hidden @[44rem]:grid" />}
       {edges.map((edge) => {
         const share = (Math.abs(edge.difference) / widest) * 50
         const leadsA = edge.difference > 0
         const level = Math.abs(edge.difference) < 0.05
 
         return (
-          <div key={edge.position} className="grid grid-cols-[2.5rem_1fr_5rem] items-center gap-3">
+          <div key={edge.position} className={cn(ROW, 'items-center')}>
             <span className="text-ink-secondary text-detail font-semibold">{edge.position}</span>
+            <span className="text-ink-secondary tnum text-detail text-right">{formatPoints(edge.b)}</span>
 
             <div
-              className="bg-surface-sunken relative h-6 overflow-hidden rounded-[var(--radius-control)]"
+              className="bg-surface-sunken relative h-5 overflow-hidden rounded-[var(--radius-control)]"
               role="img"
               aria-label={`${edge.position}: ${labelA} ${formatPoints(edge.a)} points, ${labelB} ${formatPoints(edge.b)}. ${
                 level
@@ -88,17 +103,13 @@ export function PositionalEdges({
                   }
                 />
               )}
-              <span className="text-ink-muted tnum absolute inset-y-0 left-2 flex items-center text-chip">
-                {formatPoints(edge.b)}
-              </span>
-              <span className="text-ink-muted tnum absolute inset-y-0 right-2 flex items-center text-chip">
-                {formatPoints(edge.a)}
-              </span>
             </div>
+
+            <span className="text-ink-secondary tnum text-detail">{formatPoints(edge.a)}</span>
 
             <span
               className={cn(
-                'tnum flex items-center justify-end gap-1 text-sm font-medium',
+                'tnum text-body flex items-center justify-end gap-1 font-semibold whitespace-nowrap',
                 level ? 'text-ink-muted' : 'text-ink',
               )}
             >
@@ -114,12 +125,30 @@ export function PositionalEdges({
           </div>
         )
       })}
+      </div>
 
-      <p className="text-ink-muted pt-1 text-detail leading-relaxed">
+      <p className="text-ink-muted pt-3 text-detail leading-relaxed">
         Average simulated points at each position, {labelA} minus {labelB}. These add up to the
         totals above. Each gap is an average, not a guaranteed result — the win chance above
         accounts for how much the two sides overlap; this breakdown does not.
       </p>
+    </div>
+  )
+}
+
+/** Position, their points, the bar, your points, the gap. */
+const ROW = 'grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.75rem_3.25rem] gap-x-2'
+
+function EdgeKey({ labelA, labelB, className }: { labelA: string; labelB: string; className?: string }) {
+  return (
+    <div aria-hidden className={cn(ROW, 'text-ink-muted text-chip', className)}>
+      <span />
+      {/* Over the two columns of numbers and the bar between them. */}
+      <span className="col-span-3 flex justify-between gap-2">
+        <span className="truncate">{labelB}</span>
+        <span className="truncate">{labelA}</span>
+      </span>
+      <span className="text-right">Gap</span>
     </div>
   )
 }

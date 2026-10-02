@@ -24,6 +24,12 @@ interface Side {
  * One hue at two strengths, never two hues. The pair a reader must tell apart
  * is exactly the pair a red/green split makes indistinguishable under common
  * colour deficiencies; the labels and the printed numbers carry identity here.
+ *
+ * Each side's line also carries its average simulated score, the same
+ * `expected_score` the totals further down print. It is what the position
+ * gaps under this chart add up to, so the whole is on screen with its parts.
+ * The line wraps: on a 360px phone the three range figures did not fit beside
+ * the label, and pushed the page 18px wide.
  */
 export function ScoreDistribution({
   labelA,
@@ -51,7 +57,7 @@ export function ScoreDistribution({
   const at = (value: number) => ((value - min) / (max - min)) * 100
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {sides.map((side, index) => (
         // Drawn in one after the other, left to right, when a result arrives:
         // your range, then theirs, then the overlap is there to read.
@@ -60,9 +66,15 @@ export function ScoreDistribution({
           className="animate-wipe-in"
           style={{ animationDelay: `${150 + index * 220}ms` }}
         >
-          <div className="mb-1.5 flex items-baseline justify-between gap-4 text-sm">
-            <span className="text-ink truncate font-medium">{side.label}</span>
-            <span className="text-ink-muted tnum shrink-0 text-detail">
+          <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className="text-ink text-body truncate font-medium">{side.label}</span>
+              <span className="text-ink tnum text-body font-semibold whitespace-nowrap">
+                {formatPoints(side.team.expected_score)}
+                <span className="text-ink-muted text-chip font-normal"> pts on average</span>
+              </span>
+            </span>
+            <span className="text-ink-muted tnum text-detail whitespace-nowrap">
               Low {formatPoints(side.team.p10)} · Middle {formatPoints(side.team.median_score)} · High{' '}
               {formatPoints(side.team.p90)}
             </span>
@@ -103,7 +115,7 @@ export function ScoreDistribution({
         </div>
       ))}
 
-      <div className="text-ink-muted flex items-center gap-4 text-detail">
+      <div className="text-ink-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-detail">
         <span className="flex items-center gap-1.5">
           <span aria-hidden className="bg-chart-series/55 block h-2 w-6 rounded-full" />
           Half of simulated weeks land here

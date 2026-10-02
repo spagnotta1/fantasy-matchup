@@ -8,8 +8,10 @@
  */
 
 import {
+  matchupSimulationSchema,
   projectionSchema,
   rankedProjectionSchema,
+  type MatchupSimulation,
   type Projection,
   type RankedProjection,
 } from '@/api/schemas'
@@ -130,5 +132,102 @@ export function perPlayerRangeBoard(count: number, options: ProjectionOptions = 
   return Array.from({ length: count }, (_, index) => {
     const median = 6 + index * 0.1
     return makeProjection({ id: `u${index}`, median, ceiling: median + 8 + index * 0.37, ...options })
+  })
+}
+
+/**
+ * A finished simulation: two seven-player lineups, your team a 59% favourite.
+ *
+ * The position totals are round on purpose (QB 20.3 v 19.3, RB 52.5 v 35.5,
+ * WR 32.7 v 44.8, TE 10.9 v 9.7), so a test can state a gap without a
+ * calculator, and they add up to the two expected scores.
+ */
+export function makeSimulation(
+  options: { win?: number; tie?: number; mode?: string } = {},
+): MatchupSimulation {
+  const { win = 0.5899, tie = 0.0001, mode = 'independent' } = options
+  const player = (id: string, slot: string, position: string, mean: number) => ({
+    provenance: 'model',
+    player_id: id,
+    name: id,
+    slot,
+    position,
+    team: 'DET',
+    game_id: '2026_04_DET_CAR',
+    expected_points: mean - 0.2,
+    floor: mean - 8,
+    ceiling: mean + 12,
+    simulated_mean: mean,
+  })
+
+  return matchupSimulationSchema.parse({
+    season: 2026,
+    week: 4,
+    scoring_profile: 'half_ppr',
+    simulation: {
+      provenance: 'derived',
+      iterations: 10000,
+      seed: 7,
+      sampling_method: 'inverse_transform',
+      correlation_mode: mode,
+      lineup_format: 'standard_skill',
+    },
+    team_a: {
+      provenance: 'derived',
+      expected_score: 116.4,
+      median_score: 115.3,
+      p10: 88.9,
+      p25: 101,
+      p75: 130,
+      p90: 145.5,
+      win_probability: win,
+      loss_probability: 1 - win - tie,
+      tie_probability: tie,
+      projection_sum: 114.7,
+      players: [
+        player('a-qb', 'QB', 'QB', 20.3),
+        player('a-rb1', 'RB', 'RB', 19.5),
+        player('a-rb2', 'RB', 'RB', 17.5),
+        player('a-wr1', 'WR', 'WR', 17.2),
+        player('a-wr2', 'WR', 'WR', 15.5),
+        player('a-te', 'TE', 'TE', 10.9),
+        player('a-flex', 'FLEX', 'RB', 15.5),
+      ],
+    },
+    team_b: {
+      provenance: 'derived',
+      expected_score: 109.3,
+      median_score: 108.1,
+      p10: 83,
+      p25: 95,
+      p75: 122,
+      p90: 137.6,
+      win_probability: 1 - win - tie,
+      loss_probability: win,
+      tie_probability: tie,
+      projection_sum: 107.8,
+      players: [
+        player('b-qb', 'QB', 'QB', 19.3),
+        player('b-rb1', 'RB', 'RB', 18.5),
+        player('b-rb2', 'RB', 'RB', 17),
+        player('b-wr1', 'WR', 'WR', 16),
+        player('b-wr2', 'WR', 'WR', 14.7),
+        player('b-te', 'TE', 'TE', 9.7),
+        player('b-flex', 'FLEX', 'WR', 14.1),
+      ],
+    },
+    score_differential: 7.1,
+    median_differential: 7.2,
+    assumptions: {
+      provenance: 'derived',
+      player_independence: mode === 'independent',
+      correlation_mode: mode,
+      kicker_projection_available: false,
+      defense_projection_available: false,
+      injury_adjustment_applied: false,
+      matchup_adjustment_applied: false,
+      weather_adjustment_applied: false,
+      notes: [],
+    },
   })
 }

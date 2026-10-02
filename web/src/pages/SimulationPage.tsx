@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/Input'
 import { EmptyState, ErrorState } from '@/components/feedback/States'
 import { LineupBuilder, LineupSkeleton } from '@/features/simulations/LineupBuilder'
 import { SimulationHistory } from '@/features/simulations/SimulationHistory'
-import { SimulationResults } from '@/features/simulations/SimulationResults'
+import { SimulationDetails, SimulationSummary } from '@/features/simulations/SimulationResults'
 import { PreRunExplainer } from '@/features/simulations/PreRunExplainer'
 import { liveFinals } from '@/features/simulations/finalScores'
 import {
@@ -72,6 +72,16 @@ const ITERATION_OPTIONS = [
  * distributions, read the result. The screen computes nothing: the lineup shape
  * comes from the API's format, every draw is taken server-side from a stored
  * distribution, and the win probability is returned rather than derived.
+ *
+ * The result comes first. Before a run the page is the two lineups, the run
+ * controls and what a run will produce. Once one is asked for, the top of the
+ * page is the answer — the estimated win probability, the two score ranges and
+ * the position gaps (`SimulationSummary`) — and each lineup folds to one line
+ * under it, with a button that opens it again. The controls follow, then the
+ * rest of the result. The lineups fold when the run is asked for, not when it
+ * comes back, so the layout the answer lands in is already there and nothing
+ * moves when it arrives; a refused run opens them again, because a refusal is
+ * a thing to fix in a lineup.
  *
  * Four structural choices.
  *
@@ -152,6 +162,11 @@ export default function SimulationPage() {
   const [pendingLoad, setPendingLoad] = useState<{ a: LineupEntry[]; b: LineupEntry[] } | null>(
     () => (shared.a.length > 0 || shared.b.length > 0 ? shared : null),
   )
+
+  // Which lineups are open. `null` before a run has been asked for: the
+  // builders are then plain, always open, and offer no fold. Both are shut
+  // from the moment of a run, and each is the reader's to open after that.
+  const [folds, setFolds] = useState<{ a: boolean; b: boolean } | null>(null)
 
   const resultsRef = useRef<HTMLDivElement>(null)
   const controlsRef = useRef<HTMLDivElement>(null)
@@ -253,8 +268,29 @@ export default function SimulationPage() {
     )
   }, [desiredParams, pendingLoad, setSearchParams])
 
+  /**
+   * Bring the top of the page — where the run is reported, and where its
+   * result lands — into view.
+   *
+   * Explicitly asked rather than hard-coded to 'smooth': an explicit
+   * behaviour overrides the stylesheet's reduced-motion rule, so this is the
+   * one scroll in the product that has to check the setting.
+   */
+  const showResult = useCallback((focus: boolean) => {
+    window.requestAnimationFrame(() => {
+      if (focus) resultsRef.current?.focus({ preventScroll: true })
+      resultsRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
+    })
+  }, [])
+
   const onRun = () => {
     if (!request) return
+    // Folded now, while the run is in flight: the answer then arrives into a
+    // page that is already the shape it will have.
+    setFolds({ a: false, b: false })
+    // The scroll, without the focus: the button that was pressed keeps it
+    // until there is a result to hand it to.
+    showResult(false)
     run.mutate(request, {
       onSuccess: (response) => {
         recordRun(response.data, request, {
@@ -263,15 +299,12 @@ export default function SimulationPage() {
         })
         setHistory(listHistory())
         // Move focus to the result rather than leaving the user at the button
-        // wondering whether anything happened below the fold.
-        window.requestAnimationFrame(() => {
-          resultsRef.current?.focus({ preventScroll: true })
-          // Explicitly asked rather than hard-coded to 'smooth': an explicit
-          // behaviour overrides the stylesheet's reduced-motion rule, so this
-          // is the one scroll in the product that has to check the setting.
-          resultsRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
-        })
+        // wondering whether anything happened.
+        showResult(true)
       },
+      // A refusal names a starter or a slot. The lineups it is about are
+      // opened again, so the thing to fix is on screen under the message.
+      onError: () => setFolds(null),
     })
   }
 
@@ -317,6 +350,8 @@ export default function SimulationPage() {
     setSeed(String(entry.seed))
     setPendingLoad({ a: entry.teamA, b: entry.teamB })
     run.reset()
+    // Back to building: there is no result on the page to make room for.
+    setFolds(null)
   }
 
   return (
@@ -339,6 +374,26 @@ export default function SimulationPage() {
         </aside>
       )}
 
+      {/*
+        The run, reported where its result will be: first on the page, above
+        the lineups. Nothing is here before a run has been asked for.
+      */}
+      <div
+        ref={resultsRef}
+        tabIndex={-1}
+        className={run.isIdle ? undefined : 'mb-6 scroll-mt-24 outline-none'}
+      >
+        {run.isPending ? (
+          <RunningState iterations={Number.parseInt(iterations, 10)} />
+        ) : run.isError ? (
+          <Card>
+            <ErrorState error={run.error} onRetry={onRun} />
+          </Card>
+        ) : run.isSuccess ? (
+          <SimulationSummary result={run.data.data} labelA={LABEL_A} labelB={LABEL_B} />
+        ) : null}
+      </div>
+
       {catalog.isError ? (
         <Card>
           <EmptyState
@@ -357,7 +412,9 @@ export default function SimulationPage() {
             <LineupResolver entries={pendingLoad} onResolved={onLineupsResolved} />
           )}
 
-          <div className="grid gap-6 xl:grid-cols-2">
+          {/* `items-start`: a folded lineup beside an open one stays one line
+              tall and is not stretched to its neighbour's height. */}
+          <div className={folds ? 'grid items-start gap-3 xl:grid-cols-2 xl:gap-6' : 'grid gap-6 xl:grid-cols-2'}>
             <LineupBuilder
               side="you"
               title={LABEL_A}
@@ -394,6 +451,11 @@ export default function SimulationPage() {
               }
               disabled={run.isPending}
               finals={finals}
+              disclosure={
+                folds
+                  ? { open: folds.a, onToggle: () => setFolds({ ...folds, a: !folds.a }) }
+                  : undefined
+              }
             />
             <LineupBuilder
               title={LABEL_B}
@@ -408,6 +470,11 @@ export default function SimulationPage() {
               onAutofill={() => onAutofill('b')}
               disabled={run.isPending}
               finals={finals}
+              disclosure={
+                folds
+                  ? { open: folds.b, onToggle: () => setFolds({ ...folds, b: !folds.b }) }
+                  : undefined
+              }
             />
           </div>
 
@@ -440,25 +507,23 @@ export default function SimulationPage() {
         </>
       )}
 
-      <div ref={resultsRef} tabIndex={-1} className="mt-6 scroll-mt-24 outline-none">
-        {run.isPending ? (
-          <RunningState iterations={Number.parseInt(iterations, 10)} />
-        ) : run.isError ? (
-          <Card>
-            <ErrorState error={run.error} onRetry={onRun} />
-          </Card>
-        ) : run.isSuccess ? (
-          <SimulationResults
+      {/* Under the lineups and the controls: the rest of a result, or, before
+          the first run, what a run will produce. */}
+      {run.isSuccess ? (
+        <div className="mt-6">
+          <SimulationDetails
             result={run.data.data}
             meta={run.data.meta}
             labelA={LABEL_A}
             labelB={LABEL_B}
             onAdjust={onAdjust}
           />
-        ) : (
+        </div>
+      ) : run.isIdle ? (
+        <div className="mt-6">
           <PreRunExplainer />
-        )}
-      </div>
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <SimulationHistory
@@ -619,11 +684,15 @@ function RunControls({
  * An indeterminate bar rather than a percentage. The endpoint reports no
  * progress — it holds a worker for the whole run and answers once — so a
  * counting progress bar would be an animation pretending to be telemetry.
+ *
+ * It holds some of the room the result will take. The result lands in this
+ * card's place, and a card a third of its height would send the lineups and
+ * the controls under it down the page as the answer arrived.
  */
 function RunningState({ iterations }: { iterations: number }) {
   return (
     <Card>
-      <CardBody className="py-10 text-center" aria-live="polite">
+      <CardBody className="flex min-h-80 flex-col justify-center py-10 text-center" aria-live="polite">
         <p className="text-ink text-sm font-medium">
           Simulating {Number.isFinite(iterations) ? iterations.toLocaleString() : ''} weeks…
         </p>
