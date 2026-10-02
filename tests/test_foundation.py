@@ -49,6 +49,13 @@ class TestFrozenModel:
             assert 0 < bar.correlation < 1
 
 
+def cells_by_key() -> dict[tuple[str, str], float]:
+    return {
+        (cell.profile, cell.position): cell.coverage_p10_p90
+        for cell in VALIDATION.short_history_coverage
+    }
+
+
 class TestValidationRecord:
     def test_interval_coverage_is_close_to_nominal(self):
         # The property the whole product rests on: a stated 80% interval
@@ -68,6 +75,26 @@ class TestValidationRecord:
     def test_it_records_a_real_sample(self):
         assert VALIDATION.held_out_distributions > 10_000
         assert len(VALIDATION.seasons) >= 5
+
+    def test_the_short_history_cells_are_real_and_cover_every_position(self):
+        cells = VALIDATION.short_history_coverage
+        assert {cell.position for cell in cells} == set(POSITIONS)
+        for cell in cells:
+            assert cell.n >= 300
+            assert 0.5 < cell.coverage_p10_p90 < 1.0
+
+    def test_only_cells_outside_the_report_tolerance_are_caveated(self):
+        # The caveat line is the report's own "calibrated" line. A cell inside it
+        # is not a limitation, and listing it would overstate one.
+        from nflfp.predict.calibration import COVERAGE_TOLERANCE
+        from nflfp.predict.foundation import undercovered_short_history
+
+        flagged = undercovered_short_history()
+        assert flagged
+        for cell in cells_by_key().items():
+            (key, coverage) = cell
+            shortfall = VALIDATION.nominal_p10_p90 - coverage
+            assert (key in flagged) == (shortfall > COVERAGE_TOLERANCE)
 
     def test_it_states_what_was_excluded(self):
         joined = " ".join(VALIDATION.notes).lower()

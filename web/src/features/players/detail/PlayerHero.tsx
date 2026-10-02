@@ -4,7 +4,7 @@ import { TeamLink } from '@/components/domain/TeamLink'
 import { ArrowLeft, Check, GitCompareArrows, UserPlus } from 'lucide-react'
 
 import { Badge } from '@/components/ui/Badge'
-import { ConfidenceChip } from '@/components/domain/ConfidenceChip'
+import { EvidenceChip } from '@/components/domain/EvidenceChip'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { PlayerAvatar } from '@/components/domain/PlayerIdentity'
 import { ProvenanceBadge } from '@/components/domain/ProvenanceBadge'
@@ -221,14 +221,19 @@ export function PlayerHero({
                 className="lg:border-r"
               />
               <div className="border-line col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t p-4 lg:col-span-1 lg:block lg:border-t-0">
-                <dt className="text-ink-muted text-xs font-medium tracking-wide uppercase">Confidence</dt>
+                <dt className="text-ink-muted text-xs font-medium tracking-wide uppercase">Range based on</dt>
                 <dd className="lg:mt-2">
-                  <ConfidenceChip label={points.confidence_label} value={points.confidence} size="md" />
+                  <EvidenceChip
+                    evidence={points.evidence}
+                    note={points.evidence_note}
+                    samples={points.samples}
+                    size="md"
+                  />
                 </dd>
+                {/* The caveat is the API's sentence, which quotes what was
+                    measured. With none, the tile says what the range is. */}
                 <dd className="text-ink-muted w-full text-xs leading-relaxed lg:mt-2">
-                  {points.confidence !== null && points.confidence !== undefined
-                    ? `${formatPercent(points.confidence)} — how much data backs this, not how good the player is.`
-                    : 'How much data backs this, not how good the player is.'}
+                  {points.evidence_note ?? evidenceDetail(points.evidence, player.position)}
                 </dd>
               </div>
             </dl>
@@ -237,6 +242,13 @@ export function PlayerHero({
       </section>
     </div>
   )
+}
+
+/** What an uncaveated range is, in a sentence. Never a rating of the player. */
+function evidenceDetail(evidence: string, position: string | null | undefined): string {
+  if (evidence !== 'established') return 'No floor or ceiling is stored for this projection.'
+  const who = position ? `${position}s` : 'players'
+  return `How past ${who} with a similar projection actually scored. It sizes the range, not the player.`
 }
 
 function HeroCell({

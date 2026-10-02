@@ -205,11 +205,27 @@ class PointsOut(Schema):
     confidence: float | None = Field(
         default=None,
         description=(
-            "0-1. How much information the model had — not how good the "
-            "projection is. A confidently-projected bad player is still bad."
+            "0-1. Relative width of the P10-P90 range: "
+            "1 - (P90 - P10) / (2 * max(predicted, 4)). It describes how wide "
+            "the range is against the projection — not how much evidence "
+            "stands behind it, and not accuracy. Lineage only; do not display "
+            "it as confidence."
         ),
     )
-    confidence_label: str = Field(description="high | moderate | low | very_low | unknown")
+    evidence: str = Field(
+        description=(
+            "established | thin_history | extrapolated | unknown. Whether "
+            "anything about this projection puts its range outside the "
+            "conditions its measured coverage was earned under."
+        )
+    )
+    evidence_note: str | None = Field(
+        default=None,
+        description=(
+            "The caveat in plain language, stating what was measured. Present "
+            "only for thin_history and extrapolated; show it beside the range."
+        ),
+    )
     boom_probability: float | None = None
     bust_probability: float | None = None
     boom_threshold: float | None = None

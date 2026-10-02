@@ -1,0 +1,24 @@
+CONDITIONAL-BIAS CRITERION — sampling error on the real walk-forward predictions
+==============================================================================
+seasons 2019-2025, half_ppr; bias is calibrated expectation minus actual, per projection band
+standard errors from 5,000 resamples of whole weeks, seed 20261001
+
+shrinkage_eb v1.0.0
+------------------------------------------------------------------------------
+  0-5     n=17,702  bias=+0.09  se=0.04  (2.5 se from zero)
+  5-10    n=10,866  bias=-0.08  se=0.07  (1.3 se from zero)
+  10-15   n= 7,017  bias=-0.06  se=0.09  (0.7 se from zero)
+  15-20   n= 2,217  bias=+0.06  se=0.19  (0.3 se from zero)   <- error exceeds half the limit
+  20-25   n=   254  bias=+0.09  se=0.48  (0.2 se from zero)   <- error exceeds half the limit
+  clears |bias| <= 0.25 in 30.0% of 5,000 week-resamples
+
+lightgbm_components v1.0.0
+------------------------------------------------------------------------------
+  0-5     n=16,780  bias=+0.19  se=0.04  (4.6 se from zero)
+  5-10    n=11,751  bias=+0.08  se=0.07  (1.3 se from zero)
+  10-15   n= 6,823  bias=+0.04  se=0.09  (0.4 se from zero)
+  15-20   n= 2,316  bias=+0.20  se=0.17  (1.1 se from zero)   <- error exceeds half the limit
+  20-25   n=   368  bias=+0.57  se=0.46  (1.2 se from zero)   <- error exceeds half the limit
+  clears |bias| <= 0.25 in 10.7% of 5,000 week-resamples
+
+total 1158s

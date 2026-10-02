@@ -51,8 +51,9 @@ const COLUMNS: Column[] = [
   { key: 'ceiling', label: 'Ceiling', className: 'w-20 hidden lg:table-cell xl:hidden', numeric: true, hint: HINTS.ceiling },
   // Replaced a Confidence column that read "Low" or "Very low" on every row at
   // the top of an early-season board: a column with one value carries no
-  // information. The width it described is drawn by the range itself, and the
-  // label is still on the player page and in the sort menu.
+  // information. The width it described is drawn by the range itself. The
+  // label has since been retired everywhere: the player page now says what the
+  // range is based on instead (see `EvidenceChip`).
   { key: 'boom', label: 'Chance of 20+', className: 'w-28 hidden md:table-cell', numeric: true, hint: HINTS.boom },
   { key: 'projection', label: 'Projection', className: 'w-24', numeric: true, hint: HINTS.projection },
 ]

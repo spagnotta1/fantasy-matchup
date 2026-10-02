@@ -362,7 +362,12 @@ class ProjectionPoints(Base):
     )
 
     confidence: Mapped[float | None] = mapped_column(
-        Float, doc="0-1. How much information the model had, not how good it is."
+        Float,
+        doc=(
+            "0-1. Relative width of the P10-P90 range: 1 - (P90 - P10) / "
+            "(2 * max(predicted, 4)). Width against the projection, not "
+            "evidence and not accuracy."
+        ),
     )
     boom_probability: Mapped[float | None] = mapped_column(
         Float, doc="P(points >= boom_threshold)"

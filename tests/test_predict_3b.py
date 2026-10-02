@@ -313,7 +313,7 @@ class TestDistributions:
         Bins are equal-count, so the top bin holds 1/`max_bins` of the training
         data by construction. Reading its lower edge as the extrapolation
         threshold flagged roughly 8% of every position's board -- and the flag
-        reaches `confidence_label` and the advice caveats, so it was firing on
+        reaches the range evidence label and the advice caveats, so it was firing on
         exactly the high projections a manager acts on.
         """
         samples = [

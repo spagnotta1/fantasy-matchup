@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
-import { ConfidenceChip } from '@/components/domain/ConfidenceChip'
+import { EvidenceChip } from '@/components/domain/EvidenceChip'
 import { InjuryBadge } from '@/components/domain/InjuryBadge'
 import { MatchupGradeChip } from '@/components/domain/MatchupGradeChip'
 import { OutcomeRange } from '@/components/domain/ProjectionValue'
@@ -16,9 +16,9 @@ import type { ComparisonEntry } from '@/api/schemas'
  * A row of the comparison, and how to read it.
  *
  * `better` is what makes the "Best" marker honest. Most rows are "higher wins",
- * bust risk is "lower wins", and several rows — matchup, confidence, opponent —
- * have no winner at all: a high-confidence projection is not a better one, so
- * marking it would teach the reader something false.
+ * bust risk is "lower wins", and several rows — matchup, range evidence,
+ * opponent — have no winner at all: a range built from more past weeks is not a
+ * better projection, so marking it would teach the reader something false.
  */
 interface Metric {
   label: string
@@ -76,15 +76,16 @@ const METRICS: Metric[] = [
     render: (entry) => formatPercent(entry.projection.prediction.points.bust_probability),
   },
   {
-    label: 'Confidence',
-    hint: 'how much data backs it',
+    label: 'Based on',
+    hint: 'what sizes the range',
     better: null,
     group: 'projection',
     value: () => null,
     render: (entry) => (
-      <ConfidenceChip
-        label={entry.projection.prediction.points.confidence_label}
-        value={entry.projection.prediction.points.confidence}
+      <EvidenceChip
+        evidence={entry.projection.prediction.points.evidence}
+        note={entry.projection.prediction.points.evidence_note}
+        samples={entry.projection.prediction.points.samples}
       />
     ),
   },

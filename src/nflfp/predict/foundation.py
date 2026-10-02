@@ -37,6 +37,8 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from .calibration import COVERAGE_TOLERANCE
+
 #: The model the application is built on.
 FROZEN_MODEL = "shrinkage_eb"
 
@@ -86,6 +88,27 @@ BASELINE_BAR: tuple[PositionBar, ...] = (
 )
 
 
+#: Games in a full trailing window. A projection made on fewer rests on a
+#: "short history", which is the one property of a single projection that was
+#: measured to change how much its range can be trusted.
+FULL_WINDOW_GAMES = 4
+
+
+@dataclass(frozen=True)
+class ShortHistoryCoverage:
+    """P10-P90 coverage for projections made on a short history.
+
+    One cell per scoring profile and position, over every held-out projection
+    whose player had fewer than :data:`FULL_WINDOW_GAMES` games in the trailing
+    window (including none).
+    """
+
+    profile: str
+    position: str
+    n: int
+    coverage_p10_p90: float
+
+
 @dataclass(frozen=True)
 class ValidationRecord:
     """What the frozen model was measured to do.
@@ -124,6 +147,13 @@ class ValidationRecord:
     calibration_method: str
     notes: tuple[str, ...] = field(default_factory=tuple)
 
+    #: The same P10-P90 coverage for projections made on a short history, by
+    #: scoring profile and position. This is the measurement behind the "short
+    #: history" caveat a reader sees beside a range: the caveat is raised for
+    #: exactly the cells :func:`undercovered_short_history` returns, and for no
+    #: others.
+    short_history_coverage: tuple[ShortHistoryCoverage, ...] = field(default_factory=tuple)
+
 
 #: The frozen record. Reproduce with:
 #:
@@ -160,7 +190,49 @@ VALIDATION = ValidationRecord(
         "Kickers and defences are out of scope; they score under different "
         "rules and have no features. See nflfp.services.positions.",
     ),
+    # The frozen model on the frozen harness over the frozen seasons, once per
+    # league profile that has recorded outcomes to score against
+    # (`ppr_te_premium` has no `fp_*_actual` column, so it has no measurement).
+    # 2,868 of the 38,061 held-out distributions rest on a short history; the
+    # other 35,193 cover 0.803-0.805 in every profile. Method and the reading
+    # of these cells: docs/simulation-readiness.md, "Range evidence".
+    short_history_coverage=(
+        ShortHistoryCoverage("standard", "QB", 309, 0.718),
+        ShortHistoryCoverage("standard", "RB", 775, 0.750),
+        ShortHistoryCoverage("standard", "TE", 596, 0.790),
+        ShortHistoryCoverage("standard", "WR", 1_188, 0.817),
+        ShortHistoryCoverage("half_ppr", "QB", 309, 0.718),
+        ShortHistoryCoverage("half_ppr", "RB", 775, 0.795),
+        ShortHistoryCoverage("half_ppr", "TE", 596, 0.777),
+        ShortHistoryCoverage("half_ppr", "WR", 1_188, 0.801),
+        ShortHistoryCoverage("ppr", "QB", 309, 0.718),
+        ShortHistoryCoverage("ppr", "RB", 775, 0.787),
+        ShortHistoryCoverage("ppr", "TE", 596, 0.779),
+        ShortHistoryCoverage("ppr", "WR", 1_188, 0.780),
+    ),
 )
+
+
+def undercovered_short_history() -> dict[tuple[str, str], float]:
+    """Short-history cells whose range was measured to hold too few outcomes.
+
+    Keyed ``(profile, position)``, valued with the coverage measured there.
+    "Too few" is the line the backtest report itself draws
+    (:data:`~nflfp.predict.calibration.COVERAGE_TOLERANCE` below nominal), so a
+    caveat shown to a user and the verdict printed in a report cannot disagree.
+
+    For the frozen model that is quarterbacks in every profile (0.718, one
+    measurement seen three times: a quarterback's points do not depend on the
+    reception format) and running backs under standard scoring (0.750). The
+    other eight cells sit between 0.777 and 0.817 and are deliberately absent —
+    a caveat the measurement does not support is the same failure as a missing
+    one.
+    """
+    return {
+        (cell.profile, cell.position): cell.coverage_p10_p90
+        for cell in VALIDATION.short_history_coverage
+        if VALIDATION.nominal_p10_p90 - cell.coverage_p10_p90 > COVERAGE_TOLERANCE
+    }
 
 
 @dataclass(frozen=True)
@@ -229,6 +301,15 @@ def foundation_summary() -> dict:
                     "nominal": VALIDATION.nominal_p25_p75,
                     "mean_width": VALIDATION.width_p25_p75,
                 },
+                "p10_p90_short_history": [
+                    {
+                        "profile": cell.profile,
+                        "position": cell.position,
+                        "n": cell.n,
+                        "observed": cell.coverage_p10_p90,
+                    }
+                    for cell in VALIDATION.short_history_coverage
+                ],
             },
             "crps": VALIDATION.crps,
             "pinball_loss": VALIDATION.pinball_loss,

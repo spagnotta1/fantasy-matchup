@@ -14,8 +14,10 @@ import { formatInteger } from '@/utils/format'
  * What is said instead is what was measured. A normal range states how many
  * past player-weeks it was built from, in a neutral tone, because that is a
  * fact and not a warning. The two cases where the range is on weaker ground —
- * a short history, or a projection higher than any the range was built from —
- * carry the API's own sentence, which quotes the measurement.
+ * a short history at a position where that was measured to matter, or a
+ * projection higher than any the range was built from — are cautions, and
+ * carry the API's own sentence, which quotes the measurement. Which players
+ * those are is decided by the API; nothing here re-derives it.
  */
 export function EvidenceChip({
   evidence,
@@ -58,7 +60,7 @@ function describeEvidence(
     case 'extrapolated':
       return { label: 'Beyond tested range', tone: 'caution' }
     case 'thin_history':
-      return { label: 'Short history', tone: 'info' }
+      return { label: 'Short history', tone: 'caution' }
     case 'established':
       return {
         label:

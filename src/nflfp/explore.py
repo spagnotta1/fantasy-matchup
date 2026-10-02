@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import db
+from . import duck
 
 # Canned queries that answer the questions worth asking before you commit to a
 # feature set. Each one is meant to be read, edited, and re-run.
@@ -175,7 +175,7 @@ def run_pg(sql: str) -> None:
 
 
 def run_duck(sql: str) -> None:
-    con = db.connect(read_only=True)
+    con = duck.connect(read_only=True)
     rel = con.sql(sql)
     if rel is not None:
         rel.show(max_rows=60)
@@ -195,8 +195,8 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--sql", metavar="QUERY", help="run arbitrary SQL")
     args = p.parse_args(argv)
 
-    if not args.pg and not db.db_path().exists():
-        print(f"no database at {db.db_path()} — run: python -m nflfp.ingest", file=sys.stderr)
+    if not args.pg and not duck.db_path().exists():
+        print(f"no database at {duck.db_path()} — run: python -m nflfp.ingest", file=sys.stderr)
         return 1
 
     run = run_pg if args.pg else run_duck

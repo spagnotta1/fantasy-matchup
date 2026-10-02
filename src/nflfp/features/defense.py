@@ -27,8 +27,12 @@ Metrics not available
 ---------------------
 Success rate, explosive-play rate and pressure rate need play-level data.
 ``raw_pbp`` is an opt-in dataset (``pipeline --all``) and is not loaded by
-default, so those features are declared with ``raw_pbp`` in ``requires`` and are
-simply skipped until it is. EPA allowed *is* available without it, because
+default, and no view here is defined on it. That is a measured decision rather
+than an omission: ``scripts/pbp_feature_eval.py`` added 29 lagged play-level
+features to the gradient-boosted challenger and moved CRPS by 0.16%, with no
+change in interval width (README, "Where this goes next"). A view that does
+get built on it should declare ``raw_pbp`` in ``requires`` so it is skipped
+when the table is absent. EPA allowed *is* available without it, because
 nflverse pre-aggregates per-player EPA onto the weekly stats.
 """
 

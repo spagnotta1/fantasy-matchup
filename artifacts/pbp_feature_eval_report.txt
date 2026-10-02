@@ -1,0 +1,84 @@
+PLAY-LEVEL FEATURES — do they earn a place in the feature table?
+========================================================================================
+seasons 2019-2025, half_ppr; 29 lagged play-by-play features added to lightgbm_components,
+nothing else changed. Feature list fixed before evaluation; none removed after.
+
+                             lightgbm_components      + play-level
+  crps                                    2.8151            2.8107
+  coverage_p10_p90                        0.7991            0.8007
+  width_p10_p90                           12.817            12.819
+  max_calibration_error                   0.0509            0.0363
+  max_conditional_bias                    0.5679            0.6478
+  MAE QB                                  6.1623            6.1491
+  MAE RB                                   4.299            4.2926
+  MAE TE                                  3.0777             3.076
+  MAE WR                                  4.0163            4.0169
+  ACCEPTANCE lightgbm_components: FAIL
+    - conditional bias 0.568 exceeds 0.25 points
+  ACCEPTANCE + play-level: FAIL
+    - conditional bias 0.648 exceeds 0.25 points
+
+PAIRED DIFFERENCE (+ play-level minus reference; negative is better)
+  standard errors from 5,000 resamples of whole weeks, seed 20261001
+  CRPS, all        -0.0044  se 0.0020  95% [-0.0084, -0.0004]  n=38,061
+  CRPS, QB         -0.0210  se 0.0124  95% [-0.0454, +0.0034]  n=4,247
+  CRPS, RB         -0.0077  se 0.0036  95% [-0.0148, -0.0006]  n=10,024
+  CRPS, TE         -0.0025  se 0.0025  95% [-0.0073, +0.0023]  n=7,904
+  CRPS, WR         +0.0012  se 0.0027  95% [-0.0040, +0.0065]  n=15,886
+  abs error, all   -0.0033  se 0.0035  95% [-0.0101, +0.0036]  n=40,294
+
+REACH — share of rows where the feature is not missing
+  pbp_rz_carries_l4                    96.9%
+  pbp_gl_carries_l4                    96.9%
+  pbp_rush_success_rate_l4             48.4%
+  pbp_explosive_rush_rate_l4           48.4%
+  pbp_rz_targets_l4                    96.9%
+  pbp_ez_targets_l4                    96.9%
+  pbp_deep_targets_l4                  96.9%
+  pbp_adot_l4                          82.2%
+  pbp_target_success_rate_l4           82.2%
+  pbp_explosive_rec_rate_l4            82.2%
+  pbp_dropbacks_l4                     96.9%
+  pbp_rz_pass_attempts_l4              96.9%
+  pbp_ez_pass_attempts_l4              96.9%
+  pbp_scrambles_l4                     96.9%
+  pbp_deep_attempt_rate_l4             12.4%
+  pbp_cpoe_l4                          12.3%
+  pbp_pass_success_rate_l4             12.7%
+  pbp_sack_hit_rate_l4                 12.7%
+  pbp_team_plays_l4                    93.4%
+  pbp_team_rz_plays_l4                 93.4%
+  pbp_team_pass_oe_l4                  93.4%
+  pbp_team_success_rate_l4             93.4%
+  pbp_team_epa_per_play_l4             93.4%
+  pbp_opp_rz_plays_allowed_l4          93.4%
+  pbp_opp_pass_success_allowed_l4      93.4%
+  pbp_opp_rush_success_allowed_l4      93.4%
+  pbp_opp_explosive_rate_allowed_l4    93.4%
+  pbp_opp_sack_hit_rate_l4             93.4%
+  pbp_opp_epa_per_play_allowed_l4      93.4%
+
+SPLIT GAIN — one fit on all completed rows; descriptive, not a verdict
+  play-level features together: 14.1% of gain
+   1. position_QB                          12.4%
+   2. carries_l4                            9.2%
+   3. receiving_yards_l8                    8.6%
+   4. passing_yards_l4                      8.6%
+   5. wopr_l4                               8.3%
+   6. pass_attempts_l4                      7.2%
+   7. rushing_yards_l8                      7.1%
+   8. pbp_dropbacks_l4                      6.3%  <- play-level
+   9. targets_l4                            3.6%
+  10. target_share_l4                       3.4%
+  11. rushing_yards_l4                      2.7%
+  12. receptions_l4                         1.9%
+  13. snap_pct_season                       1.7%
+  14. snap_pct_trend                        1.1%
+  15. passing_yards_l8                      1.0%
+  16. fp_half_ppr_season                    0.9%
+  17. opportunities_l4                      0.7%
+  18. pbp_team_pass_oe_l4                   0.6%  <- play-level
+  19. opp_targets_allowed_l4                0.6%
+  20. snap_pct_l4                           0.6%
+
+  total 2450s

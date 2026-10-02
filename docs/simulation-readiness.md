@@ -1609,6 +1609,128 @@ by side in every response so a caller can see the gap rather than discover it.
 
 ---
 
+## Range evidence
+
+**What may be said beside a single player's floor-to-ceiling range, and the
+measurement behind it.** This section is the citation for
+`services/grading.py::range_evidence` and the `evidence` / `evidence_note`
+fields on every projection.
+
+### What it replaced
+
+The player page carried a "Confidence" chip cut from the stored
+`projection_points.confidence`, described on screen as "how much data backs
+this". The stored number is not that. It is
+
+```
+confidence = 1 - (P90 - P10) / (2 * max(predicted, 4))
+```
+
+— the *width* of the range relative to the raw projection. Weekly football is
+wide, so on the published 2026 week 3 PPR board the four bands read:
+
+| label | players |
+|---|---|
+| very_low | 529 |
+| low | 84 |
+| moderate | 54 |
+| high | 0 |
+
+The 54 "moderate" rows are almost all players projected under four points,
+where the `max(predicted, 4)` floor flatters the ratio; among the 194 players
+projected for eight or more, four are "moderate" and none is higher. The label
+graded the best-evidenced projections on the board as the worst.
+
+Meanwhile the ranges themselves do what they claim: 80.3% of 38,061 held-out
+outcomes fall inside P10–P90 against a nominal 80% (README, Layer 3b). A red
+"Very low" beside a range the evidence supports is an overstated limitation,
+and it is the same failure as an overstated verdict.
+
+### What was measured instead
+
+The question a reader actually has is whether anything about *this* projection
+puts its range outside the conditions that 80.3% was earned under. One property
+of a single projection was tested: how many games were in the player's trailing
+four-game window when it was made.
+
+Frozen model, frozen harness, frozen seasons (2019–2025), each league profile
+that has recorded outcomes to score against. P10–P90 coverage, nominal 0.80:
+
+| | standard | half_ppr | ppr |
+|---|---|---|---|
+| full window (4 games), n = 35,193 | 0.803 | 0.805 | 0.803 |
+| short history (0–3 games), n = 2,868 | 0.783 | 0.785 | 0.775 |
+
+Pooled, a short history costs about two points of coverage, which is inside
+the backtest report's own ±0.03 "calibrated" tolerance. Split by position it is
+not uniform:
+
+| short history only | n | standard | half_ppr | ppr |
+|---|---|---|---|---|
+| QB | 309 | **0.718** | **0.718** | **0.718** |
+| RB | 775 | **0.750** | 0.795 | 0.787 |
+| TE | 596 | 0.790 | 0.777 | 0.779 |
+| WR | 1,188 | 0.817 | 0.801 | 0.780 |
+
+Bold is outside the tolerance. The quarterback row is one measurement seen
+three times — a quarterback's points do not depend on the reception format.
+
+Splitting by exact game count instead does **not** give a stable answer, and
+was rejected for that reason: under half_ppr the one-game bucket is the one
+that fails (0.768, n = 727), under ppr it is the no-history bucket (0.735,
+n = 784) while one game reads 0.791, and under standard it is one game again
+(0.762). With about 700 rows a cell the failing bucket moves with the scoring
+format, which is what noise looks like.
+
+`ppr_te_premium` has no `fp_*_actual` column in `feat_training_dataset`, so it
+cannot be backtested and has no measurement.
+
+### What is shown
+
+| `evidence` | when | on screen |
+|---|---|---|
+| `established` | everything else | "355 similar weeks" — the count of held-out residuals the range was built from. Neutral: a fact, not a warning |
+| `thin_history` | fewer than four games in the window **and** a bold cell above | "Short history", with the cell's number: "ranges for QBs with fewer than 4 held about 72 in 100 results instead of 80" |
+| `extrapolated` | the stored `extrapolated` flag | "Beyond tested range" |
+| `unknown` | no floor or ceiling stored | "No range" |
+
+Rules this follows, each of which is a way the previous label went wrong:
+
+- **Width is not graded.** The range is drawn on screen and is its own
+  statement. A wide range is not a badly evidenced one.
+- **A caveat quotes its measurement.** The sentence is built by the API from
+  the same constants the test suite pins to
+  `predict/foundation.py::VALIDATION.short_history_coverage`, so the number a
+  reader sees cannot drift from the number that was measured.
+- **A cell inside tolerance carries no caveat.** Short-history receivers and
+  tight ends are not flagged; the measurement does not support it.
+- **An unmeasured profile carries no caveat**, and is not lent one from PPR.
+- **A missing usage row is not a short history.** `games_in_window` of `NULL`
+  means the join found nothing, and absent data is not reported as a measured
+  weakness.
+
+On the 2026 week 3 board that is 9 of 667 players caveated for short history
+under half_ppr and ppr (all quarterbacks), 38 under standard, and 2 flagged as
+extrapolated under ppr.
+
+### Limitations
+
+- The measurement belongs to `shrinkage_eb`. A successor has different
+  short-history behaviour and must re-measure the table before its projections
+  are shown under these caveats; the pinned test fails if the constants and the
+  record disagree, but nothing forces the record to be re-taken on promotion.
+- One property was tested. Other things plausibly matter to an individual range
+  — a role change, a new team, a return from injury — and none has been
+  measured, so none is claimed.
+- The stored `confidence` column is unchanged and still served, described as
+  what it is. Historical rows are immutable.
+
+```powershell
+pytest tests/test_services_grading.py tests/test_foundation.py   # no database
+```
+
+---
+
 ## What is deliberately not built
 
 None of the brief's future tables exist: `fantasy_rosters`, `roster_players`,

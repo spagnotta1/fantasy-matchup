@@ -52,10 +52,10 @@ export function ProjectionPanel({
 
         <ComponentBreakdown components={components} />
 
-        {points.extrapolated && (
+        {/* The same sentence the hero carries, beside the range it qualifies. */}
+        {points.evidence_note && (
           <p className="bg-caution-soft text-caution-text rounded-[var(--radius-control)] px-3 py-2 text-xs leading-relaxed">
-            This projection is higher than anything the model has seen before, so its range is an
-            educated guess rather than something backed by past results.
+            {points.evidence_note}
           </p>
         )}
       </CardBody>

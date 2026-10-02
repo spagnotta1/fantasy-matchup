@@ -23,7 +23,6 @@ export type SortKey =
   | 'boom'
   | 'bust'
   | 'matchup'
-  | 'confidence'
   | 'name'
 
 export type SortDirection = 'asc' | 'desc'
@@ -37,7 +36,6 @@ export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'boom', label: 'Boom chance' },
   { value: 'bust', label: 'Bust risk' },
   { value: 'matchup', label: 'Matchup grade' },
-  { value: 'confidence', label: 'Confidence' },
   { value: 'name', label: 'Name' },
 ]
 
@@ -118,8 +116,6 @@ function sortValue(entry: RankedProjection, key: SortKey): number | null {
       // would put A+ beside A- and call it an ordering. Ungraded is null, so it
       // falls to the bottom rather than pretending to be average.
       return entry.projection.matchup?.grade.score ?? null
-    case 'confidence':
-      return points.confidence ?? null
     default:
       return null
   }
