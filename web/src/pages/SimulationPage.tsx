@@ -249,7 +249,7 @@ export default function SimulationPage() {
         if (!desiredParams[SEED_PARAM]) params.delete(SEED_PARAM)
         return params
       },
-      { replace: true },
+      { replace: true, preventScrollReset: true },
     )
   }, [desiredParams, pendingLoad, setSearchParams])
 

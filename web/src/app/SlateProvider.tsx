@@ -178,7 +178,7 @@ export function SlateProvider({ children }: { children: ReactNode }) {
           params.delete(WEEK_PARAM)
           return params
         },
-        { replace: true },
+        { replace: true, preventScrollReset: true },
       )
     },
     [setSearchParams],

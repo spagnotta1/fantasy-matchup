@@ -20,6 +20,13 @@ type AllStringValues<T> = { [K in keyof T]: string }
  *
  * A value equal to its default is omitted from the URL so an untouched
  * toolbar doesn't clutter the address bar with `?query=&team=`.
+ *
+ * The write keeps the page where it is (`preventScrollReset`). The router
+ * treats any change of address as a new page and scrolls to its top, which is
+ * right for a link and wrong for a filter: the position switch on a team's
+ * remaining schedule sits three screens down, and every press of it threw the
+ * reader back to the top. Everything else that keeps state in the query string
+ * (the slate, the roster, compare, the simulation, a trade) writes the same way.
  */
 export function useUrlState<T extends AllStringValues<T>>(
   defaults: T,
@@ -50,7 +57,7 @@ export function useUrlState<T extends AllStringValues<T>>(
           }
           return params
         },
-        { replace: true },
+        { replace: true, preventScrollReset: true },
       )
     },
     [setSearchParams, defaults],

@@ -508,6 +508,14 @@ quick way to change the week, and this button is where it is read.
 **The phone bar** is unchanged: Dashboard, Rankings, Matchups, Simulation,
 My team.
 
+**A filter keeps the page where it is.** Filters, the slate, the roster and
+the other things kept in the query string are written with
+`preventScrollReset`. The router treats any change of address as a new page
+and scrolls to its top, which is right for a link and wrong for a filter: the
+position switch on a team's remaining schedule is three screens down, and
+every press of it threw the reader back to the top. `useUrlState` does this
+for every page that uses it; a new direct `setSearchParams` has to as well.
+
 ## The player page
 
 `/players/:id` is where one player's week is read, and where the week before

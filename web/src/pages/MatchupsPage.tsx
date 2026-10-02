@@ -47,7 +47,7 @@ export default function MatchupsPage() {
         else params.set('view', next)
         return params
       },
-      { replace: true },
+      { replace: true, preventScrollReset: true },
     )
   }
 

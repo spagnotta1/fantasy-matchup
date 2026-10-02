@@ -89,7 +89,7 @@ export function useRoster(): [string[], (ids: string[]) => void] {
           else params.delete(PARAM)
           return params
         },
-        { replace: true },
+        { replace: true, preventScrollReset: true },
       )
     },
     [setSearchParams],
@@ -152,7 +152,7 @@ export function useLineupChoice(): [string[] | null, (ids: string[] | null) => v
           else params.delete(LINEUP_PARAM)
           return params
         },
-        { replace: true },
+        { replace: true, preventScrollReset: true },
       )
     },
     [setSearchParams],

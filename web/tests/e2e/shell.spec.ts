@@ -207,6 +207,48 @@ test.describe('the slate', () => {
   })
 })
 
+test.describe('a filter keeps the page where it is', () => {
+  test.skip(({ isMobile }) => isMobile, 'the same write at any width')
+
+  test('choosing a position on the remaining schedule of a team does not throw the reader to the top', async ({ page }) => {
+    await page.goto('/teams/BAL')
+    await settle(page)
+    const schedule = page.getByRole('radiogroup', { name: 'Position' })
+    await schedule.scrollIntoViewIfNeeded()
+    await expect(schedule).toBeInViewport()
+    const before = await page.evaluate(() => window.scrollY)
+    expect(before).toBeGreaterThan(400)
+
+    for (const position of ['TE', 'RB', 'QB']) {
+      await schedule.getByText(position, { exact: true }).click()
+      await expect(page).toHaveURL(new RegExp(`sospos=${position}`))
+      await expect(page.getByRole('table', { name: new RegExp(`remaining schedule against ${position}`) })).toBeVisible()
+      expect(await page.evaluate(() => window.scrollY), `after choosing ${position}`).toBe(before)
+      await expect(schedule).toBeInViewport()
+    }
+  })
+
+  test('nor does a filter half-way down a report, and a link still starts at the top', async ({ page }) => {
+    await page.goto('/reports/usage')
+    await settle(page)
+    await page.evaluate(() => window.scrollTo(0, 300))
+    await page.evaluate(() => {
+      // The toolbar has scrolled off; its control is still the way to filter.
+      const radio = [...document.querySelectorAll<HTMLInputElement>('main [role="radiogroup"][aria-label="Position"] input')].find(
+        (input) => input.value === 'WR',
+      )
+      radio?.click()
+    })
+    await expect(page).toHaveURL(/position=WR/)
+    expect(await page.evaluate(() => window.scrollY)).toBe(300)
+
+    // A link to another page still starts at its top.
+    await page.locator('main a[href^="/players/"]').first().click()
+    await settle(page)
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+  })
+})
+
 test.describe('pages that moved', () => {
   test('the injury report and the usage trends are two views of Reports', async ({ page }) => {
     await page.goto('/reports')

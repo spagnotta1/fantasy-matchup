@@ -57,7 +57,7 @@ export default function ComparePage() {
           else params.set(PLAYERS_PARAM, next.join(','))
           return params
         },
-        { replace: true },
+        { replace: true, preventScrollReset: true },
       )
     },
     [setSearchParams],
